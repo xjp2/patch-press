@@ -1,0 +1,128 @@
+[
+  {
+    "id": "tote",
+    "name": "Canvas Tote",
+    "front_image_url": "/tote-bag.png",
+    "back_image_url": "/tote-bag.png",
+    "base_price": 25,
+    "width": 400,
+    "height": 500,
+    "placement_zone": {
+      "x": 15,
+      "y": 25,
+      "type": "rectangle",
+      "width": 70,
+      "height": 60
+    },
+    "crop_zone": null,
+    "sort_order": 0,
+    "created_at": "2026-02-25T17:11:11.153257+00:00",
+    "updated_at": "2026-02-26T06:19:15.289+00:00",
+    "link_url": null
+  },
+  {
+    "id": "keychain-blue",
+    "name": "Blue Keychain",
+    "front_image_url": "/keychain-strap-blue.png",
+    "back_image_url": "/keychain-strap-blue.png",
+    "base_price": 12,
+    "width": 300,
+    "height": 100,
+    "placement_zone": {
+      "x": 10,
+      "y": 20,
+      "type": "rectangle",
+      "width": 80,
+      "height": 60
+    },
+    "crop_zone": null,
+    "sort_order": 1,
+    "created_at": "2026-02-25T17:11:11.42555+00:00",
+    "updated_at": "2026-02-26T06:19:15.962+00:00",
+    "link_url": null
+  },
+  {
+    "id": "keychain-purple",
+    "name": "Purple Keychain",
+    "front_image_url": "/keychain-strap-purple.png",
+    "back_image_url": "/keychain-strap-purple.png",
+    "base_price": 12,
+    "width": 300,
+    "height": 100,
+    "placement_zone": {
+      "x": 10,
+      "y": 20,
+      "type": "rectangle",
+      "width": 80,
+      "height": 60
+    },
+    "crop_zone": null,
+    "sort_order": 2,
+    "created_at": "2026-02-25T17:11:11.589144+00:00",
+    "updated_at": "2026-02-26T06:19:16.2+00:00",
+    "link_url": null
+  },
+  {
+    "id": "keychain-white",
+    "name": "White Keychain",
+    "front_image_url": "/keychain-strap-white.png",
+    "back_image_url": "/keychain-strap-white.png",
+    "base_price": 12,
+    "width": 300,
+    "height": 100,
+    "placement_zone": {
+      "x": 10,
+      "y": 20,
+      "type": "rectangle",
+      "width": 80,
+      "height": 60
+    },
+    "crop_zone": null,
+    "sort_order": 3,
+    "created_at": "2026-02-25T17:11:11.741088+00:00",
+    "updated_at": "2026-02-26T06:19:16.383+00:00",
+    "link_url": null
+  },
+  {
+    "id": "pouch",
+    "name": "Beige Pouch",
+    "front_image_url": "/pouch-beige.png",
+    "back_image_url": "/pouch-beige.png",
+    "base_price": 18,
+    "width": 350,
+    "height": 250,
+    "placement_zone": {
+      "x": 15,
+      "y": 20,
+      "type": "rectangle",
+      "width": 70,
+      "height": 65
+    },
+    "crop_zone": null,
+    "sort_order": 4,
+    "created_at": "2026-02-25T17:11:11.892184+00:00",
+    "updated_at": "2026-02-26T06:19:16.572+00:00",
+    "link_url": null
+  },
+  {
+    "id": "cardholder",
+    "name": "Cardholder",
+    "front_image_url": "/cardholder-yellow.png",
+    "back_image_url": "/cardholder-yellow.png",
+    "base_price": 15,
+    "width": 300,
+    "height": 200,
+    "placement_zone": {
+      "x": 10,
+      "y": 15,
+      "type": "rectangle",
+      "width": 80,
+      "height": 70
+    },
+    "crop_zone": null,
+    "sort_order": 5,
+    "created_at": "2026-02-25T17:11:12.049073+00:00",
+    "updated_at": "2026-02-26T06:19:16.756+00:00",
+    "link_url": null
+  }
+]

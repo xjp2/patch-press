@@ -1,0 +1,73 @@
+/* App-specific styles */
+
+/* Smooth scrolling for the entire page */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Selection color */
+::selection {
+  background-color: rgba(255, 182, 193, 0.3);
+  color: #4A4A4A;
+}
+
+/* Focus styles */
+*:focus-visible {
+  outline: 2px solid #FFB6C1;
+  outline-offset: 2px;
+}
+
+/* Prevent text selection during drag */
+.patch-item,
+.patch-placed {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Canvas container */
+.design-canvas {
+  touch-action: none;
+}
+
+/* Mobile optimizations */
+@media (max-width: 768px) {
+  .design-canvas {
+    min-height: 300px;
+  }
+  
+  .patch-placed img {
+    width: 48px !important;
+    height: 48px !important;
+  }
+}
+
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+/* Hide scrollbar but keep functionality */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Base scroll reveal additions */
+.scroll-reveal-scale {
+  opacity: 0;
+  transform: scale(0.95);
+  transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.scroll-reveal-scale.scroll-revealed {
+  opacity: 1;
+  transform: scale(1);
+}

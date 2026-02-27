@@ -1,0 +1,164 @@
+{
+  "id": "current",
+  "landing_page": [
+    {
+      "id": "sec-hero",
+      "type": "hero",
+      "content": {
+        "slides": [
+          {
+            "id": "2e4eb04f-01a3-40c1-bb0e-c7e34ca636bc",
+            "image": "https://fyadtnkbayeafjmdvymx.supabase.co/storage/v1/object/public/assets/uploads/bb9ffd8b-2deb-4b8b-9cbb-2c8c21f7b60b-Screenshot_2025_09_28_160051.png",
+            "title": "New Summer\nCollection",
+            "ctaLink": "neural.xjp2automation.online",
+            "ctaText": "hello world",
+            "subtitle": "Check out our new fruit-themed patches — strawberries, watermelons, and more!",
+            "ctaAction": "link",
+            "isFullWidth": true
+          },
+          {
+            "id": "57c143ae-d8d1-4649-b96a-f770251a6ed9",
+            "image": "https://fyadtnkbayeafjmdvymx.supabase.co/storage/v1/object/public/assets/uploads/555d6a4e-168a-431a-af56-10a953b2d047-Screenshot_2025_10_31_150612.png",
+            "title": "Design Your\nOwn Style",
+            "subtitle": "Pick your item, choose your patches, and make it uniquely yours."
+          },
+          {
+            "id": "67f1da02-6e9c-422f-bde8-819fe2819e9c",
+            "image": "",
+            "title": "testingslide",
+            "linkUrl": "mission.xjp2automation.online",
+            "subtitle": "5"
+          }
+        ],
+        "ctaText": "Start Designing",
+        "isFullWidth": false
+      },
+      "visible": true
+    },
+    {
+      "id": "sec-how",
+      "type": "howItWorks",
+      "content": {
+        "steps": [
+          {
+            "id": "7a16a53c-731f-42d1-8cd9-5b4240ed980e",
+            "emoji": "",
+            "image": "/products/tote-bag.png",
+            "title": "Pick Your Item",
+            "description": "Select your tote bag, fan or any blank item you want."
+          },
+          {
+            "id": "ca29de1a-f950-4162-a72b-5d57bf399e83",
+            "emoji": "",
+            "image": "",
+            "title": "Choose Patches",
+            "description": "Choose your cute patches and add your picks."
+          },
+          {
+            "id": "9942f21d-404b-417b-b598-1dece4aca18c",
+            "emoji": "🔥",
+            "image": "",
+            "title": "We Press It",
+            "description": "We press a heat press to affix your custom artwork."
+          }
+        ],
+        "sectionTitle": "How It Works"
+      },
+      "visible": true
+    },
+    {
+      "id": "sec-gallery",
+      "type": "gallery",
+      "content": {
+        "items": [
+          {
+            "id": "g1",
+            "image": "/products/tote-bag.png",
+            "label": "Custom Tote Bag"
+          },
+          {
+            "id": "g2",
+            "image": "/products/pouch-beige.png",
+            "label": "Designer Pouch"
+          },
+          {
+            "id": "g3",
+            "image": "/products/cardholder-yellow.png",
+            "label": "Card Holder"
+          },
+          {
+            "id": "g4",
+            "image": "/products/keychain-strap-blue.png",
+            "label": "Blue Keychain"
+          },
+          {
+            "id": "g5",
+            "image": "/products/keychain-strap-purple.png",
+            "label": "Purple Keychain"
+          }
+        ],
+        "sectionTitle": "Featured Creations"
+      },
+      "visible": true
+    },
+    {
+      "id": "cd2756eb-9a5d-4c2f-b6a5-7457d3d52a49",
+      "type": "cta",
+      "content": {
+        "heading": "Ready to create?",
+        "subtitle": "Start designing your custom accessories today.",
+        "buttonText": "Start Now",
+        "buttonAction": "scroll"
+      },
+      "visible": true
+    },
+    {
+      "id": "09ac3da1-3d3e-40f4-988e-3e3b6697c470",
+      "type": "testimonials",
+      "content": {
+        "items": [
+          {
+            "id": "b871685b-4196-44a2-87b9-838bf298e468",
+            "quote": "Amazing!",
+            "author": "Happy Customer",
+            "avatar": "",
+            "linkUrl": "www.abc.com",
+            "proofImage": "https://fyadtnkbayeafjmdvymx.supabase.co/storage/v1/object/public/assets/uploads/52bea4a5-1d85-4d0a-8c10-2aeaecae4e5b-Screenshot_2025_09_22_161113.png"
+          }
+        ],
+        "sectionTitle": "What Our Customers Say"
+      },
+      "visible": true
+    }
+  ],
+  "footer": {
+    "tagline": "Create your own unique accessories!",
+    "brandName": "Patch & Press",
+    "copyright": "© 2025 Patch & Press. Made with 💕 in Seoul",
+    "twitterUrl": "#",
+    "facebookUrl": "#",
+    "instagramUrl": "#"
+  },
+  "global_settings": {
+    "bodyFont": "Inter",
+    "logoText": "Patch & Press",
+    "logoImage": "",
+    "headingFont": "Outfit",
+    "primaryColor": "#3a3530",
+    "secondaryColor": "#6b8f71"
+  },
+  "customize_page": {
+    "step1Title": "Choose Your Product",
+    "step3Title": "Your Design is Ready!",
+    "step1Subtitle": "Pick the perfect base for your custom creation",
+    "step3Subtitle": "Review your custom creation before adding to cart",
+    "step2PanelTitle": "Design Your Creation",
+    "howToDesignSteps": [
+      "Drag patches from the panel onto your product",
+      "Resize and reposition patches as you like",
+      "Remove patches by clicking the × button"
+    ]
+  },
+  "updated_at": "2026-02-26T15:48:16.596+00:00",
+  "navbar": {}
+}
