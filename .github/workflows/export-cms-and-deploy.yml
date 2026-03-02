@@ -1,0 +1,57 @@
+name: Export CMS and Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      trigger_source:
+        description: 'Who triggered this workflow'
+        required: false
+        default: 'manual'
+
+jobs:
+  export-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Export CMS data from Supabase
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: npm run export-cms
+
+      - name: Check for changes
+        id: check_changes
+        run: |
+          if [ -n "$(git status --porcelain public/cms/)" ]; then
+            echo "HAS_CHANGES=true" >> $GITHUB_OUTPUT
+          else
+            echo "HAS_CHANGES=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and push changes
+        if: steps.check_changes.outputs.HAS_CHANGES == 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add public/cms/
+          git commit -m "🔄 Auto-update CMS content [${{ github.event.inputs.trigger_source }}]"
+          git push
+
+      - name: Deployment Status
+        run: |
+          if [ "${{ steps.check_changes.outputs.HAS_CHANGES }}" == "true" ]; then
+            echo "✅ CMS data exported and committed. Vercel will auto-deploy."
+          else
+            echo "ℹ️ No changes detected in CMS data."
+          fi
