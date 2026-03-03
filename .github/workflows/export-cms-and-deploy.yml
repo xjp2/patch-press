@@ -24,22 +24,17 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        run: |
-          cd app
-          npm install
+        run: npm install
 
       - name: Export CMS data from Supabase
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-        run: |
-          cd app
-          npm run export-cms
+        run: npm run export-cms
 
       - name: Check for changes
         id: check_changes
         run: |
-          cd app
           if [ -n "$(git status --porcelain public/cms/)" ]; then
             echo "HAS_CHANGES=true" >> $GITHUB_OUTPUT
           else
@@ -54,7 +49,7 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git remote set-url origin https://x-access-token:${PAT_TOKEN}@github.com/${{ github.repository }}.git
-          git add app/public/cms/
+          git add public/cms/
           git commit -m "🔄 Auto-update CMS content [${{ github.event.inputs.trigger_source }}]"
           git push
 
