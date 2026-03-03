@@ -2,37 +2,6 @@
   "id": "current",
   "landing_page": [
     {
-      "id": "sec-how",
-      "type": "howItWorks",
-      "content": {
-        "steps": [
-          {
-            "id": "7a16a53c-731f-42d1-8cd9-5b4240ed980e",
-            "emoji": "",
-            "image": "/products/tote-bag.png",
-            "title": "Pick Your Item",
-            "description": "Select your tote bag, fan or any blank item you want."
-          },
-          {
-            "id": "ca29de1a-f950-4162-a72b-5d57bf399e83",
-            "emoji": "",
-            "image": "",
-            "title": "Choose Patches",
-            "description": "Choose your cute patches and add your picks."
-          },
-          {
-            "id": "9942f21d-404b-417b-b598-1dece4aca18c",
-            "emoji": "🔥",
-            "image": "",
-            "title": "We Press It",
-            "description": "We press a heat press to affix your custom artwork."
-          }
-        ],
-        "sectionTitle": "How It Works"
-      },
-      "visible": true
-    },
-    {
       "id": "sec-hero",
       "type": "hero",
       "content": {
@@ -63,6 +32,37 @@
         ],
         "ctaText": "Start Designing",
         "isFullWidth": false
+      },
+      "visible": true
+    },
+    {
+      "id": "sec-how",
+      "type": "howItWorks",
+      "content": {
+        "steps": [
+          {
+            "id": "7a16a53c-731f-42d1-8cd9-5b4240ed980e",
+            "emoji": "",
+            "image": "/products/tote-bag.png",
+            "title": "Pick Your Item",
+            "description": "Select your tote bag, fan or any blank item you want."
+          },
+          {
+            "id": "ca29de1a-f950-4162-a72b-5d57bf399e83",
+            "emoji": "",
+            "image": "",
+            "title": "Choose Patches",
+            "description": "Choose your cute patches and add your picks."
+          },
+          {
+            "id": "9942f21d-404b-417b-b598-1dece4aca18c",
+            "emoji": "🔥",
+            "image": "",
+            "title": "We Press It",
+            "description": "We press a heat press to affix your custom artwork."
+          }
+        ],
+        "sectionTitle": "How It Works"
       },
       "visible": true
     },
@@ -159,6 +159,6 @@
       "Remove patches by clicking the × button"
     ]
   },
-  "updated_at": "2026-03-02T10:22:55.23+00:00",
+  "updated_at": "2026-03-03T08:46:06.567+00:00",
   "navbar": {}
 }
