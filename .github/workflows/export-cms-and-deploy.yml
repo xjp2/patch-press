@@ -24,9 +24,8 @@ jobs:
           node-version: '20'
 
       - name: Install dependencies
-        run: |
-          cd app
-          npm install
+        working-directory: app
+        run: npm install
 
       - name: Export CMS data from Supabase
         working-directory: app
@@ -37,8 +36,8 @@ jobs:
 
       - name: Check for changes
         id: check_changes
+        working-directory: app
         run: |
-          cd app
           if [ -n "$(git status --porcelain public/cms/)" ]; then
             echo "HAS_CHANGES=true" >> $GITHUB_OUTPUT
           else
