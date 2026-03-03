@@ -37,6 +37,7 @@ function HeroSection({ section, startCustomizing, notices: initialNotices }: { s
     const c = section.content as HeroContent;
     const [notices] = useState<Notice[]>(initialNotices);
     const [heroIndex, setHeroIndex] = useState(0);
+    const [slideDirection, setSlideDirection] = useState<'left' | 'right'>('right');
 
     const heroSlides = (c.showNoticesOverride && notices.length > 0)
         ? notices.map(n => ({
@@ -58,14 +59,30 @@ function HeroSection({ section, startCustomizing, notices: initialNotices }: { s
             isFullWidth: s.isFullWidth !== undefined ? s.isFullWidth : c.isFullWidth
         }));
 
-    const nextSlide = () => setHeroIndex((prev) => (prev + 1) % heroSlides.length);
-    const prevSlide = () => setHeroIndex((prev) => (prev - 1 + heroSlides.length) % heroSlides.length);
+    const nextSlide = useCallback(() => {
+        setSlideDirection('right');
+        setHeroIndex((prev) => (prev + 1) % heroSlides.length);
+    }, [heroSlides.length]);
+    
+    const prevSlide = useCallback(() => {
+        setSlideDirection('left');
+        setHeroIndex((prev) => (prev - 1 + heroSlides.length) % heroSlides.length);
+    }, [heroSlides.length]);
+    
+    const goToSlide = useCallback((index: number) => {
+        setSlideDirection(index > heroIndex ? 'right' : 'left');
+        setHeroIndex(index);
+    }, [heroIndex]);
 
+    // Auto-advance timer that resets when user manually changes slides
     useEffect(() => {
         if (heroSlides.length <= 1) return;
-        const timer = setInterval(nextSlide, 7000);
+        const timer = setInterval(() => {
+            setSlideDirection('right');
+            setHeroIndex((prev) => (prev + 1) % heroSlides.length);
+        }, 7000);
         return () => clearInterval(timer);
-    }, [heroSlides.length]);
+    }, [heroSlides.length, heroIndex]);
 
     const currentSlide = heroSlides[heroIndex];
 
@@ -95,58 +112,58 @@ function HeroSection({ section, startCustomizing, notices: initialNotices }: { s
             )}
 
             <div className="max-w-7xl mx-auto px-6 w-full grid lg:grid-cols-2 gap-8 lg:gap-12 items-center py-16 relative z-10">
-                <div className="flex flex-col gap-6 animate-slide-up">
-                    {/* Context7 Best Practice: text-balance for better typography */}
-                    <h1 className={`font-heading text-5xl sm:text-6xl lg:text-7xl font-bold text-balance whitespace-pre-line ${currentSlide.isFullWidth ? 'text-white' : 'text-[#3a3530]'}`}>
-                        {currentSlide.title}
-                    </h1>
-                    {/* Context7 Best Practice: max-w-prose for readable line length */}
-                    <p className={`text-lg sm:text-xl max-w-prose leading-relaxed ${currentSlide.isFullWidth ? 'text-white/90' : 'text-[#7a7570]'}`}>
-                        {currentSlide.content}
-                    </p>
-                    {/* Context7 Best Practice: focus-visible for accessibility */}
-                    {/* self-start prevents button from stretching full width in flex container */}
-                    <button
-                        onClick={() => handleCtaClick(currentSlide.ctaAction, currentSlide.ctaLink)}
-                        className={`self-start inline-flex items-center gap-3 px-8 py-4 rounded-full text-lg font-semibold transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${currentSlide.isFullWidth
-                            ? 'bg-white text-[#3a3530] hover:bg-pink hover:text-white focus-visible:ring-white'
-                            : 'bg-[#6b8f71] text-white hover:bg-[#5a7e60] shadow-[#6b8f71]/20 hover:shadow-[#6b8f71]/30 focus-visible:ring-[#6b8f71]'
-                            }`}
+                {/* Left content with fixed min-height to prevent button movement */}
+                <div className="flex flex-col gap-6 min-h-[400px]">
+                    {/* Slide content with directional animation */}
+                    <div 
+                        key={heroIndex}
+                        className={`flex flex-col gap-6 ${slideDirection === 'right' ? 'animate-slide-in-right' : 'animate-slide-in-left'}`}
                     >
-                        {currentSlide.ctaText} <ArrowRight className="w-5 h-5" />
-                    </button>
+                        {/* Context7 Best Practice: text-balance for better typography */}
+                        <h1 className={`font-heading text-5xl sm:text-6xl lg:text-7xl font-bold text-balance whitespace-pre-line ${currentSlide.isFullWidth ? 'text-white' : 'text-[#3a3530]'}`}>
+                            {currentSlide.title}
+                        </h1>
+                        {/* Context7 Best Practice: max-w-prose for readable line length */}
+                        <p className={`text-lg sm:text-xl max-w-prose leading-relaxed min-h-[3.5rem] ${currentSlide.isFullWidth ? 'text-white/90' : 'text-[#7a7570]'}`}>
+                            {currentSlide.content}
+                        </p>
+                    </div>
+                    
+                    {/* CTA Button - fixed position below content */}
+                    <div className={`${slideDirection === 'right' ? 'animate-slide-in-right' : 'animate-slide-in-left'}`} style={{ animationDelay: '100ms' }}>
+                        <button
+                            onClick={() => handleCtaClick(currentSlide.ctaAction, currentSlide.ctaLink)}
+                            className={`inline-flex items-center gap-3 px-8 py-4 rounded-full text-lg font-semibold transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${currentSlide.isFullWidth
+                                ? 'bg-white text-[#3a3530] hover:bg-pink hover:text-white focus-visible:ring-white'
+                                : 'bg-[#6b8f71] text-white hover:bg-[#5a7e60] shadow-[#6b8f71]/20 hover:shadow-[#6b8f71]/30 focus-visible:ring-[#6b8f71]'
+                                }`}
+                        >
+                            {currentSlide.ctaText} <ArrowRight className="w-5 h-5" />
+                        </button>
+                    </div>
 
-                    {heroSlides.length > 1 && (
-                        <div className="flex items-center gap-4 mt-10">
-                            <button
-                                onClick={prevSlide}
-                                className={`w-10 h-10 rounded-full border-2 flex items-center justify-center transition-all ${currentSlide.isFullWidth ? 'border-white/30 text-white hover:border-white' : 'border-[#d5cec4] text-[#7a7570] hover:border-[#3a3530] hover:text-[#3a3530]'}`}
-                            >
-                                <ChevronLeft className="w-5 h-5" />
-                            </button>
+                    {/* Navigation dots only - positioned at bottom of content area */}
+                    {!currentSlide.isFullWidth && heroSlides.length > 1 && (
+                        <div className="flex items-center gap-4 mt-auto pt-8">
                             <div className="flex gap-2">
                                 {heroSlides.map((_, i) => (
                                     <button
                                         key={i}
-                                        onClick={() => setHeroIndex(i)}
-                                        className={`h-2 rounded-full transition-all duration-300 ${i === heroIndex
-                                            ? (currentSlide.isFullWidth ? 'w-8 bg-white' : 'w-8 bg-[#3a3530]')
-                                            : (currentSlide.isFullWidth ? 'w-2 bg-white/30' : 'w-2 bg-[#d5cec4]')}`}
+                                        onClick={() => goToSlide(i)}
+                                        className={`h-2 rounded-full transition-all duration-300 ${i === heroIndex ? 'w-8 bg-[#3a3530]' : 'w-2 bg-[#d5cec4]'}`}
                                     />
                                 ))}
                             </div>
-                            <button
-                                onClick={nextSlide}
-                                className={`w-10 h-10 rounded-full border-2 flex items-center justify-center transition-all ${currentSlide.isFullWidth ? 'border-white/30 text-white hover:border-white' : 'border-[#d5cec4] text-[#7a7570] hover:border-[#3a3530] hover:text-[#3a3530]'}`}
-                            >
-                                <ChevronRight className="w-5 h-5" />
-                            </button>
                         </div>
                     )}
                 </div>
 
                 {!currentSlide.isFullWidth && (
-                    <div className="relative flex items-center justify-center min-h-[450px] animate-slide-up animation-delay-300">
+                    <div 
+                        key={`img-${heroIndex}`}
+                        className={`relative flex items-center justify-center min-h-[450px] ${slideDirection === 'right' ? 'animate-slide-in-right' : 'animate-slide-in-left'}`}
+                        style={{ animationDelay: '150ms' }}
+                    >
                         <img
                             src={currentSlide.image || '/products/tote-bag.png'}
                             alt="Featured Product"
@@ -160,15 +177,43 @@ function HeroSection({ section, startCustomizing, notices: initialNotices }: { s
                 )}
             </div>
 
-            {/* Global Arrows for Full Width (on hover) */}
-            {currentSlide.isFullWidth && heroSlides.length > 1 && (
+            {/* Fixed position navigation for ALL slide types - prevents layout shift */}
+            {heroSlides.length > 1 && (
                 <>
-                    <button onClick={prevSlide} className="absolute left-6 top-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-all hover:bg-white/20 z-20">
-                        <ChevronLeft className="w-8 h-8" />
+                    {/* Left Arrow */}
+                    <button 
+                        onClick={prevSlide} 
+                        className={`absolute left-4 sm:left-6 top-1/2 -translate-y-1/2 w-12 h-12 sm:w-14 sm:h-14 rounded-full backdrop-blur-md flex items-center justify-center transition-all z-20
+                            ${currentSlide.isFullWidth 
+                                ? 'bg-white/10 text-white opacity-0 group-hover:opacity-100 hover:bg-white/20' 
+                                : 'bg-[#3a3530]/5 text-[#3a3530] opacity-60 hover:opacity-100 hover:bg-[#3a3530]/10'}`}
+                    >
+                        <ChevronLeft className="w-6 h-6 sm:w-8 sm:h-8" />
                     </button>
-                    <button onClick={nextSlide} className="absolute right-6 top-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-white/10 backdrop-blur-md flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-all hover:bg-white/20 z-20">
-                        <ChevronRight className="w-8 h-8" />
+                    
+                    {/* Right Arrow */}
+                    <button 
+                        onClick={nextSlide} 
+                        className={`absolute right-4 sm:right-6 top-1/2 -translate-y-1/2 w-12 h-12 sm:w-14 sm:h-14 rounded-full backdrop-blur-md flex items-center justify-center transition-all z-20
+                            ${currentSlide.isFullWidth 
+                                ? 'bg-white/10 text-white opacity-0 group-hover:opacity-100 hover:bg-white/20' 
+                                : 'bg-[#3a3530]/5 text-[#3a3530] opacity-60 hover:opacity-100 hover:bg-[#3a3530]/10'}`}
+                    >
+                        <ChevronRight className="w-6 h-6 sm:w-8 sm:h-8" />
                     </button>
+                    
+                    {/* Slide indicators (dots) - fixed at bottom for full-width */}
+                    {currentSlide.isFullWidth && (
+                        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-2 z-20">
+                            {heroSlides.map((_, i) => (
+                                <button
+                                    key={i}
+                                    onClick={() => goToSlide(i)}
+                                    className={`h-2 rounded-full transition-all duration-300 ${i === heroIndex ? 'w-8 bg-white' : 'w-2 bg-white/40 hover:bg-white/60'}`}
+                                />
+                            ))}
+                        </div>
+                    )}
                 </>
             )}
         </section>
@@ -548,6 +593,20 @@ export function LandingPage({ notices, startCustomizing, siteContent }: LandingP
                 @keyframes float {
                     0% { transform: translateY(0px) rotate(0deg); }
                     100% { transform: translateY(-12px) rotate(5deg); }
+                }
+                @keyframes slide-in-right {
+                    0% { opacity: 0; transform: translateX(30px); }
+                    100% { opacity: 1; transform: translateX(0); }
+                }
+                @keyframes slide-in-left {
+                    0% { opacity: 0; transform: translateX(-30px); }
+                    100% { opacity: 1; transform: translateX(0); }
+                }
+                .animate-slide-in-right {
+                    animation: slide-in-right 0.5s ease-out forwards;
+                }
+                .animate-slide-in-left {
+                    animation: slide-in-left 0.5s ease-out forwards;
                 }
                 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
                 .scrollbar-hide::-webkit-scrollbar { display: none; }
