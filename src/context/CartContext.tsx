@@ -5,7 +5,15 @@ export interface CartItem {
   name: string;
   productId: string;
   productName: string;
-  patches: Array<{
+  productImage: string;
+  basePrice: number;
+  frontPatches: Array<{
+    id: string;
+    name: string;
+    image: string;
+    price: number;
+  }>;
+  backPatches: Array<{
     id: string;
     name: string;
     image: string;
@@ -69,7 +77,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             id: item.id,
             product_id: item.productId,
             product_name: item.productName,
-            patches: item.patches,
+            product_image: item.productImage,
+            base_price: item.basePrice,
+            front_patches: item.frontPatches,
+            back_patches: item.backPatches,
             total_price: item.totalPrice,
             quantity: item.quantity,
             design_image: item.designImage,
@@ -99,11 +110,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
               id: row.id,
               productId: row.product_id,
               productName: row.product_name,
-              patches: row.patches,
+              productImage: row.product_image,
+              basePrice: Number(row.base_price),
+              frontPatches: row.front_patches || [],
+              backPatches: row.back_patches || [],
               totalPrice: Number(row.total_price),
               quantity: row.quantity,
               designImage: row.design_image,
-              name: row.product_name // Optional helper
+              name: row.product_name
             }));
             setItems(frontendItems);
           }
@@ -120,7 +134,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setItems((prev) => {
       const existingIndex = prev.findIndex(
         (item) => item.productId === newItem.productId &&
-          JSON.stringify(item.patches) === JSON.stringify(newItem.patches)
+          JSON.stringify(item.frontPatches) === JSON.stringify(newItem.frontPatches) &&
+          JSON.stringify(item.backPatches) === JSON.stringify(newItem.backPatches)
       );
 
       if (existingIndex >= 0) {

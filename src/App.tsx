@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Palette, LogOut, Settings, User, ShoppingCart, X, Plus, Minus, Trash2, Loader2, CheckCircle } from 'lucide-react';
+import { Palette, LogOut, Settings, User, ShoppingCart, X, Plus, Minus, Trash2, Loader2, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { loadStripe } from '@stripe/stripe-js';
 import './App.css';
@@ -78,6 +78,139 @@ const initialNotices: Notice[] = [
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '');
 
+// Cart Item Component with expandable details
+function CartItemCard({ item, updateQuantity, removeItem }: { 
+  item: import('./context/CartContext').CartItem; 
+  updateQuantity: (id: string, qty: number) => void;
+  removeItem: (id: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const totalPatches = item.frontPatches.length + item.backPatches.length;
+  const patchPrice = item.frontPatches.reduce((sum, p) => sum + p.price, 0) + item.backPatches.reduce((sum, p) => sum + p.price, 0);
+  
+  return (
+    <div className="bg-gray-50 rounded-xl p-4">
+      {/* Main Preview Row */}
+      <div className="flex gap-3">
+        {/* Product Preview Image */}
+        <div className="w-20 h-20 bg-white rounded-lg border flex-shrink-0 overflow-hidden">
+          <img 
+            src={item.productImage} 
+            alt={item.productName}
+            className="w-full h-full object-contain"
+          />
+        </div>
+        
+        {/* Product Info */}
+        <div className="flex-1 min-w-0">
+          <div className="flex justify-between items-start">
+            <div>
+              <h4 className="font-semibold text-sm">{item.productName}</h4>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Base: ${item.basePrice.toFixed(2)}
+              </p>
+              <p className="text-xs text-gray-500">
+                {totalPatches} patch{totalPatches !== 1 ? 'es' : ''} (+${patchPrice.toFixed(2)})
+              </p>
+            </div>
+            <button
+              onClick={() => removeItem(item.id)}
+              className="p-1 hover:bg-red-100 rounded-full text-red-500"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Expandable Details */}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-center gap-1 py-2 mt-2 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+      >
+        {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+        {expanded ? 'Hide Details' : 'View Patches'}
+      </button>
+
+      {expanded && (
+        <div className="mt-2 pt-2 border-t border-gray-200 space-y-3">
+          {/* Front Side Patches */}
+          {item.frontPatches.length > 0 && (
+            <div>
+              <h5 className="text-xs font-semibold text-gray-600 mb-2">Front Side</h5>
+              <div className="space-y-1.5">
+                {item.frontPatches.map((patch) => (
+                  <div key={patch.id} className="flex items-center justify-between bg-white rounded-lg px-2 py-1.5">
+                    <div className="flex items-center gap-2">
+                      <img src={patch.image} alt={patch.name} className="w-6 h-6 object-contain" />
+                      <span className="text-xs">{patch.name}</span>
+                    </div>
+                    <span className="text-xs font-medium">${patch.price.toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Back Side Patches */}
+          {item.backPatches.length > 0 && (
+            <div>
+              <h5 className="text-xs font-semibold text-gray-600 mb-2">Back Side</h5>
+              <div className="space-y-1.5">
+                {item.backPatches.map((patch) => (
+                  <div key={patch.id} className="flex items-center justify-between bg-white rounded-lg px-2 py-1.5">
+                    <div className="flex items-center gap-2">
+                      <img src={patch.image} alt={patch.name} className="w-6 h-6 object-contain" />
+                      <span className="text-xs">{patch.name}</span>
+                    </div>
+                    <span className="text-xs font-medium">${patch.price.toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Price Breakdown */}
+          <div className="pt-2 border-t border-gray-200 text-xs space-y-1">
+            <div className="flex justify-between text-gray-500">
+              <span>Base Product</span>
+              <span>${item.basePrice.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-gray-500">
+              <span>Patches ({totalPatches})</span>
+              <span>${patchPrice.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between font-semibold text-gray-700 pt-1 border-t">
+              <span>Item Total</span>
+              <span>${item.totalPrice.toFixed(2)}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quantity & Price Controls */}
+      <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-200">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => updateQuantity(item.id, item.quantity - 1)}
+            className="p-1 hover:bg-gray-200 rounded-full bg-white"
+          >
+            <Minus className="w-4 h-4" />
+          </button>
+          <span className="w-8 text-center font-medium text-sm">{item.quantity}</span>
+          <button
+            onClick={() => updateQuantity(item.id, item.quantity + 1)}
+            className="p-1 hover:bg-gray-200 rounded-full bg-white"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+        </div>
+        <span className="font-bold">${(item.totalPrice * item.quantity).toFixed(2)}</span>
+      </div>
+    </div>
+  );
+}
+
 // Cart Drawer Component
 function CartDrawer() {
   const { items, isCartOpen, setIsCartOpen, totalPrice, totalItems, updateQuantity, removeItem, clearCart } = useCart();
@@ -123,7 +256,12 @@ function CartDrawer() {
         await supabase.from('orders').insert({
           user_id: session.user.id,
           customer_email: session.user.email,
-          items: items.map(i => ({ name: i.productName, patches: i.patches.map(p => p.name), qty: i.quantity, price: i.totalPrice })),
+          items: items.map(i => ({ 
+            name: i.productName, 
+            patches: [...i.frontPatches, ...i.backPatches].map(p => p.name), 
+            qty: i.quantity, 
+            price: i.totalPrice 
+          })),
           total_amount: totalPrice,
           status: 'paid',
           payment_intent_id: piData.clientSecret.split('_secret_')[0],
@@ -164,54 +302,12 @@ function CartDrawer() {
           ) : (
             <div className="space-y-4">
               {items.map((item) => (
-                <div key={item.id} className="bg-gray-50 rounded-xl p-4">
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <h4 className="font-semibold">{item.productName}</h4>
-                      <p className="text-sm text-gray-500">
-                        {item.patches.length} patch{item.patches.length !== 1 ? 'es' : ''}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => removeItem(item.id)}
-                      className="p-1 hover:bg-red-100 rounded-full text-red-500"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  {item.patches.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mb-3">
-                      {item.patches.map((patch) => (
-                        <img
-                          key={patch.id}
-                          src={patch.image}
-                          alt={patch.name}
-                          className="w-8 h-8 object-contain"
-                        />
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                        className="p-1 hover:bg-gray-200 rounded-full"
-                      >
-                        <Minus className="w-4 h-4" />
-                      </button>
-                      <span className="w-8 text-center font-medium">{item.quantity}</span>
-                      <button
-                        onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                        className="p-1 hover:bg-gray-200 rounded-full"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </button>
-                    </div>
-                    <span className="font-bold">${(item.totalPrice * item.quantity).toFixed(2)}</span>
-                  </div>
-                </div>
+                <CartItemCard 
+                  key={item.id} 
+                  item={item} 
+                  updateQuantity={updateQuantity}
+                  removeItem={removeItem}
+                />
               ))}
             </div>
           )}

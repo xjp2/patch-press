@@ -269,7 +269,15 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
             productId: selectedProduct.id,
             productName: selectedProduct.name,
             name: selectedProduct.name,
-            patches: [...frontPatches, ...backPatches].map(p => ({
+            productImage: selectedProduct.frontImage,
+            basePrice: selectedProduct.basePrice,
+            frontPatches: frontPatches.map(p => ({
+                id: p.id,
+                name: p.name,
+                image: p.image,
+                price: p.price
+            })),
+            backPatches: backPatches.map(p => ({
                 id: p.id,
                 name: p.name,
                 image: p.image,
