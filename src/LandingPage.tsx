@@ -561,38 +561,29 @@ export function LandingPage({ notices, startCustomizing, siteContent }: LandingP
                 </div>
             </footer>
 
-            {/* Hero Animation Keyframes - isolated to prevent conflicts */}
+            {/* Hero Animation Keyframes */}
             <style>{`
                 @keyframes float {
                     0% { transform: translateY(0px) rotate(0deg); }
                     100% { transform: translateY(-12px) rotate(5deg); }
                 }
-                /* Pure horizontal slide animations - isolated from global CSS */
+                /* Hero slide animations - horizontal only */
                 @keyframes hero-slide-right {
-                    0% { opacity: 0; transform: translate3d(60px, 0, 0) !important; }
-                    100% { opacity: 1; transform: translate3d(0, 0, 0) !important; }
+                    from { opacity: 0; transform: translateX(40px); }
+                    to { opacity: 1; transform: translateX(0); }
                 }
                 @keyframes hero-slide-left {
-                    0% { opacity: 0; transform: translate3d(-60px, 0, 0) !important; }
-                    100% { opacity: 1; transform: translate3d(0, 0, 0) !important; }
+                    from { opacity: 0; transform: translateX(-40px); }
+                    to { opacity: 1; transform: translateX(0); }
                 }
-                /* High specificity to override any conflicting animations */
-                section .hero-slide-content {
+                .hero-slide-content {
                     will-change: transform, opacity;
-                    transform: translate3d(0, 0, 0) !important;
                 }
-                section .hero-slide-content.animate-slide-in-right {
-                    animation: hero-slide-right 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards !important;
-                    transform: translate3d(0, 0, 0) !important;
+                .hero-slide-content.animate-slide-in-right {
+                    animation: hero-slide-right 0.4s ease-out forwards;
                 }
-                section .hero-slide-content.animate-slide-in-left {
-                    animation: hero-slide-left 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards !important;
-                    transform: translate3d(0, 0, 0) !important;
-                }
-                /* Ensure child elements don't have conflicting transforms during animation */
-                section .hero-slide-content > * {
-                    transform: none !important;
-                    animation: none !important;
+                .hero-slide-content.animate-slide-in-left {
+                    animation: hero-slide-left 0.4s ease-out forwards;
                 }
                 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
                 .scrollbar-hide::-webkit-scrollbar { display: none; }
