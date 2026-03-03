@@ -85,8 +85,15 @@ function CartItemCard({ item, updateQuantity, removeItem }: {
   removeItem: (id: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const totalPatches = item.frontPatches.length + item.backPatches.length;
-  const patchPrice = item.frontPatches.reduce((sum, p) => sum + p.price, 0) + item.backPatches.reduce((sum, p) => sum + p.price, 0);
+  // Handle old cart data that may not have frontPatches/backPatches
+  const frontPatches = item.frontPatches || [];
+  const backPatches = item.backPatches || [];
+  // Handle legacy cart items that only have patches array
+  const legacyPatches = (item as any).patches || [];
+  const totalPatches = frontPatches.length + backPatches.length + legacyPatches.length;
+  const patchPrice = frontPatches.reduce((sum: number, p: any) => sum + (p.price || 0), 0) + 
+                     backPatches.reduce((sum: number, p: any) => sum + (p.price || 0), 0) +
+                     legacyPatches.reduce((sum: number, p: any) => sum + (p.price || 0), 0);
   
   return (
     <div className="bg-gray-50 rounded-xl p-4">
@@ -95,7 +102,7 @@ function CartItemCard({ item, updateQuantity, removeItem }: {
         {/* Product Preview Image */}
         <div className="w-20 h-20 bg-white rounded-lg border flex-shrink-0 overflow-hidden">
           <img 
-            src={item.productImage} 
+            src={item.productImage || '/products/tote-bag.png'} 
             alt={item.productName}
             className="w-full h-full object-contain"
           />
@@ -107,7 +114,7 @@ function CartItemCard({ item, updateQuantity, removeItem }: {
             <div>
               <h4 className="font-semibold text-sm">{item.productName}</h4>
               <p className="text-xs text-gray-500 mt-0.5">
-                Base: ${item.basePrice.toFixed(2)}
+                Base: ${(item.basePrice || 0).toFixed(2)}
               </p>
               <p className="text-xs text-gray-500">
                 {totalPatches} patch{totalPatches !== 1 ? 'es' : ''} (+${patchPrice.toFixed(2)})
@@ -135,17 +142,17 @@ function CartItemCard({ item, updateQuantity, removeItem }: {
       {expanded && (
         <div className="mt-2 pt-2 border-t border-gray-200 space-y-3">
           {/* Front Side Patches */}
-          {item.frontPatches.length > 0 && (
+          {frontPatches.length > 0 && (
             <div>
               <h5 className="text-xs font-semibold text-gray-600 mb-2">Front Side</h5>
               <div className="space-y-1.5">
-                {item.frontPatches.map((patch) => (
+                {frontPatches.map((patch) => (
                   <div key={patch.id} className="flex items-center justify-between bg-white rounded-lg px-2 py-1.5">
                     <div className="flex items-center gap-2">
                       <img src={patch.image} alt={patch.name} className="w-6 h-6 object-contain" />
                       <span className="text-xs">{patch.name}</span>
                     </div>
-                    <span className="text-xs font-medium">${patch.price.toFixed(2)}</span>
+                    <span className="text-xs font-medium">${(patch.price || 0).toFixed(2)}</span>
                   </div>
                 ))}
               </div>
@@ -153,17 +160,35 @@ function CartItemCard({ item, updateQuantity, removeItem }: {
           )}
 
           {/* Back Side Patches */}
-          {item.backPatches.length > 0 && (
+          {backPatches.length > 0 && (
             <div>
               <h5 className="text-xs font-semibold text-gray-600 mb-2">Back Side</h5>
               <div className="space-y-1.5">
-                {item.backPatches.map((patch) => (
+                {backPatches.map((patch) => (
                   <div key={patch.id} className="flex items-center justify-between bg-white rounded-lg px-2 py-1.5">
                     <div className="flex items-center gap-2">
                       <img src={patch.image} alt={patch.name} className="w-6 h-6 object-contain" />
                       <span className="text-xs">{patch.name}</span>
                     </div>
-                    <span className="text-xs font-medium">${patch.price.toFixed(2)}</span>
+                    <span className="text-xs font-medium">${(patch.price || 0).toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Legacy Patches (old cart data) */}
+          {legacyPatches.length > 0 && (
+            <div>
+              <h5 className="text-xs font-semibold text-gray-600 mb-2">Patches</h5>
+              <div className="space-y-1.5">
+                {legacyPatches.map((patch: any) => (
+                  <div key={patch.id} className="flex items-center justify-between bg-white rounded-lg px-2 py-1.5">
+                    <div className="flex items-center gap-2">
+                      <img src={patch.image} alt={patch.name} className="w-6 h-6 object-contain" />
+                      <span className="text-xs">{patch.name}</span>
+                    </div>
+                    <span className="text-xs font-medium">${(patch.price || 0).toFixed(2)}</span>
                   </div>
                 ))}
               </div>
@@ -174,7 +199,7 @@ function CartItemCard({ item, updateQuantity, removeItem }: {
           <div className="pt-2 border-t border-gray-200 text-xs space-y-1">
             <div className="flex justify-between text-gray-500">
               <span>Base Product</span>
-              <span>${item.basePrice.toFixed(2)}</span>
+              <span>${(item.basePrice || 0).toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-gray-500">
               <span>Patches ({totalPatches})</span>
