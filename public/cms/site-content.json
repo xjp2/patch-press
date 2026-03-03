@@ -108,7 +108,11 @@
         "heading": "Ready to create?",
         "subtitle": "Start designing your custom accessories today.",
         "buttonText": "Start Now",
-        "buttonAction": "scroll"
+        "titleColor": "#000000",
+        "buttonAction": "scroll",
+        "subtitleColor": "#198712",
+        "titleAlignment": "center",
+        "subtitleAlignment": "right"
       },
       "visible": true
     },
@@ -159,6 +163,6 @@
       "Remove patches by clicking the × button"
     ]
   },
-  "updated_at": "2026-03-03T08:46:06.567+00:00",
+  "updated_at": "2026-03-03T17:06:08.202+00:00",
   "navbar": {}
 }
