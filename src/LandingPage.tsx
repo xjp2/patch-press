@@ -111,59 +111,32 @@ function HeroSection({ section, startCustomizing, notices: initialNotices }: { s
                 <div className="absolute inset-0 opacity-[0.03] z-0" style={{ backgroundImage: 'radial-gradient(#3a3530 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
             )}
 
-            <div className="max-w-7xl mx-auto px-6 w-full grid lg:grid-cols-2 gap-8 lg:gap-12 items-center py-16 relative z-10">
-                {/* Left content with fixed min-height to prevent button movement */}
-                <div className="flex flex-col gap-6 min-h-[400px]">
-                    {/* Slide content with directional animation */}
-                    <div 
-                        key={heroIndex}
-                        className={`flex flex-col gap-6 ${slideDirection === 'right' ? 'animate-slide-in-right' : 'animate-slide-in-left'}`}
+            {/* Main slide content - single key for uniform animation */}
+            <div 
+                key={heroIndex}
+                className={`max-w-7xl mx-auto px-6 w-full grid lg:grid-cols-2 gap-8 lg:gap-12 items-center py-16 relative z-10 ${slideDirection === 'right' ? 'animate-slide-in-right' : 'animate-slide-in-left'}`}
+            >
+                {/* Left content */}
+                <div className="flex flex-col gap-6">
+                    <h1 className={`font-heading text-5xl sm:text-6xl lg:text-7xl font-bold text-balance whitespace-pre-line ${currentSlide.isFullWidth ? 'text-white' : 'text-[#3a3530]'}`}>
+                        {currentSlide.title}
+                    </h1>
+                    <p className={`text-lg sm:text-xl max-w-prose leading-relaxed ${currentSlide.isFullWidth ? 'text-white/90' : 'text-[#7a7570]'}`}>
+                        {currentSlide.content}
+                    </p>
+                    <button
+                        onClick={() => handleCtaClick(currentSlide.ctaAction, currentSlide.ctaLink)}
+                        className={`self-start inline-flex items-center gap-3 px-8 py-4 rounded-full text-lg font-semibold transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${currentSlide.isFullWidth
+                            ? 'bg-white text-[#3a3530] hover:bg-pink hover:text-white focus-visible:ring-white'
+                            : 'bg-[#6b8f71] text-white hover:bg-[#5a7e60] shadow-[#6b8f71]/20 hover:shadow-[#6b8f71]/30 focus-visible:ring-[#6b8f71]'
+                            }`}
                     >
-                        {/* Context7 Best Practice: text-balance for better typography */}
-                        <h1 className={`font-heading text-5xl sm:text-6xl lg:text-7xl font-bold text-balance whitespace-pre-line ${currentSlide.isFullWidth ? 'text-white' : 'text-[#3a3530]'}`}>
-                            {currentSlide.title}
-                        </h1>
-                        {/* Context7 Best Practice: max-w-prose for readable line length */}
-                        <p className={`text-lg sm:text-xl max-w-prose leading-relaxed min-h-[3.5rem] ${currentSlide.isFullWidth ? 'text-white/90' : 'text-[#7a7570]'}`}>
-                            {currentSlide.content}
-                        </p>
-                    </div>
-                    
-                    {/* CTA Button - fixed position below content */}
-                    <div className={`${slideDirection === 'right' ? 'animate-slide-in-right' : 'animate-slide-in-left'}`} style={{ animationDelay: '100ms' }}>
-                        <button
-                            onClick={() => handleCtaClick(currentSlide.ctaAction, currentSlide.ctaLink)}
-                            className={`inline-flex items-center gap-3 px-8 py-4 rounded-full text-lg font-semibold transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${currentSlide.isFullWidth
-                                ? 'bg-white text-[#3a3530] hover:bg-pink hover:text-white focus-visible:ring-white'
-                                : 'bg-[#6b8f71] text-white hover:bg-[#5a7e60] shadow-[#6b8f71]/20 hover:shadow-[#6b8f71]/30 focus-visible:ring-[#6b8f71]'
-                                }`}
-                        >
-                            {currentSlide.ctaText} <ArrowRight className="w-5 h-5" />
-                        </button>
-                    </div>
-
-                    {/* Navigation dots only - positioned at bottom of content area */}
-                    {!currentSlide.isFullWidth && heroSlides.length > 1 && (
-                        <div className="flex items-center gap-4 mt-auto pt-8">
-                            <div className="flex gap-2">
-                                {heroSlides.map((_, i) => (
-                                    <button
-                                        key={i}
-                                        onClick={() => goToSlide(i)}
-                                        className={`h-2 rounded-full transition-all duration-300 ${i === heroIndex ? 'w-8 bg-[#3a3530]' : 'w-2 bg-[#d5cec4]'}`}
-                                    />
-                                ))}
-                            </div>
-                        </div>
-                    )}
+                        {currentSlide.ctaText} <ArrowRight className="w-5 h-5" />
+                    </button>
                 </div>
 
                 {!currentSlide.isFullWidth && (
-                    <div 
-                        key={`img-${heroIndex}`}
-                        className={`relative flex items-center justify-center min-h-[450px] ${slideDirection === 'right' ? 'animate-slide-in-right' : 'animate-slide-in-left'}`}
-                        style={{ animationDelay: '150ms' }}
-                    >
+                    <div className="relative flex items-center justify-center min-h-[450px]">
                         <img
                             src={currentSlide.image || '/products/tote-bag.png'}
                             alt="Featured Product"
@@ -177,7 +150,7 @@ function HeroSection({ section, startCustomizing, notices: initialNotices }: { s
                 )}
             </div>
 
-            {/* Fixed position navigation for ALL slide types - prevents layout shift */}
+            {/* Fixed position navigation for ALL slide types */}
             {heroSlides.length > 1 && (
                 <>
                     {/* Left Arrow */}
@@ -202,18 +175,18 @@ function HeroSection({ section, startCustomizing, notices: initialNotices }: { s
                         <ChevronRight className="w-6 h-6 sm:w-8 sm:h-8" />
                     </button>
                     
-                    {/* Slide indicators (dots) - fixed at bottom for full-width */}
-                    {currentSlide.isFullWidth && (
-                        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-2 z-20">
-                            {heroSlides.map((_, i) => (
-                                <button
-                                    key={i}
-                                    onClick={() => goToSlide(i)}
-                                    className={`h-2 rounded-full transition-all duration-300 ${i === heroIndex ? 'w-8 bg-white' : 'w-2 bg-white/40 hover:bg-white/60'}`}
-                                />
-                            ))}
-                        </div>
-                    )}
+                    {/* Slide indicators (dots) - ALWAYS at bottom center for ALL slide types */}
+                    <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-2 z-20">
+                        {heroSlides.map((_, i) => (
+                            <button
+                                key={i}
+                                onClick={() => goToSlide(i)}
+                                className={`h-2 rounded-full transition-all duration-300 ${i === heroIndex 
+                                    ? (currentSlide.isFullWidth ? 'w-8 bg-white' : 'w-8 bg-[#3a3530]') 
+                                    : (currentSlide.isFullWidth ? 'w-2 bg-white/40 hover:bg-white/60' : 'w-2 bg-[#3a3530]/30 hover:bg-[#3a3530]/50')}`}
+                            />
+                        ))}
+                    </div>
                 </>
             )}
         </section>
