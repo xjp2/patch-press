@@ -107,13 +107,20 @@ export interface TestimonialItem {
     proofImage?: string;
     linkUrl?: string;
 }
-export interface TestimonialsContent { sectionTitle: string; items: TestimonialItem[]; }
+export interface TestimonialsContent { 
+    sectionTitle: string; 
+    items: TestimonialItem[];
+    titleAlignment?: 'left' | 'center' | 'right';
+    titleColor?: string;
+}
 export interface CtaContent {
     heading: string;
     subtitle?: string;
     buttonText: string;
     buttonAction: 'customize' | 'scroll' | 'link';
     linkUrl?: string;
+    titleAlignment?: 'left' | 'center' | 'right';
+    titleColor?: string;
 }
 export interface DividerContent { style: 'line' | 'dots' | 'wave'; }
 export interface SectionStyling {
@@ -147,9 +154,21 @@ export interface HeroContent {
     ctaText: string;
     showNoticesOverride?: boolean;
     isFullWidth?: boolean; // Slideshow/cover style toggle
+    titleAlignment?: 'left' | 'center' | 'right';
+    titleColor?: string;
 }
-export interface HowItWorksContent { sectionTitle: string; steps: HowItWorksStep[]; }
-export interface GalleryContent { sectionTitle: string; items: GalleryItem[]; }
+export interface HowItWorksContent { 
+    sectionTitle: string; 
+    steps: HowItWorksStep[];
+    titleAlignment?: 'left' | 'center' | 'right';
+    titleColor?: string;
+}
+export interface GalleryContent { 
+    sectionTitle: string; 
+    items: GalleryItem[];
+    titleAlignment?: 'left' | 'center' | 'right';
+    titleColor?: string;
+}
 
 export interface GlobalSettings {
     logoText: string;
@@ -1109,6 +1128,23 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                                                                     <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Section Title</label>
                                                                                     <input type="text" value={c.sectionTitle || ''} onChange={e => updateSectionContent(section.id, { ...c, sectionTitle: e.target.value })} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-pink outline-none" />
                                                                                 </div>
+                                                                                <div className="grid grid-cols-2 gap-4">
+                                                                                    <div>
+                                                                                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Title Alignment</label>
+                                                                                        <div className="flex gap-1">
+                                                                                            {(['left', 'center', 'right'] as const).map(align => (
+                                                                                                <button key={align} onClick={() => updateSectionContent(section.id, { ...c, titleAlignment: align })} className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold capitalize transition-all ${c.titleAlignment === align ? 'bg-pink text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{align}</button>
+                                                                                            ))}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Title Color</label>
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            <input type="color" value={c.titleColor || '#3a3530'} onChange={e => updateSectionContent(section.id, { ...c, titleColor: e.target.value })} className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer" />
+                                                                                            <input type="text" value={c.titleColor || ''} onChange={e => updateSectionContent(section.id, { ...c, titleColor: e.target.value })} placeholder="#3a3530" className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-sm" />
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
                                                                                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => handleStepDragEnd(section.id, e)}>
                                                                                     <SortableContext items={c.steps.map(s => s.id || `step-${Math.random()}`)} strategy={verticalListSortingStrategy}>
                                                                                         {c.steps.map((step: HowItWorksStep, i: number) => (
@@ -1145,6 +1181,23 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                                                                 <div>
                                                                                     <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Section Title</label>
                                                                                     <input type="text" value={c.sectionTitle || ''} onChange={e => updateSectionContent(section.id, { ...c, sectionTitle: e.target.value })} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-pink outline-none" />
+                                                                                </div>
+                                                                                <div className="grid grid-cols-2 gap-4">
+                                                                                    <div>
+                                                                                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Title Alignment</label>
+                                                                                        <div className="flex gap-1">
+                                                                                            {(['left', 'center', 'right'] as const).map(align => (
+                                                                                                <button key={align} onClick={() => updateSectionContent(section.id, { ...c, titleAlignment: align })} className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold capitalize transition-all ${c.titleAlignment === align ? 'bg-pink text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{align}</button>
+                                                                                            ))}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Title Color</label>
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            <input type="color" value={c.titleColor || '#3a3530'} onChange={e => updateSectionContent(section.id, { ...c, titleColor: e.target.value })} className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer" />
+                                                                                            <input type="text" value={c.titleColor || ''} onChange={e => updateSectionContent(section.id, { ...c, titleColor: e.target.value })} placeholder="#3a3530" className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-sm" />
+                                                                                        </div>
+                                                                                    </div>
                                                                                 </div>
                                                                                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => handleGalleryDragEnd(section.id, e)}>
                                                                                     <SortableContext items={c.items.map(item => item.id)} strategy={verticalListSortingStrategy}>
@@ -1272,6 +1325,23 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                                                                     <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Section Title</label>
                                                                                     <input type="text" value={c.sectionTitle || ''} onChange={e => updateSectionContent(section.id, { ...c, sectionTitle: e.target.value })} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-pink outline-none" />
                                                                                 </div>
+                                                                                <div className="grid grid-cols-2 gap-4">
+                                                                                    <div>
+                                                                                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Title Alignment</label>
+                                                                                        <div className="flex gap-1">
+                                                                                            {(['left', 'center', 'right'] as const).map(align => (
+                                                                                                <button key={align} onClick={() => updateSectionContent(section.id, { ...c, titleAlignment: align })} className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold capitalize transition-all ${c.titleAlignment === align ? 'bg-pink text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{align}</button>
+                                                                                            ))}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Title Color</label>
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            <input type="color" value={c.titleColor || '#3a3530'} onChange={e => updateSectionContent(section.id, { ...c, titleColor: e.target.value })} className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer" />
+                                                                                            <input type="text" value={c.titleColor || ''} onChange={e => updateSectionContent(section.id, { ...c, titleColor: e.target.value })} placeholder="#3a3530" className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-sm" />
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
                                                                                 {c.items.map((item) => (
                                                                                     <div key={item.id} className="bg-white border border-gray-100 rounded-xl p-4 space-y-3 group shadow-sm hover:border-pink/30 transition-all">
                                                                                         <div className="flex items-center justify-between">
@@ -1307,9 +1377,24 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                                                                         <input type="text" value={c.heading || ''} onChange={e => updateSectionContent(section.id, { ...c, heading: e.target.value })} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-pink outline-none shadow-sm" />
                                                                                     </div>
                                                                                     <div>
-                                                                                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Subtitle</label>
-                                                                                        <input type="text" value={c.subtitle || ''} onChange={e => updateSectionContent(section.id, { ...c, subtitle: e.target.value })} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-pink outline-none shadow-sm" />
+                                                                                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Title Color</label>
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            <input type="color" value={c.titleColor || '#ffffff'} onChange={e => updateSectionContent(section.id, { ...c, titleColor: e.target.value })} className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer" />
+                                                                                            <input type="text" value={c.titleColor || ''} onChange={e => updateSectionContent(section.id, { ...c, titleColor: e.target.value })} placeholder="#ffffff" className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-sm" />
+                                                                                        </div>
                                                                                     </div>
+                                                                                </div>
+                                                                                <div>
+                                                                                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Title Alignment</label>
+                                                                                    <div className="flex gap-1 max-w-xs">
+                                                                                        {(['left', 'center', 'right'] as const).map(align => (
+                                                                                            <button key={align} onClick={() => updateSectionContent(section.id, { ...c, titleAlignment: align })} className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold capitalize transition-all ${c.titleAlignment === align ? 'bg-pink text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{align}</button>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                </div>
+                                                                                <div>
+                                                                                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Subtitle</label>
+                                                                                    <input type="text" value={c.subtitle || ''} onChange={e => updateSectionContent(section.id, { ...c, subtitle: e.target.value })} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-pink outline-none shadow-sm" />
                                                                                 </div>
                                                                                 <div className="grid sm:grid-cols-2 gap-4">
                                                                                     <div>

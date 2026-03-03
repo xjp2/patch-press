@@ -201,19 +201,19 @@ function HowItWorksSection({ section }: { section: PageSection }) {
     return (
         <section
             ref={ref}
-            className={`scroll-reveal ${isRevealed ? 'scroll-revealed' : ''}`}
+            className={`py-16 scroll-reveal ${isRevealed ? 'scroll-revealed' : ''}`}
             style={{
                 backgroundColor: styling.backgroundColor,
-                paddingTop: styling.paddingTop,
-                paddingBottom: styling.paddingBottom,
+                paddingTop: styling.paddingTop || '4rem',
+                paddingBottom: styling.paddingBottom || '4rem',
                 color: styling.textColor
             }}
         >
             {/* Context7 Best Practice: Consistent container max-width and padding */}
             <div className="max-w-6xl mx-auto px-6">
                 {/* Context7 Best Practice: Proper heading hierarchy with text-balance */}
-                <div className={`text-center mb-12 lg:mb-16 flex flex-col gap-3 scroll-reveal ${isRevealed ? 'scroll-revealed' : ''}`}>
-                    <h2 className="font-heading text-3xl sm:text-4xl font-bold text-[var(--color-primary)] text-balance">{c.sectionTitle}</h2>
+                <div className={`text-${c.titleAlignment || 'center'} mb-12 lg:mb-16 flex flex-col gap-3 scroll-reveal ${isRevealed ? 'scroll-revealed' : ''}`}>
+                    <h2 className="font-heading text-3xl sm:text-4xl font-bold text-balance" style={{ color: c.titleColor || 'var(--color-primary)' }}>{c.sectionTitle}</h2>
                     <div className="flex items-center justify-center gap-1 text-[var(--color-secondary)]"><span className="text-2xl">✦</span></div>
                 </div>
                 {/* Context7 Best Practice: gap-6 for consistent spacing (shadcn/ui field group pattern) */}
@@ -269,16 +269,19 @@ function GallerySection({ section, startCustomizing }: { section: PageSection; s
         <section
             id="gallery"
             ref={ref}
-            className={`scroll-reveal ${isRevealed ? 'scroll-revealed' : ''}`}
+            className={`py-16 scroll-reveal ${isRevealed ? 'scroll-revealed' : ''}`}
             style={{
                 backgroundColor: styling.backgroundColor,
-                paddingTop: styling.paddingTop,
-                paddingBottom: styling.paddingBottom,
+                paddingTop: styling.paddingTop || '4rem',
+                paddingBottom: styling.paddingBottom || '4rem',
                 color: styling.textColor
             }}
         >
             <div className="max-w-[1400px] mx-auto px-6">
-                <h2 className="text-4xl font-black mb-12" style={{ color: styling.textColor }}>{c.sectionTitle}</h2>
+                <h2 className="text-4xl font-black mb-12" style={{ 
+                    color: c.titleColor || styling.textColor || 'var(--color-primary)',
+                    textAlign: c.titleAlignment || 'center'
+                }}>{c.sectionTitle}</h2>
                 <div className="flex gap-6 overflow-x-auto pb-12 snap-x hide-scrollbar">
                     {c.items.map((item, i) => (
                         <div key={item.id} className={`flex-shrink-0 snap-center group cursor-pointer scroll-reveal-scale scroll-delay-${Math.min(i + 1, 6)} ${isRevealed ? 'scroll-revealed' : ''}`} onClick={() => handleItemClick(item.linkUrl)}>
@@ -392,7 +395,10 @@ function TestimonialsSection({ section }: { section: PageSection }) {
             }}
         >
             <div className="max-w-5xl mx-auto">
-                <h2 className={`font-heading text-3xl sm:text-4xl font-bold text-[var(--color-primary)] text-center mb-12 scroll-reveal ${isRevealed ? 'scroll-revealed' : ''}`}>{c.sectionTitle}</h2>
+                <h2 className={`font-heading text-3xl sm:text-4xl font-bold mb-12 scroll-reveal ${isRevealed ? 'scroll-revealed' : ''}`} style={{ 
+                    color: c.titleColor || 'var(--color-primary)',
+                    textAlign: c.titleAlignment || 'center'
+                }}>{c.sectionTitle}</h2>
                 <div className="grid md:grid-cols-3 gap-6">
                     {c.items.map((item, i) => (
                         <div
@@ -455,7 +461,10 @@ function CtaSection({ section, startCustomizing }: { section: PageSection; start
             }}
         >
             <div className={`max-w-3xl mx-auto text-center scroll-reveal ${isRevealed ? 'scroll-revealed' : ''}`}>
-                <h2 className="font-heading text-3xl sm:text-4xl font-bold text-white mb-4">{c.heading}</h2>
+                <h2 className="font-heading text-3xl sm:text-4xl font-bold mb-4" style={{ 
+                    color: c.titleColor || 'white',
+                    textAlign: c.titleAlignment || 'center'
+                }}>{c.heading}</h2>
                 {c.subtitle && <p className="text-white/80 text-lg mb-8">{c.subtitle}</p>}
                 <button
                     onClick={handleCtaClick}
