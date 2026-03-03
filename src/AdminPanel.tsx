@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { db, storage, supabase, frontendProductToDb, frontendPatchToDb } from './lib/supabase';
-import { Settings, X, Plus, ShoppingCart, Palette, Layers, Camera, AlertCircle, Trash2, Layout, ChevronDown, ChevronUp, Eye, EyeOff, Facebook, Twitter, Globe, Loader2, ImageIcon, RefreshCw } from 'lucide-react';
+import { Settings, X, Plus, ShoppingCart, Palette, Layers, Camera, AlertCircle, Trash2, Layout, ChevronDown, ChevronUp, Eye, EyeOff, Facebook, Twitter, Globe, Loader2, ImageIcon, RefreshCw, Wand2, Sparkles, Crop } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
-import { ZoneEditor } from './ZoneEditor';
+import { ImageTracer, type TracedZone } from './ImageTracer';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { SortableSection } from './SortableSection';
@@ -527,9 +527,14 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
     // Visual Zone Editor State
     const [showZoneEditor, setShowZoneEditor] = useState(false);
     const [showCropEditor, setShowCropEditor] = useState(false);
-    const [editingProductId, setEditingProductId] = useState<string | null>(null);
 
-    const [tempZone, setTempZone] = useState<{ x: number; y: number; width: number; height: number; type: 'rectangle' | 'polygon'; points?: { x: number, y: number }[] }>({ x: 15, y: 25, width: 70, height: 60, type: 'rectangle' });
+    const [editingProductId, setEditingProductId] = useState<string | null>(null);
+    const [editingProductForCrop, setEditingProductForCrop] = useState<string | null>(null);
+    const [editingPatchId, setEditingPatchId] = useState<string | null>(null);
+    const [tracerImageUrl, setTracerImageUrl] = useState('');
+    const [tracerInitialZone, setTracerInitialZone] = useState<TracedZone | undefined>(undefined);
+
+    const [tempZone, setTempZone] = useState<TracedZone>({ x: 15, y: 25, width: 70, height: 60, type: 'rectangle' });
 
     const [newPatchName, setNewPatchName] = useState('');
     const [newPatchPrice, setNewPatchPrice] = useState('');
@@ -540,7 +545,7 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
     const [newPatchHeight, setNewPatchHeight] = useState('80');
     // Patch Sizer State
     const [showPatchSizer, setShowPatchSizer] = useState(false);
-    const [tempPatchZone, setTempPatchZone] = useState<{ x: number; y: number; width: number; height: number; type: 'rectangle' | 'polygon'; points?: { x: number, y: number }[] }>({ x: 10, y: 10, width: 80, height: 80, type: 'rectangle' });
+    const [tempPatchZone, setTempPatchZone] = useState<TracedZone>({ x: 10, y: 10, width: 80, height: 80, type: 'rectangle' });
 
 
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, setter: (url: string) => void, folder: string = 'uploads') => {
@@ -605,12 +610,38 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
         }
     };
 
-    const openZoneEditor = () => {
-        if (!newProductFrontImage) {
-            alert("Please upload a front image first!");
+    
+
+    const openImageTracer = (mode: 'placement' | 'crop', productId?: string) => {
+        const product = productId ? products.find(p => p.id === productId) : null;
+        const imageUrl = product?.frontImage || newProductFrontImage;
+        
+        if (!imageUrl) {
+            alert("Please upload an image first!");
             return;
         }
-        setShowZoneEditor(true);
+
+        setTracerImageUrl(imageUrl);
+        
+        if (mode === 'placement') {
+            setTracerInitialZone(product?.placementZone || tempZone);
+        } else {
+            setTracerInitialZone(product?.cropZone || { x: 0, y: 0, width: 100, height: 100, type: 'rectangle' });
+        }
+        
+        if (productId) {
+            if (mode === 'placement') {
+                setEditingProductId(productId);
+            } else {
+                setEditingProductForCrop(productId);
+            }
+        }
+        
+        if (mode === 'placement') {
+            setShowZoneEditor(true);
+        } else {
+            setShowCropEditor(true);
+        }
     };
 
     const openPatchSizer = () => {
@@ -618,6 +649,20 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
             alert("Please upload a patch image first!");
             return;
         }
+        setTracerImageUrl(newPatchImage);
+        setTracerInitialZone(tempPatchZone);
+        setShowPatchSizer(true);
+    };
+
+    const openExistingPatchSizer = (patchId: string) => {
+        const patch = patches.find(p => p.id === patchId);
+        if (!patch?.image) {
+            alert("Patch has no image!");
+            return;
+        }
+        setEditingPatchId(patchId);
+        setTracerImageUrl(patch.image);
+        setTracerInitialZone(patch.contentZone || { x: 10, y: 10, width: 80, height: 80, type: 'rectangle' });
         setShowPatchSizer(true);
     };
 
@@ -663,37 +708,33 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                     <button
                                         onClick={handleRebuild}
                                         disabled={isRebuilding}
-                                        className={`text-xs px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 ${
+                                        className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-lg flex items-center gap-2 ${
                                             rebuildStatus === 'success' 
-                                                ? 'bg-green-600 text-white' 
+                                                ? 'bg-green-500 text-white shadow-green-500/30' 
                                                 : rebuildStatus === 'error'
-                                                ? 'bg-red-600 text-white'
-                                                : 'bg-blue-600 text-white hover:bg-blue-700'
-                                        } ${isRebuilding ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                ? 'bg-red-500 text-white shadow-red-500/30'
+                                                : 'bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 shadow-blue-500/30 hover:shadow-xl hover:-translate-y-0.5'
+                                        } ${isRebuilding ? 'opacity-70 cursor-not-allowed' : ''}`}
                                     >
                                         {isRebuilding ? (
                                             <>
-                                                <Loader2 className="w-3 h-3 animate-spin" />
-                                                Rebuilding...
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                Updating Live Site...
                                             </>
                                         ) : rebuildStatus === 'success' ? (
                                             <>
-                                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                                </svg>
-                                                Rebuild Started!
+                                                <Sparkles className="w-4 h-4" />
+                                                Live Site Updated!
                                             </>
                                         ) : rebuildStatus === 'error' ? (
                                             <>
-                                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                                                </svg>
-                                                Failed
+                                                <AlertCircle className="w-4 h-4" />
+                                                Update Failed
                                             </>
                                         ) : (
                                             <>
-                                                <RefreshCw className="w-3 h-3" />
-                                                Rebuild Site
+                                                <RefreshCw className="w-4 h-4" />
+                                                🚀 Update Live Site
                                             </>
                                         )}
                                     </button>
@@ -754,28 +795,49 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                         {saveSuccess === 'products' ? '✅ Saved to Cloud' : '☁️ Save Products'}
                                     </button>
                                 </div>
-                                <h2 className="font-heading text-xl font-bold">Add New Product</h2>
-                                <div className="grid md:grid-cols-2 gap-4">
-                                    <input type="text" value={newProductName || ''} onChange={(e) => setNewProductName(e.target.value)} placeholder="Product Name" className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-pink outline-none" />
-                                    <input type="number" value={newProductPrice || ''} onChange={(e) => setNewProductPrice(e.target.value)} placeholder="Base Price ($)" className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-pink outline-none" />
-                                </div>
-
-                                <div className="grid md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-sm font-semibold mb-2">Front Image (Base)</label>
-                                        <label className="flex items-center justify-center gap-2 px-4 py-8 bg-cream rounded-xl cursor-pointer hover:bg-pink/10 transition-colors border-2 border-dashed border-gray-300">
-                                            <Camera className="w-6 h-6 text-pink" /><span className="text-sm">Upload Front</span>
-                                            <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, setNewProductFrontImage, 'products')} className="hidden" />
-                                        </label>
-                                        {newProductFrontImage && <img src={newProductFrontImage} alt="Front Preview" className="mt-2 w-24 h-24 object-contain" />}
+                                {/* Context7 Best Practice: Section heading with proper spacing */}
+                                <h2 className="font-heading text-xl font-bold text-foreground">Add New Product</h2>
+                                
+                                {/* Context7 Best Practice: flex flex-col gap-6 for field groups */}
+                                <div className="flex flex-col gap-6">
+                                    <div className="grid md:grid-cols-2 gap-4">
+                                        {/* Context7 Best Practice: focus-visible ring for accessibility */}
+                                        <input 
+                                            type="text" 
+                                            value={newProductName || ''} 
+                                            onChange={(e) => setNewProductName(e.target.value)} 
+                                            placeholder="Product Name" 
+                                            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-pink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink/50 focus-visible:ring-offset-2 transition-all" 
+                                        />
+                                        <input 
+                                            type="number" 
+                                            value={newProductPrice || ''} 
+                                            onChange={(e) => setNewProductPrice(e.target.value)} 
+                                            placeholder="Base Price ($)" 
+                                            className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-pink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink/50 focus-visible:ring-offset-2 transition-all" 
+                                        />
                                     </div>
-                                    <div>
-                                        <label className="block text-sm font-semibold mb-2">Back Image</label>
-                                        <label className="flex items-center justify-center gap-2 px-4 py-8 bg-cream rounded-xl cursor-pointer hover:bg-pink/10 transition-colors border-2 border-dashed border-gray-300">
-                                            <Camera className="w-6 h-6 text-pink" /><span className="text-sm">Upload Back</span>
-                                            <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, setNewProductBackImage, 'products')} className="hidden" />
-                                        </label>
-                                        {newProductBackImage && <img src={newProductBackImage} alt="Back Preview" className="mt-2 w-24 h-24 object-contain" />}
+
+                                    <div className="grid md:grid-cols-2 gap-6">
+                                        {/* Context7 Best Practice: Field groups with gap-2 for label+input */}
+                                        <div className="flex flex-col gap-2">
+                                            <label className="text-sm font-semibold text-foreground">Front Image (Base)</label>
+                                            <label className="flex items-center justify-center gap-2 px-4 py-8 bg-cream rounded-xl cursor-pointer hover:bg-pink/10 transition-colors border-2 border-dashed border-gray-300 focus-within:ring-2 focus-within:ring-pink/50 focus-within:ring-offset-2">
+                                                <Camera className="w-6 h-6 text-pink" aria-hidden="true" />
+                                                <span className="text-sm">Upload Front</span>
+                                                <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, setNewProductFrontImage, 'products')} className="hidden" />
+                                            </label>
+                                            {newProductFrontImage && <img src={newProductFrontImage} alt="Front Preview" className="mt-2 w-24 h-24 object-contain rounded-lg" />}
+                                        </div>
+                                        <div className="flex flex-col gap-2">
+                                            <label className="text-sm font-semibold text-foreground">Back Image</label>
+                                            <label className="flex items-center justify-center gap-2 px-4 py-8 bg-cream rounded-xl cursor-pointer hover:bg-pink/10 transition-colors border-2 border-dashed border-gray-300 focus-within:ring-2 focus-within:ring-pink/50 focus-within:ring-offset-2">
+                                                <Camera className="w-6 h-6 text-pink" aria-hidden="true" />
+                                                <span className="text-sm">Upload Back</span>
+                                                <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, setNewProductBackImage, 'products')} className="hidden" />
+                                            </label>
+                                            {newProductBackImage && <img src={newProductBackImage} alt="Back Preview" className="mt-2 w-24 h-24 object-contain rounded-lg" />}
+                                        </div>
                                     </div>
                                 </div>
 
@@ -784,10 +846,10 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                     <div className="flex justify-between items-center mb-4">
                                         <h3 className="font-bold text-gray-700">Placement Zone</h3>
                                         <button
-                                            onClick={openZoneEditor}
-                                            className="text-pink hover:text-pink-600 font-semibold text-sm flex items-center gap-1"
+                                            onClick={() => openImageTracer('placement')}
+                                            className="text-pink hover:text-pink-600 font-semibold text-sm flex items-center gap-1 bg-pink/10 px-3 py-1.5 rounded-lg hover:bg-pink/20 transition-colors"
                                         >
-                                            <Settings className="w-4 h-4" /> Open Visual Editor
+                                            <Wand2 className="w-4 h-4" /> Auto-Trace Placement
                                         </button>
                                     </div>
                                     <div className="grid grid-cols-4 gap-2 text-sm">
@@ -815,18 +877,8 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                         {products.map(product => (
                                             <div key={product.id} className="bg-cream rounded-xl p-3 text-center relative group">
                                                 <div className="absolute top-2 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                                                    <button onClick={() => {
-                                                        const defaultZone = { x: 10, y: 10, width: 80, height: 80, type: 'rectangle' as const };
-                                                        setTempZone(product.placementZone || defaultZone);
-                                                        setEditingProductId(product.id);
-                                                        setShowZoneEditor(true);
-                                                    }} className="p-1 bg-white rounded shadow text-indigo-500 hover:text-indigo-700 hover:scale-110" title="Edit Placement Zone"><Layers className="w-4 h-4" /></button>
-                                                    <button onClick={() => {
-                                                        const defaultCrop = { x: 0, y: 0, width: 100, height: 100, type: 'rectangle' as const };
-                                                        setTempZone(product.cropZone || defaultCrop);
-                                                        setEditingProductId(product.id);
-                                                        setShowCropEditor(true);
-                                                    }} className="p-1 bg-white rounded shadow text-green-500 hover:text-green-700 hover:scale-110" title="Edit Crop"><Camera className="w-4 h-4" /></button>
+                                                    <button onClick={() => openImageTracer('placement', product.id)} className="p-1.5 bg-white rounded-lg shadow text-indigo-500 hover:text-indigo-700 hover:scale-110 transition-transform" title="Auto-Trace Placement Zone"><Wand2 className="w-4 h-4" /></button>
+                                                    <button onClick={() => openImageTracer('crop', product.id)} className="p-1.5 bg-white rounded-lg shadow text-green-500 hover:text-green-700 hover:scale-110 transition-transform" title="Auto-Trace Crop Zone"><Camera className="w-4 h-4" /></button>
                                                     <button onClick={async () => {
                                                         if (confirm('Delete this product?')) {
                                                             const { error } = await db.products.remove(product.id);
@@ -899,13 +951,22 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                     <div className="grid grid-cols-4 md:grid-cols-8 gap-3">
                                         {patches.map(patch => (
                                             <div key={patch.id} className="bg-cream rounded-xl p-2 text-center relative group">
-                                                <button
-                                                    onClick={() => handleDeletePatch(patch.id)}
-                                                    className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm z-10"
-                                                    title="Delete Patch"
-                                                >
-                                                    <X className="w-3 h-3" />
-                                                </button>
+                                                <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                                                    <button
+                                                        onClick={() => openExistingPatchSizer(patch.id)}
+                                                        className="bg-blue-500 text-white rounded-full p-0.5 shadow-sm"
+                                                        title="Edit Content Zone"
+                                                    >
+                                                        <Crop className="w-3 h-3" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDeletePatch(patch.id)}
+                                                        className="bg-red-500 text-white rounded-full p-0.5 shadow-sm"
+                                                        title="Delete Patch"
+                                                    >
+                                                        <X className="w-3 h-3" />
+                                                    </button>
+                                                </div>
                                                 <img src={patch.image} alt={patch.name} className="w-full aspect-square object-contain mb-1" />
                                                 <p className="text-[10px] font-semibold truncate">{patch.name}</p>
                                                 <p className="text-[10px] text-pink">${patch.price}</p>
@@ -1549,9 +1610,11 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
             </div>
 
             {showZoneEditor && (
-                <ZoneEditor
-                    image={editingProductId ? (products.find(p => p.id === editingProductId)?.frontImage || '') : newProductFrontImage}
-                    initialZone={tempZone}
+                <ImageTracer
+                    imageUrl={tracerImageUrl || (editingProductId ? (products.find(p => p.id === editingProductId)?.frontImage || '') : newProductFrontImage)}
+                    mode="placement"
+                    title="Auto-Trace Placement Zone"
+                    initialZone={tracerInitialZone || tempZone}
                     onSave={(zone) => {
                         if (editingProductId) {
                             setProducts(products.map(p => p.id === editingProductId ? { ...p, placementZone: zone } : p));
@@ -1560,37 +1623,65 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                         }
                         setShowZoneEditor(false);
                         setEditingProductId(null);
+                        setTracerImageUrl('');
+                        setTracerInitialZone(undefined);
                     }}
-                    onCancel={() => { setShowZoneEditor(false); setEditingProductId(null); }}
+                    onCancel={() => { 
+                        setShowZoneEditor(false); 
+                        setEditingProductId(null);
+                        setTracerImageUrl('');
+                        setTracerInitialZone(undefined);
+                    }}
                 />
             )}
 
             {showCropEditor && (
-                <ZoneEditor
-                    image={editingProductId ? (products.find(p => p.id === editingProductId)?.frontImage || '') : newProductFrontImage}
-                    title="Define Product Crop"
-                    initialZone={tempZone}
+                <ImageTracer
+                    imageUrl={tracerImageUrl || (editingProductForCrop ? (products.find(p => p.id === editingProductForCrop)?.frontImage || '') : newProductFrontImage)}
+                    mode="crop"
+                    title="Auto-Trace Product Crop"
+                    initialZone={tracerInitialZone || tempZone}
                     onSave={(zone) => {
-                        if (editingProductId) {
-                            setProducts(products.map(p => p.id === editingProductId ? { ...p, cropZone: zone } : p));
+                        if (editingProductForCrop) {
+                            setProducts(products.map(p => p.id === editingProductForCrop ? { ...p, cropZone: zone } : p));
                         }
                         setShowCropEditor(false);
-                        setEditingProductId(null);
+                        setEditingProductForCrop(null);
+                        setTracerImageUrl('');
+                        setTracerInitialZone(undefined);
                     }}
-                    onCancel={() => { setShowCropEditor(false); setEditingProductId(null); }}
+                    onCancel={() => { 
+                        setShowCropEditor(false); 
+                        setEditingProductForCrop(null);
+                        setTracerImageUrl('');
+                        setTracerInitialZone(undefined);
+                    }}
                 />
             )}
 
             {showPatchSizer && (
-                <ZoneEditor
-                    image={newPatchImage}
-                    title="Define Patch Bounds (Trim)"
-                    initialZone={tempPatchZone}
+                <ImageTracer
+                    imageUrl={tracerImageUrl || newPatchImage}
+                    mode="patch"
+                    title="Auto-Trace Patch Content Zone"
+                    initialZone={tracerInitialZone || tempPatchZone}
                     onSave={(zone) => {
-                        setTempPatchZone(zone);
+                        if (editingPatchId) {
+                            setPatches(patches.map(p => p.id === editingPatchId ? { ...p, contentZone: zone } : p));
+                        } else {
+                            setTempPatchZone(zone);
+                        }
                         setShowPatchSizer(false);
+                        setEditingPatchId(null);
+                        setTracerImageUrl('');
+                        setTracerInitialZone(undefined);
                     }}
-                    onCancel={() => setShowPatchSizer(false)}
+                    onCancel={() => {
+                        setShowPatchSizer(false);
+                        setEditingPatchId(null);
+                        setTracerImageUrl('');
+                        setTracerInitialZone(undefined);
+                    }}
                 />
             )}
         </>

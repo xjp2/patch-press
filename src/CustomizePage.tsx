@@ -758,17 +758,33 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                                         />
                                                         {selectedPatchId === patch.uniqueId && (
                                                             <>
-                                                                <div className="absolute inset-0 pointer-events-none" style={{ margin: '-2px' }}>
+                                                                {/* Traced Zone Overlay - Semi-transparent fill with border */}
+                                                                <div className="absolute inset-0 pointer-events-none" style={{ margin: '-4px' }}>
                                                                     <svg className="w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
                                                                         {patch.contentZone && patch.contentZone.type === 'polygon' && patch.contentZone.points ? (
-                                                                            <polygon points={patch.contentZone.points.map(p => `${p.x},${p.y}`).join(' ')}
-                                                                                stroke="#FF69B4" strokeWidth="2" fill="none" vectorEffect="non-scaling-stroke" strokeDasharray="4 2" />
+                                                                            <>
+                                                                                {/* Filled background */}
+                                                                                <polygon points={patch.contentZone.points.map(p => `${p.x},${p.y}`).join(' ')}
+                                                                                    fill="rgba(236, 72, 153, 0.15)" stroke="none" />
+                                                                                {/* Dashed border */}
+                                                                                <polygon points={patch.contentZone.points.map(p => `${p.x},${p.y}`).join(' ')}
+                                                                                    stroke="#FF69B4" strokeWidth="2" fill="none" vectorEffect="non-scaling-stroke" strokeDasharray="4 2" />
+                                                                            </>
                                                                         ) : (
-                                                                            <rect x={patch.contentZone ? patch.contentZone.x : 0}
-                                                                                y={patch.contentZone ? patch.contentZone.y : 0}
-                                                                                width={patch.contentZone ? patch.contentZone.width : 100}
-                                                                                height={patch.contentZone ? patch.contentZone.height : 100}
-                                                                                stroke="#FF69B4" strokeWidth="2" fill="none" vectorEffect="non-scaling-stroke" strokeDasharray="4 2" rx="1" />
+                                                                            <>
+                                                                                {/* Filled background */}
+                                                                                <rect x={patch.contentZone ? patch.contentZone.x : 0}
+                                                                                    y={patch.contentZone ? patch.contentZone.y : 0}
+                                                                                    width={patch.contentZone ? patch.contentZone.width : 100}
+                                                                                    height={patch.contentZone ? patch.contentZone.height : 100}
+                                                                                    fill="rgba(236, 72, 153, 0.15)" stroke="none" rx="1" />
+                                                                                {/* Dashed border */}
+                                                                                <rect x={patch.contentZone ? patch.contentZone.x : 0}
+                                                                                    y={patch.contentZone ? patch.contentZone.y : 0}
+                                                                                    width={patch.contentZone ? patch.contentZone.width : 100}
+                                                                                    height={patch.contentZone ? patch.contentZone.height : 100}
+                                                                                    stroke="#FF69B4" strokeWidth="2" fill="none" vectorEffect="non-scaling-stroke" strokeDasharray="4 2" rx="1" />
+                                                                            </>
                                                                         )}
                                                                     </svg>
                                                                 </div>

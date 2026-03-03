@@ -11,6 +11,9 @@ on:
 jobs:
   export-and-deploy:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -23,6 +26,23 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
+          cache-dependency-path: app/package-lock.json
+
+      # Safeguard: Ensure package.json and package-lock.json are in sync
+      # This prevents "npm ci" failures due to lock file drift
+      - name: Validate lock file sync
+        run: |
+          echo "🔍 Checking if package.json and package-lock.json are in sync..."
+          npm pkg get dependencies > /dev/null 2>&1 || exit 1
+          # Install to check for drift (faster than npm ci for validation)
+          npm install --package-lock-only
+          # Check if lock file changed
+          if [ -n "$(git status --porcelain package-lock.json)" ]; then
+            echo "❌ ERROR: package.json and package-lock.json are out of sync!"
+            echo "   Run 'npm install' locally and commit the updated package-lock.json"
+            exit 1
+          fi
+          echo "✅ Lock file is in sync"
 
       - name: Install dependencies
         run: npm ci
@@ -50,7 +70,7 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git remote set-url origin https://x-access-token:${PAT_TOKEN}@github.com/${{ github.repository }}.git
-          git add public/cms/
+          git add app/public/cms/
           git commit -m "🔄 Auto-update CMS content [${{ github.event.inputs.trigger_source }}]"
           git push
 

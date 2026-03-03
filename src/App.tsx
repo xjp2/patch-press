@@ -674,7 +674,12 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-cream font-body overflow-x-hidden">
-      <nav className="fixed top-0 left-0 right-0 z-40 bg-cream/90 backdrop-blur-md border-b border-pink/20">
+      {/* Context7 Best Practice: Skip link for keyboard accessibility */}
+      <a href="#main-content" className="skip-link">
+        Skip to main content
+      </a>
+      
+      <nav className="fixed top-0 left-0 right-0 z-40 bg-cream/90 backdrop-blur-md border-b border-pink/20" role="navigation" aria-label="Main navigation">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-2 cursor-pointer" onClick={() => setCurrentView('landing')}>
@@ -694,30 +699,32 @@ function AppContent() {
               ) : (
                 <>
                   {currentUser?.role === 'admin' && (
-                    <button onClick={() => setShowAdmin(true)} className="p-2 hover:bg-pink/20 rounded-full transition-colors" title="Admin Panel">
-                      <Settings className="w-5 h-5 text-text-dark" />
+                    <button onClick={() => setShowAdmin(true)} className="p-2 hover:bg-pink/20 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink focus-visible:ring-offset-2" title="Admin Panel" aria-label="Open admin panel">
+                      <Settings className="w-5 h-5 text-text-dark" aria-hidden="true" />
                     </button>
                   )}
                   {currentUser ? (
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold hidden sm:block">{currentUser.name}</span>
-                      <button onClick={handleLogout} className="p-2 hover:bg-pink/20 rounded-full transition-colors">
-                        <LogOut className="w-5 h-5 text-text-dark" />
+                      <button onClick={handleLogout} className="p-2 hover:bg-pink/20 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink focus-visible:ring-offset-2" aria-label="Log out">
+                        <LogOut className="w-5 h-5 text-text-dark" aria-hidden="true" />
                       </button>
                     </div>
                   ) : (
-                    <button onClick={() => setShowAuth(true)} className="p-2 hover:bg-pink/20 rounded-full transition-colors">
-                      <User className="w-5 h-5 text-text-dark" />
+                    <button onClick={() => setShowAuth(true)} className="p-2 hover:bg-pink/20 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink focus-visible:ring-offset-2" aria-label="Sign in">
+                      <User className="w-5 h-5 text-text-dark" aria-hidden="true" />
                     </button>
                   )}
                 </>
               )}
+              {/* Context7 Best Practice: aria-label for icon buttons */}
               <button
                 onClick={() => setIsCartOpen(true)}
-                className="relative p-2 hover:bg-pink/20 rounded-full transition-colors"
+                className="relative p-2 hover:bg-pink/20 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink focus-visible:ring-offset-2"
+                aria-label={`Shopping cart with ${totalItems} items`}
               >
-                <ShoppingCart className="w-6 h-6 text-text-dark" />
-                {totalItems > 0 && <span className="absolute -top-1 -right-1 w-5 h-5 bg-pink text-white text-xs rounded-full flex items-center justify-center font-bold animate-bounce">{totalItems}</span>}
+                <ShoppingCart className="w-6 h-6 text-text-dark" aria-hidden="true" />
+                {totalItems > 0 && <span className="absolute -top-1 -right-1 w-5 h-5 bg-pink text-white text-xs rounded-full flex items-center justify-center font-bold animate-bounce" aria-hidden="true">{totalItems}</span>}
               </button>
             </div>
           </div>
@@ -760,16 +767,19 @@ function AppContent() {
         </div>
       )}
 
-      {currentView === 'landing' ? (
-        <LandingPage notices={notices} startCustomizing={startCustomizing} siteContent={siteContent} />
-      ) : (
-        <CustomizePage
-          products={products}
-          patches={patches}
-          setCurrentView={setCurrentView}
-          siteContent={siteContent}
-        />
-      )}
+      {/* Context7 Best Practice: Main content landmark with id for skip link */}
+      <main id="main-content" className="outline-none">
+        {currentView === 'landing' ? (
+          <LandingPage notices={notices} startCustomizing={startCustomizing} siteContent={siteContent} />
+        ) : (
+          <CustomizePage
+            products={products}
+            patches={patches}
+            setCurrentView={setCurrentView}
+            siteContent={siteContent}
+          />
+        )}
+      </main>
     </div>
   );
 }

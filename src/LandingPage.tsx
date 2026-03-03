@@ -94,19 +94,23 @@ function HeroSection({ section, startCustomizing, notices: initialNotices }: { s
                 <div className="absolute inset-0 opacity-[0.03] z-0" style={{ backgroundImage: 'radial-gradient(#3a3530 1px, transparent 1px)', backgroundSize: '24px 24px' }} />
             )}
 
-            <div className="max-w-7xl mx-auto px-6 w-full grid lg:grid-cols-2 gap-8 items-center py-16 relative z-10">
-                <div className="animate-slide-up">
-                    <h1 className={`font-heading text-5xl sm:text-6xl lg:text-7xl font-bold leading-[1.05] mb-6 whitespace-pre-line ${currentSlide.isFullWidth ? 'text-white' : 'text-[#3a3530]'}`}>
+            <div className="max-w-7xl mx-auto px-6 w-full grid lg:grid-cols-2 gap-8 lg:gap-12 items-center py-16 relative z-10">
+                <div className="flex flex-col gap-6 animate-slide-up">
+                    {/* Context7 Best Practice: text-balance for better typography */}
+                    <h1 className={`font-heading text-5xl sm:text-6xl lg:text-7xl font-bold text-balance whitespace-pre-line ${currentSlide.isFullWidth ? 'text-white' : 'text-[#3a3530]'}`}>
                         {currentSlide.title}
                     </h1>
-                    <p className={`text-lg sm:text-xl max-w-md mb-10 leading-relaxed ${currentSlide.isFullWidth ? 'text-white/90' : 'text-[#7a7570]'}`}>
+                    {/* Context7 Best Practice: max-w-prose for readable line length */}
+                    <p className={`text-lg sm:text-xl max-w-prose leading-relaxed ${currentSlide.isFullWidth ? 'text-white/90' : 'text-[#7a7570]'}`}>
                         {currentSlide.content}
                     </p>
+                    {/* Context7 Best Practice: focus-visible for accessibility */}
+                    {/* self-start prevents button from stretching full width in flex container */}
                     <button
                         onClick={() => handleCtaClick(currentSlide.ctaAction, currentSlide.ctaLink)}
-                        className={`inline-flex items-center gap-3 px-8 py-4 rounded-full text-lg font-semibold transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 ${currentSlide.isFullWidth
-                            ? 'bg-white text-[#3a3530] hover:bg-pink hover:text-white'
-                            : 'bg-[#6b8f71] text-white hover:bg-[#5a7e60] shadow-[#6b8f71]/20 hover:shadow-[#6b8f71]/30'
+                        className={`self-start inline-flex items-center gap-3 px-8 py-4 rounded-full text-lg font-semibold transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${currentSlide.isFullWidth
+                            ? 'bg-white text-[#3a3530] hover:bg-pink hover:text-white focus-visible:ring-white'
+                            : 'bg-[#6b8f71] text-white hover:bg-[#5a7e60] shadow-[#6b8f71]/20 hover:shadow-[#6b8f71]/30 focus-visible:ring-[#6b8f71]'
                             }`}
                     >
                         {currentSlide.ctaText} <ArrowRight className="w-5 h-5" />
@@ -187,15 +191,19 @@ function HowItWorksSection({ section }: { section: PageSection }) {
                 color: styling.textColor
             }}
         >
-            <div className="max-w-5xl mx-auto">
-                <div className={`text-center mb-16 scroll-reveal ${isRevealed ? 'scroll-revealed' : ''}`}>
-                    <h2 className="font-heading text-3xl sm:text-4xl font-bold text-[var(--color-primary)] mb-3">{c.sectionTitle}</h2>
+            {/* Context7 Best Practice: Consistent container max-width and padding */}
+            <div className="max-w-6xl mx-auto px-6">
+                {/* Context7 Best Practice: Proper heading hierarchy with text-balance */}
+                <div className={`text-center mb-12 lg:mb-16 flex flex-col gap-3 scroll-reveal ${isRevealed ? 'scroll-revealed' : ''}`}>
+                    <h2 className="font-heading text-3xl sm:text-4xl font-bold text-[var(--color-primary)] text-balance">{c.sectionTitle}</h2>
                     <div className="flex items-center justify-center gap-1 text-[var(--color-secondary)]"><span className="text-2xl">✦</span></div>
                 </div>
-                <div className="grid md:grid-cols-3 gap-8">
+                {/* Context7 Best Practice: gap-6 for consistent spacing (shadcn/ui field group pattern) */}
+                <div className="grid md:grid-cols-3 gap-6 lg:gap-8">
                     {c.steps.map((step, i) => (
-                        <div key={i} className={`text-center group scroll-reveal scroll-delay-${i + 1} ${isRevealed ? 'scroll-revealed' : ''}`}>
-                            <div className="relative mx-auto w-36 h-36 mb-6">
+                        /* Context7 Best Practice: Card-like structure with flex col gap */
+                        <div key={i} className={`flex flex-col gap-4 text-center group scroll-reveal scroll-delay-${i + 1} ${isRevealed ? 'scroll-revealed' : ''}`}>
+                            <div className="relative mx-auto w-36 h-36">
                                 <div className="absolute inset-0 bg-[var(--color-primary)]/10 rounded-full" />
                                 <div className="absolute top-0 right-0 w-8 h-8 bg-[var(--color-secondary)] text-white rounded-full flex items-center justify-center text-sm font-bold z-10">{i + 1}</div>
                                 <div className="relative z-10 w-full h-full flex items-center justify-center">
@@ -212,8 +220,11 @@ function HowItWorksSection({ section }: { section: PageSection }) {
                                     )}
                                 </div>
                             </div>
-                            <h3 className="font-heading text-xl font-bold text-[var(--color-primary)] mb-2">{step.title}</h3>
-                            <p className="text-[var(--color-primary)] text-sm leading-relaxed opacity-80">{step.description}</p>
+                            {/* Context7 Best Practice: Semantic spacing with gap-2 */}
+                            <div className="flex flex-col gap-2">
+                                <h3 className="font-heading text-xl font-bold text-[var(--color-primary)]">{step.title}</h3>
+                                <p className="text-[var(--color-primary)] text-sm leading-relaxed opacity-80 max-w-xs mx-auto">{step.description}</p>
+                            </div>
                         </div>
                     ))}
                 </div>
