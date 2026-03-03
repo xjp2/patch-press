@@ -114,7 +114,7 @@ function HeroSection({ section, startCustomizing, notices: initialNotices }: { s
             {/* Main slide content - single key for uniform animation */}
             <div 
                 key={heroIndex}
-                className={`max-w-7xl mx-auto px-6 w-full grid lg:grid-cols-2 gap-8 lg:gap-12 items-center py-16 relative z-10 ${slideDirection === 'right' ? 'animate-slide-in-right' : 'animate-slide-in-left'}`}
+                className={`max-w-7xl mx-auto px-6 w-full grid lg:grid-cols-2 gap-8 lg:gap-12 items-center py-16 relative z-10 hero-slide-content ${slideDirection === 'right' ? 'animate-slide-in-right' : 'animate-slide-in-left'}`}
             >
                 {/* Left content */}
                 <div className="flex flex-col gap-6">
@@ -569,14 +569,14 @@ export function LandingPage({ notices, startCustomizing, siteContent }: LandingP
                 }
                 @keyframes slide-in-right {
                     0% { opacity: 0; transform: translateX(30px); }
-                    100% { opacity: 1; transform: translateX(0); }
+                    100% { opacity: 1; transform: translateX(0px); }
                 }
                 @keyframes slide-in-left {
                     0% { opacity: 0; transform: translateX(-30px); }
-                    100% { opacity: 1; transform: translateX(0); }
+                    100% { opacity: 1; transform: translateX(0px); }
                 }
                 .animate-slide-in-right {
-                    animation: slide-in-right 0.5s ease-out forwards;
+                    animation: slide-in-right 1s ease-out forwards;
                 }
                 .animate-slide-in-left {
                     animation: slide-in-left 0.5s ease-out forwards;
