@@ -575,6 +575,7 @@ export function LandingPage({ notices, startCustomizing, siteContent }: LandingP
                 @keyframes hero-left {
                     0% { opacity: 0; transform: translateX(-50px); }
                     100% { opacity: 1; transform: translateX(0); }
+                }
                 .animate-hero-right {
                     animation: hero-right 0.5s ease-out forwards;
                 }
