@@ -695,6 +695,30 @@ function AppContent() {
               <span className="font-heading text-xl font-bold text-text-dark">{siteContent.global.logoText || 'Patch & Press'}</span>
             </div>
             <div className="flex items-center gap-3">
+              {/* Currency Selector */}
+              <select
+                value={siteContent.global.currency || 'USD'}
+                onChange={e => {
+                  const currency = e.target.value;
+                  const symbols: Record<string, string> = {
+                    'USD': '$', 'SGD': 'S$', 'EUR': '€', 'GBP': '£', 'JPY': '¥', 'KRW': '₩'
+                  };
+                  setSiteContent({
+                    ...siteContent,
+                    global: { ...siteContent.global, currency: currency as any, currencySymbol: symbols[currency] || '$' }
+                  });
+                }}
+                className="hidden sm:block px-2 py-1 rounded-lg border border-gray-200 bg-white text-sm font-medium focus:border-pink outline-none cursor-pointer"
+                aria-label="Select currency"
+              >
+                <option value="USD">USD ($)</option>
+                <option value="SGD">SGD (S$)</option>
+                <option value="EUR">EUR (€)</option>
+                <option value="GBP">GBP (£)</option>
+                <option value="JPY">JPY (¥)</option>
+                <option value="KRW">KRW (₩)</option>
+              </select>
+
               {/* Show loading spinner while auth is initializing */}
               {isAuthLoading ? (
                 <div className="w-5 h-5 border-2 border-pink/30 border-t-pink rounded-full animate-spin" />
