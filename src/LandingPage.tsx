@@ -100,7 +100,7 @@ function HeroSection({ section, startCustomizing, notices: initialNotices }: { s
     };
 
     return (
-        <section className={`relative overflow-hidden transition-all duration-700 ${currentSlide.isFullWidth ? 'h-[90vh]' : 'pt-20 min-h-[85vh]'} flex items-center group`}>
+        <section className={`relative overflow-hidden ${currentSlide.isFullWidth ? 'h-[90vh]' : 'pt-20 min-h-[85vh]'} flex items-center group`}>
             {/* Background Layer */}
             {currentSlide.isFullWidth ? (
                 <div className="absolute inset-0 z-0">
@@ -114,7 +114,7 @@ function HeroSection({ section, startCustomizing, notices: initialNotices }: { s
             {/* Main slide content - single key for uniform animation */}
             <div 
                 key={heroIndex}
-                className={`max-w-7xl mx-auto px-6 w-full grid lg:grid-cols-2 gap-8 lg:gap-12 items-center py-16 relative z-10 hero-slide-content ${slideDirection === 'right' ? 'animate-slide-in-right' : 'animate-slide-in-left'}`}
+                className={`max-w-7xl mx-auto px-6 w-full grid lg:grid-cols-2 gap-8 lg:gap-12 items-center py-16 relative z-10 ${slideDirection === 'right' ? 'animate-hero-right' : 'animate-hero-left'}`}
             >
                 {/* Left content */}
                 <div className="flex flex-col gap-6">
@@ -567,23 +567,19 @@ export function LandingPage({ notices, startCustomizing, siteContent }: LandingP
                     0% { transform: translateY(0px) rotate(0deg); }
                     100% { transform: translateY(-12px) rotate(5deg); }
                 }
-                /* Hero slide animations - horizontal only */
-                @keyframes hero-slide-right {
-                    from { opacity: 0; transform: translateX(40px); }
-                    to { opacity: 1; transform: translateX(0); }
+                /* Hero slide animations - completely isolated */
+                @keyframes hero-right {
+                    0% { opacity: 0; transform: translateX(50px); }
+                    100% { opacity: 1; transform: translateX(0); }
                 }
-                @keyframes hero-slide-left {
-                    from { opacity: 0; transform: translateX(-40px); }
-                    to { opacity: 1; transform: translateX(0); }
+                @keyframes hero-left {
+                    0% { opacity: 0; transform: translateX(-50px); }
+                    100% { opacity: 1; transform: translateX(0); }
+                .animate-hero-right {
+                    animation: hero-right 0.5s ease-out forwards;
                 }
-                .hero-slide-content {
-                    will-change: transform, opacity;
-                }
-                .hero-slide-content.animate-slide-in-right {
-                    animation: hero-slide-right 0.4s ease-out forwards;
-                }
-                .hero-slide-content.animate-slide-in-left {
-                    animation: hero-slide-left 0.4s ease-out forwards;
+                .animate-hero-left {
+                    animation: hero-left 0.5s ease-out forwards;
                 }
                 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
                 .scrollbar-hide::-webkit-scrollbar { display: none; }
