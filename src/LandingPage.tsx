@@ -282,7 +282,7 @@ function GallerySection({ section, startCustomizing }: { section: PageSection; s
                     color: c.titleColor || styling.textColor || 'var(--color-primary)',
                     textAlign: c.titleAlignment || 'center'
                 }}>{c.sectionTitle}</h2>
-                <div className="flex gap-6 overflow-x-auto pb-12 snap-x hide-scrollbar">
+                <div className="flex gap-6 overflow-x-auto pb-12 snap-x hide-scrollbar justify-center">
                     {c.items.map((item, i) => (
                         <div key={item.id} className={`flex-shrink-0 snap-center group cursor-pointer scroll-reveal-scale scroll-delay-${Math.min(i + 1, 6)} ${isRevealed ? 'scroll-revealed' : ''}`} onClick={() => handleItemClick(item.linkUrl)}>
                             <div className="w-52 h-52 rounded-2xl overflow-hidden bg-[var(--color-primary)]/10 shadow-md group-hover:shadow-xl transition-all duration-300 group-hover:-translate-y-1">
@@ -465,7 +465,10 @@ function CtaSection({ section, startCustomizing }: { section: PageSection; start
                     color: c.titleColor || 'white',
                     textAlign: c.titleAlignment || 'center'
                 }}>{c.heading}</h2>
-                {c.subtitle && <p className="text-white/80 text-lg mb-8">{c.subtitle}</p>}
+                {c.subtitle && <p className="text-lg mb-8" style={{ 
+                    color: c.subtitleColor || 'white',
+                    textAlign: c.subtitleAlignment || 'center'
+                }}>{c.subtitle}</p>}
                 <button
                     onClick={handleCtaClick}
                     className="inline-flex items-center gap-3 bg-white text-[var(--color-primary)] px-8 py-4 rounded-full text-lg font-semibold hover:bg-[var(--color-primary)]/10 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5"

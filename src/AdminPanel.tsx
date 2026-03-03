@@ -121,6 +121,8 @@ export interface CtaContent {
     linkUrl?: string;
     titleAlignment?: 'left' | 'center' | 'right';
     titleColor?: string;
+    subtitleAlignment?: 'left' | 'center' | 'right';
+    subtitleColor?: string;
 }
 export interface DividerContent { style: 'line' | 'dots' | 'wave'; }
 export interface SectionStyling {
@@ -153,9 +155,11 @@ export interface HeroContent {
     slides: HeroSlide[];
     ctaText: string;
     showNoticesOverride?: boolean;
-    isFullWidth?: boolean; // Slideshow/cover style toggle
+    isFullWidth?: boolean;
     titleAlignment?: 'left' | 'center' | 'right';
     titleColor?: string;
+    subtitleAlignment?: 'left' | 'center' | 'right';
+    subtitleColor?: string;
 }
 export interface HowItWorksContent { 
     sectionTitle: string; 
@@ -177,6 +181,8 @@ export interface GlobalSettings {
     secondaryColor: string;
     headingFont: string;
     bodyFont: string;
+    currency: 'USD' | 'SGD' | 'EUR' | 'GBP' | 'JPY' | 'KRW';
+    currencySymbol: string;
 }
 
 export interface FooterContent {
@@ -985,6 +991,58 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                                     >
                                                         <X className="w-3 h-3" />
                                                     </button>
+
+                                          {/* Currency Section */}
+                                          <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm md:col-span-2 space-y-5">
+                                              <h4 className="font-heading font-bold text-gray-800 flex items-center gap-2">
+                                                  💱 Currency
+                                              </h4>
+
+                                              <div className="grid md:grid-cols-2 gap-6">
+                                                  <div>
+                                                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 block">Currency Code</label>
+                                                      <select
+                                                          value={siteContent.global.currency || 'USD'}
+                                                          onChange={e => {
+                                                              const currency = e.target.value;
+                                                              const symbols: Record<string, string> = {
+                                                                  'USD': '$',
+                                                                  'SGD': 'S$',
+                                                                  'EUR': '€',
+                                                                  'GBP': '£',
+                                                                  'JPY': '¥',
+                                                                  'KRW': '₩'
+                                                              };
+                                                              updateGlobalSettings({ 
+                                                                  currency: currency as any,
+                                                                  currencySymbol: symbols[currency] || '$'
+                                                              });
+                                                          }}
+                                                          className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-pink outline-none bg-white font-medium"
+                                                      >
+                                                          <option value="USD">USD - US Dollar ($)</option>
+                                                          <option value="SGD">SGD - Singapore Dollar (S$)</option>
+                                                          <option value="EUR">EUR - Euro (€)</option>
+                                                          <option value="GBP">GBP - British Pound (£)</option>
+                                                          <option value="JPY">JPY - Japanese Yen (¥)</option>
+                                                          <option value="KRW">KRW - Korean Won (₩)</option>
+                                                      </select>
+                                                      <p className="mt-2 text-xs text-gray-400">Currency for product prices</p>
+                                                  </div>
+
+                                                  <div>
+                                                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 block">Currency Symbol</label>
+                                                      <input
+                                                          type="text"
+                                                          value={siteContent.global.currencySymbol || '$'}
+                                                          onChange={e => updateGlobalSettings({ currencySymbol: e.target.value })}
+                                                          placeholder="$"
+                                                          className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-pink outline-none"
+                                                      />
+                                                      <p className="mt-2 text-xs text-gray-400">Symbol displayed before prices</p>
+                                                  </div>
+                                              </div>
+                                          </div>
                                                 </div>
                                                 <img src={patch.image} alt={patch.name} className="w-full aspect-square object-contain mb-1" />
                                                 <p className="text-[10px] font-semibold truncate">{patch.name}</p>
@@ -1395,6 +1453,23 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                                                                 <div>
                                                                                     <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Subtitle</label>
                                                                                     <input type="text" value={c.subtitle || ''} onChange={e => updateSectionContent(section.id, { ...c, subtitle: e.target.value })} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-pink outline-none shadow-sm" />
+                                                                                </div>
+                                                                                <div className="grid grid-cols-2 gap-4">
+                                                                                    <div>
+                                                                                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Subtitle Alignment</label>
+                                                                                        <div className="flex gap-1">
+                                                                                            {(['left', 'center', 'right'] as const).map(align => (
+                                                                                                <button key={align} onClick={() => updateSectionContent(section.id, { ...c, subtitleAlignment: align })} className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold capitalize transition-all ${c.subtitleAlignment === align ? 'bg-pink text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{align}</button>
+                                                                                            ))}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Subtitle Color</label>
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            <input type="color" value={c.subtitleColor || '#ffffff'} onChange={e => updateSectionContent(section.id, { ...c, subtitleColor: e.target.value })} className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer" />
+                                                                                            <input type="text" value={c.subtitleColor || ''} onChange={e => updateSectionContent(section.id, { ...c, subtitleColor: e.target.value })} placeholder="#ffffff" className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-sm" />
+                                                                                        </div>
+                                                                                    </div>
                                                                                 </div>
                                                                                 <div className="grid sm:grid-cols-2 gap-4">
                                                                                     <div>
