@@ -100,7 +100,7 @@ function HeroSection({ section, startCustomizing, notices: initialNotices }: { s
     };
 
     return (
-        <section className={`relative overflow-hidden pt-20 min-h-[85vh] flex items-center group`}>
+        <section className={`relative overflow-hidden min-h-[85vh] flex items-center group`}>
             {/* Background Layer */}
             {currentSlide.isFullWidth ? (
                 <div className="absolute inset-0 z-0">
