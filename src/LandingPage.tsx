@@ -561,25 +561,38 @@ export function LandingPage({ notices, startCustomizing, siteContent }: LandingP
                 </div>
             </footer>
 
-            {/* ───── Float Animation Keyframes ───── */}
+            {/* Hero Animation Keyframes - isolated to prevent conflicts */}
             <style>{`
                 @keyframes float {
                     0% { transform: translateY(0px) rotate(0deg); }
                     100% { transform: translateY(-12px) rotate(5deg); }
                 }
-                @keyframes slide-in-right {
-                    0% { opacity: 0; transform: translateX(30px); }
-                    100% { opacity: 1; transform: translateX(0px); }
+                /* Pure horizontal slide animations - isolated from global CSS */
+                @keyframes hero-slide-right {
+                    0% { opacity: 0; transform: translate3d(60px, 0, 0) !important; }
+                    100% { opacity: 1; transform: translate3d(0, 0, 0) !important; }
                 }
-                @keyframes slide-in-left {
-                    0% { opacity: 0; transform: translateX(-30px); }
-                    100% { opacity: 1; transform: translateX(0px); }
+                @keyframes hero-slide-left {
+                    0% { opacity: 0; transform: translate3d(-60px, 0, 0) !important; }
+                    100% { opacity: 1; transform: translate3d(0, 0, 0) !important; }
                 }
-                .animate-slide-in-right {
-                    animation: slide-in-right 1s ease-out forwards;
+                /* High specificity to override any conflicting animations */
+                section .hero-slide-content {
+                    will-change: transform, opacity;
+                    transform: translate3d(0, 0, 0) !important;
                 }
-                .animate-slide-in-left {
-                    animation: slide-in-left 0.5s ease-out forwards;
+                section .hero-slide-content.animate-slide-in-right {
+                    animation: hero-slide-right 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards !important;
+                    transform: translate3d(0, 0, 0) !important;
+                }
+                section .hero-slide-content.animate-slide-in-left {
+                    animation: hero-slide-left 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards !important;
+                    transform: translate3d(0, 0, 0) !important;
+                }
+                /* Ensure child elements don't have conflicting transforms during animation */
+                section .hero-slide-content > * {
+                    transform: none !important;
+                    animation: none !important;
                 }
                 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
                 .scrollbar-hide::-webkit-scrollbar { display: none; }
