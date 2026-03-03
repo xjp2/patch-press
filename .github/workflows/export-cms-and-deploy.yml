@@ -11,9 +11,6 @@ on:
 jobs:
   export-and-deploy:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: app
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -25,14 +22,27 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-          # Path relative to repo root (not working-directory)
-          cache-dependency-path: '**/package-lock.json'
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: app/node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('app/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
 
       - name: Install dependencies
-        run: npm ci
+        working-directory: app
+        run: |
+          if [ -d "node_modules" ]; then
+            echo "📦 Using cached node_modules"
+          else
+            echo "📦 Installing dependencies..."
+            npm ci
+          fi
 
       - name: Export CMS data from Supabase
+        working-directory: app
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
@@ -40,6 +50,7 @@ jobs:
 
       - name: Check for changes
         id: check_changes
+        working-directory: app
         run: |
           if [ -n "$(git status --porcelain public/cms/)" ]; then
             echo "HAS_CHANGES=true" >> $GITHUB_OUTPUT
