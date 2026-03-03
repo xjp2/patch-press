@@ -100,7 +100,7 @@ function HeroSection({ section, startCustomizing, notices: initialNotices }: { s
     };
 
     return (
-        <section className={`relative overflow-hidden ${currentSlide.isFullWidth ? 'h-[90vh]' : 'pt-20 min-h-[85vh]'} flex items-center group`}>
+        <section className={`relative overflow-hidden pt-20 min-h-[85vh] flex items-center group`}>
             {/* Background Layer */}
             {currentSlide.isFullWidth ? (
                 <div className="absolute inset-0 z-0">
@@ -153,24 +153,24 @@ function HeroSection({ section, startCustomizing, notices: initialNotices }: { s
             {/* Fixed position navigation for ALL slide types */}
             {heroSlides.length > 1 && (
                 <>
-                    {/* Left Arrow */}
+                    {/* Left Arrow - fixed position, no transition-all to prevent jitter */}
                     <button 
                         onClick={prevSlide} 
-                        className={`absolute left-4 sm:left-6 top-1/2 -translate-y-1/2 w-12 h-12 sm:w-14 sm:h-14 rounded-full backdrop-blur-md flex items-center justify-center transition-all z-20
+                        className={`absolute left-4 sm:left-6 top-1/2 -translate-y-1/2 w-12 h-12 sm:w-14 sm:h-14 rounded-full backdrop-blur-md flex items-center justify-center z-20
                             ${currentSlide.isFullWidth 
-                                ? 'bg-white/10 text-white opacity-0 group-hover:opacity-100 hover:bg-white/20' 
-                                : 'bg-[#3a3530]/5 text-[#3a3530] opacity-60 hover:opacity-100 hover:bg-[#3a3530]/10'}`}
+                                ? 'bg-white/10 text-white opacity-0 group-hover:opacity-100 hover:bg-white/20 transition-opacity' 
+                                : 'bg-[#3a3530]/5 text-[#3a3530] opacity-60 hover:opacity-100 hover:bg-[#3a3530]/10 transition-opacity'}`}
                     >
                         <ChevronLeft className="w-6 h-6 sm:w-8 sm:h-8" />
                     </button>
                     
-                    {/* Right Arrow */}
+                    {/* Right Arrow - fixed position, no transition-all to prevent jitter */}
                     <button 
                         onClick={nextSlide} 
-                        className={`absolute right-4 sm:right-6 top-1/2 -translate-y-1/2 w-12 h-12 sm:w-14 sm:h-14 rounded-full backdrop-blur-md flex items-center justify-center transition-all z-20
+                        className={`absolute right-4 sm:right-6 top-1/2 -translate-y-1/2 w-12 h-12 sm:w-14 sm:h-14 rounded-full backdrop-blur-md flex items-center justify-center z-20
                             ${currentSlide.isFullWidth 
-                                ? 'bg-white/10 text-white opacity-0 group-hover:opacity-100 hover:bg-white/20' 
-                                : 'bg-[#3a3530]/5 text-[#3a3530] opacity-60 hover:opacity-100 hover:bg-[#3a3530]/10'}`}
+                                ? 'bg-white/10 text-white opacity-0 group-hover:opacity-100 hover:bg-white/20 transition-opacity' 
+                                : 'bg-[#3a3530]/5 text-[#3a3530] opacity-60 hover:opacity-100 hover:bg-[#3a3530]/10 transition-opacity'}`}
                     >
                         <ChevronRight className="w-6 h-6 sm:w-8 sm:h-8" />
                     </button>
