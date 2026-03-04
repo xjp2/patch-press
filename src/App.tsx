@@ -250,12 +250,29 @@ function CartDrawer() {
       const amountInCents = Math.round(totalPrice * 100);
 
       // Create payment intent via Edge Function
-      const { data: piData, error: piError } = await supabase.functions.invoke('create-payment-intent', {
-        body: { amount: amountInCents, currency: 'usd' },
-      });
+      let piData;
+      try {
+        const response = await supabase.functions.invoke('create-payment-intent', {
+          body: { amount: amountInCents, currency: 'usd' },
+        });
+        piData = response.data;
+        if (response.error) throw response.error;
+      } catch (edgeError: any) {
+        console.error('Edge Function error:', edgeError);
+        // Check if Edge Function is not deployed
+        if (edgeError.message?.includes('Failed to send a request') || 
+            edgeError.message?.includes('Edge Function') ||
+            edgeError.status === 404) {
+          throw new Error(
+            'Payment system not configured. Please contact support or try again later. ' +
+            '(Edge Function not deployed)'
+          );
+        }
+        throw edgeError;
+      }
 
-      if (piError || !piData?.clientSecret) {
-        throw new Error(piError?.message || 'Failed to create payment intent');
+      if (!piData?.clientSecret) {
+        throw new Error('Failed to create payment intent');
       }
 
       // NOTE: In production, you should use Stripe Elements for secure card input
@@ -283,7 +300,7 @@ function CartDrawer() {
           customer_email: session.user.email,
           items: items.map(i => ({ 
             name: i.productName, 
-            patches: [...i.frontPatches, ...i.backPatches].map(p => p.name), 
+            patches: [...(i.frontPatches || []), ...(i.backPatches || [])].map(p => p.name), 
             qty: i.quantity, 
             price: i.totalPrice 
           })),
@@ -300,6 +317,7 @@ function CartDrawer() {
         setIsCartOpen(false);
       }, 2500);
     } catch (err: any) {
+      console.error('Checkout error:', err);
       setCheckoutError(err?.message || 'Checkout failed');
       setCheckoutState('error');
     }
