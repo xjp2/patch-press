@@ -95,7 +95,7 @@ const getClipAndCenter = (zone: any) => {
 const categories = [{ id: 'all', name: 'All' }, { id: 'food', name: 'Food' }, { id: 'characters', name: 'Characters' }, { id: 'letters', name: 'Letters' }, { id: 'symbols', name: 'Symbols' }];
 
 export function CustomizePage({ products, patches, setCurrentView, siteContent }: CustomizePageProps) {
-    const { addItem } = useCart();
+    const { addItem, syncCart } = useCart();
     const [currentStep, setCurrentStep] = useState<DesignStep>('product');
     const [selectedProduct, setSelectedProduct] = useState<Product>(products[0]);
 
@@ -263,30 +263,45 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
     };
 
     const handleAddToCart = () => {
-        // Create cart item from current design
+        // Create cart item from current design with full patch placement data
         const cartItem = {
             id: uuidv4(),
             productId: selectedProduct.id,
             productName: selectedProduct.name,
             name: selectedProduct.name,
             productImage: selectedProduct.frontImage,
+            productBackImage: selectedProduct.backImage,
             basePrice: selectedProduct.basePrice,
             frontPatches: frontPatches.map(p => ({
                 id: p.id,
                 name: p.name,
                 image: p.image,
-                price: p.price
+                price: p.price,
+                x: p.x,
+                y: p.y,
+                rotation: p.rotation,
+                widthPercent: p.widthPercent,
+                heightPercent: p.heightPercent,
+                contentZone: p.contentZone
             })),
             backPatches: backPatches.map(p => ({
                 id: p.id,
                 name: p.name,
                 image: p.image,
-                price: p.price
+                price: p.price,
+                x: p.x,
+                y: p.y,
+                rotation: p.rotation,
+                widthPercent: p.widthPercent,
+                heightPercent: p.heightPercent,
+                contentZone: p.contentZone
             })),
             totalPrice: totalPrice,
             designImage: undefined // Could generate preview image here
         };
         addItem(cartItem);
+        // Explicitly sync to ensure cart is saved
+        setTimeout(() => syncCart(), 100);
         setShowSuccess(true);
         setTimeout(() => setShowSuccess(false), 2000);
     };
@@ -987,16 +1002,15 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                 <p className="text-text-dark/60 text-sm">{siteContent.customizePage.step3Subtitle}</p>
                             </div>
 
-                            {/* Side-by-side preview */}
+                            {/* Side-by-side preview - Show full product like design canvas */}
                             <div ref={reviewRef} className="grid grid-cols-2 gap-4 mb-6">
                                 {/* Front View */}
                                 <div className="relative bg-gray-50 rounded-2xl p-3 sm:p-5">
                                     <h4 className="font-heading text-sm sm:text-base font-bold text-center mb-2 text-text-dark/50">Front</h4>
                                     <div className="relative mx-auto" style={{ maxWidth: 240 }}>
-                                        {(() => {
-                                            const s = getClipAndCenter(selectedProduct.placementZone);
-                                            return <img src={selectedProduct.frontImage} alt={`${selectedProduct.name} Front`} className="w-full object-contain" style={{ clipPath: s.clipPath, transform: s.transform }} />;
-                                        })()}
+                                        {/* Full product image - NOT clipped */}
+                                        <img src={selectedProduct.frontImage} alt={`${selectedProduct.name} Front`} className="w-full object-contain" />
+                                        {/* Patches positioned on full image */}
                                         {frontPatches.map((patch) => {
                                             const cz = patch.contentZone || { x: 0, y: 0, width: 100, height: 100 };
                                             const cx = cz.x + cz.width / 2;
@@ -1022,10 +1036,9 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                 <div className="relative bg-gray-50 rounded-2xl p-3 sm:p-5">
                                     <h4 className="font-heading text-sm sm:text-base font-bold text-center mb-2 text-text-dark/50">Back</h4>
                                     <div className="relative mx-auto" style={{ maxWidth: 240 }}>
-                                        {(() => {
-                                            const s = getClipAndCenter(selectedProduct.placementZone);
-                                            return <img src={selectedProduct.backImage} alt={`${selectedProduct.name} Back`} className="w-full object-contain" style={{ clipPath: s.clipPath, transform: s.transform }} />;
-                                        })()}
+                                        {/* Full product image - NOT clipped */}
+                                        <img src={selectedProduct.backImage} alt={`${selectedProduct.name} Back`} className="w-full object-contain" />
+                                        {/* Patches positioned on full image */}
                                         {backPatches.map((patch) => {
                                             const cz = patch.contentZone || { x: 0, y: 0, width: 100, height: 100 };
                                             const cx = cz.x + cz.width / 2;

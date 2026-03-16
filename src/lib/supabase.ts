@@ -39,6 +39,37 @@ export const auth = {
   },
   signIn: async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    
+    // Immediately fetch role after sign in - industrial practice
+    if (data.user && !error) {
+      try {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role, full_name')
+          .eq('id', data.user.id)
+          .single();
+        
+        if (profile) {
+          // Update user metadata with role for immediate availability
+          await supabase.auth.updateUser({
+            data: { 
+              role: profile.role,
+              full_name: profile.full_name 
+            }
+          });
+          
+          // Also update the returned user object
+          data.user.user_metadata = {
+            ...data.user.user_metadata,
+            role: profile.role,
+            full_name: profile.full_name
+          };
+        }
+      } catch (err) {
+        console.warn('Failed to fetch role after sign in:', err);
+      }
+    }
+    
     return { data, error };
   },
   signInWithApple: async () => {
@@ -213,6 +244,44 @@ export const db = {
         .select('*')
         .order('created_at', { ascending: false });
       if (error) console.error('DB Error (orders.list):', error);
+      return { data, error };
+    },
+    getById: async (id: string) => {
+      console.log('DB: Getting order by id...', id);
+      const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', id)
+        .single();
+      if (error) console.error('DB Error (orders.getById):', error);
+      return { data, error };
+    },
+    create: async (order: {
+      order_number: string;
+      payment_intent_id: string;
+      customer_email: string;
+      customer_name?: string;
+      items: any[];
+      total_amount: number;
+      currency: string;
+      shipping_address: any;
+      shipping_country?: string;
+      user_id?: string;
+    }) => {
+      console.log('DB: Creating order...', order.order_number);
+      const { data, error } = await supabase
+        .from('orders')
+        .insert({
+          ...order,
+          status: 'pending',  // Webhook will validate and mark as 'paid'
+          payment_verified: false,
+          fulfillment_status: 'pending',
+        })
+        .select()
+        .single();
+      if (error) {
+        console.error('DB Error (orders.create):', error);
+      }
       return { data, error };
     },
     updateStatus: async (id: string, status: string) => {

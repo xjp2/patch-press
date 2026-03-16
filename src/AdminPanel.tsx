@@ -7,6 +7,7 @@ import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type D
 import { arrayMove, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { SortableSection } from './SortableSection';
 import { SortableItem } from './SortableItem';
+import { AdminOrderManagement } from './components/AdminOrderManagement';
 
 export interface Notice {
     id: string;
@@ -693,7 +694,7 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
 
     return (
         <>
-            <div className="fixed inset-0 z-[100] bg-[#faf9f6] overflow-auto animate-slide-up shadow-2xl">
+            <div className="fixed inset-0 z-[100] bg-cream overflow-auto animate-slide-up shadow-2xl">
                 <div className="max-w-6xl mx-auto p-4 sm:p-8">
                     <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-10 border-b border-pink/10 pb-8">
                         <div className="flex items-center gap-4">
@@ -712,75 +713,52 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                         </div>
                     </div>
 
-                    {/* Static CMS Notice */}
+                    {/* Rebuild Button - only show if usingStaticCms */}
                     {usingStaticCms && (
-                        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl flex items-start gap-3">
-                            <div className="w-5 h-5 rounded-full bg-blue-500 text-white flex items-center justify-center flex-shrink-0 mt-0.5">
-                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                                </svg>
-                            </div>
-                            <div className="flex-1">
-                                <p className="text-sm font-medium text-blue-900">
-                                    Static CMS Mode Enabled
-                                </p>
-                                <p className="text-sm text-blue-700 mt-1">
-                                    Changes are saved to the database but won't appear on the live site until you run 
-                                    <code className="bg-blue-100 px-1.5 py-0.5 rounded mx-1">npm run export-cms</code> 
-                                    and redeploy.
-                                </p>
-                                <div className="mt-3 flex gap-2">
-                                    <button
-                                        onClick={handleRebuild}
-                                        disabled={isRebuilding}
-                                        className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-lg flex items-center gap-2 ${
-                                            rebuildStatus === 'success' 
-                                                ? 'bg-green-500 text-white shadow-green-500/30' 
-                                                : rebuildStatus === 'error'
-                                                ? 'bg-red-500 text-white shadow-red-500/30'
-                                                : 'bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 shadow-blue-500/30 hover:shadow-xl hover:-translate-y-0.5'
-                                        } ${isRebuilding ? 'opacity-70 cursor-not-allowed' : ''}`}
-                                    >
-                                        {isRebuilding ? (
-                                            <>
-                                                <Loader2 className="w-4 h-4 animate-spin" />
-                                                Updating Live Site...
-                                            </>
-                                        ) : rebuildStatus === 'success' ? (
-                                            <>
-                                                <Sparkles className="w-4 h-4" />
-                                                Live Site Updated!
-                                            </>
-                                        ) : rebuildStatus === 'error' ? (
-                                            <>
-                                                <AlertCircle className="w-4 h-4" />
-                                                Update Failed
-                                            </>
-                                        ) : (
-                                            <>
-                                                <RefreshCw className="w-4 h-4" />
-                                                🚀 Update Live Site
-                                            </>
-                                        )}
-                                    </button>
-                                    <button
-                                        onClick={() => alert('To update the live site:\n\nOption 1 (Automatic):\nClick "Rebuild Site" button above to trigger deployment via webhook.\n\nOption 2 (Manual):\n1. Run: npm run export-cms\n2. Run: npm run build\n3. Deploy the dist/ folder\n\nSetup:\nSet DEPLOY_WEBHOOK_URL in Supabase Edge Function secrets for automatic deployment.')}
-                                        className="text-xs bg-white text-blue-600 border border-blue-300 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors"
-                                    >
-                                        Learn More
-                                    </button>
-                                </div>
-                                {rebuildMessage && (
-                                    <p className={`text-xs mt-2 ${rebuildStatus === 'success' ? 'text-green-600' : 'text-red-600'}`}>
-                                        {rebuildMessage}
-                                    </p>
+                        <div className="mb-6 flex items-center gap-3">
+                            <button
+                                onClick={handleRebuild}
+                                disabled={isRebuilding}
+                                className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-lg flex items-center gap-2 ${
+                                    rebuildStatus === 'success' 
+                                        ? 'bg-green-500 text-white shadow-green-500/30' 
+                                        : rebuildStatus === 'error'
+                                        ? 'bg-red-500 text-white shadow-red-500/30'
+                                        : 'bg-pink text-white hover:bg-pink-400 shadow-pink/30 hover:shadow-xl hover:-translate-y-0.5'
+                                } ${isRebuilding ? 'opacity-70 cursor-not-allowed' : ''}`}
+                            >
+                                {isRebuilding ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        Updating...
+                                    </>
+                                ) : rebuildStatus === 'success' ? (
+                                    <>
+                                        <Sparkles className="w-4 h-4" />
+                                        Updated!
+                                    </>
+                                ) : rebuildStatus === 'error' ? (
+                                    <>
+                                        <AlertCircle className="w-4 h-4" />
+                                        Failed
+                                    </>
+                                ) : (
+                                    <>
+                                        <RefreshCw className="w-4 h-4" />
+                                        Update Live Site
+                                    </>
                                 )}
-                            </div>
+                            </button>
+                            {rebuildMessage && (
+                                <p className={`text-sm ${rebuildStatus === 'success' ? 'text-green-600' : 'text-red-600'}`}>
+                                    {rebuildMessage}
+                                </p>
+                            )}
                         </div>
                     )}
 
                     {/* Tabs */}
-                    <div className="flex gap-2 mb-10 bg-white/50 backdrop-blur-sm p-1.5 rounded-2xl border border-pink/5 overflow-x-auto no-scrollbar shadow-inner">
+                    <div className="flex gap-2 mb-10 bg-white p-1.5 rounded-2xl border border-pink/10 overflow-x-auto no-scrollbar shadow-sm">
                         {[
                             { id: 'products', label: 'Products', icon: ShoppingCart },
                             { id: 'patches', label: 'Patches', icon: Palette },
@@ -801,7 +779,7 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                         ))}
                     </div>
 
-                    <div className="bg-white/80 backdrop-blur-md rounded-[2.5rem] p-8 shadow-xl shadow-pink/5 border border-white/50 min-h-[600px]">
+                    <div className="bg-white rounded-[2.5rem] p-8 shadow-xl shadow-pink/5 border border-pink/10 min-h-[600px]">
 
                         {/* Products Tab with Visual Zone Editor */}
                         {adminTab === 'products' && (
@@ -811,14 +789,20 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                         <h2 className="font-heading text-xl font-bold text-gray-900">Products</h2>
                                         <p className="text-xs text-gray-500 font-medium">Add or edit base products for customization</p>
                                     </div>
-                                    <button
-                                        onClick={() => handleSaveProducts(true)}
-                                        disabled={isSaving}
-                                        className={`px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm ${saveSuccess === 'products' ? 'bg-green-500 text-white' : 'bg-pink text-white hover:bg-pink/90'} ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                    >
-                                        {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : saveSuccess === 'products' ? null : <ShoppingCart className="w-4 h-4" />}
-                                        {saveSuccess === 'products' ? '✅ Saved to Cloud' : '☁️ Save Products'}
-                                    </button>
+                                    {!usingStaticCms ? (
+                                        <button
+                                            onClick={() => handleSaveProducts(true)}
+                                            disabled={isSaving}
+                                            className={`px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm ${saveSuccess === 'products' ? 'bg-green-500 text-white' : 'bg-pink text-white hover:bg-pink/90'} ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        >
+                                            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : saveSuccess === 'products' ? null : <ShoppingCart className="w-4 h-4" />}
+                                            {saveSuccess === 'products' ? '✅ Saved to Cloud' : '☁️ Save Products'}
+                                        </button>
+                                    ) : (
+                                        <div className="text-xs text-gray-400 bg-white px-3 py-1.5 rounded-lg border border-pink/10">
+                                            Changes saved automatically
+                                        </div>
+                                    )}
                                 </div>
                                 {/* Context7 Best Practice: Section heading with proper spacing */}
                                 <h2 className="font-heading text-xl font-bold text-foreground">Add New Product</h2>
@@ -931,14 +915,20 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                         <h2 className="font-heading text-xl font-bold text-gray-900">Patches</h2>
                                         <p className="text-xs text-gray-500 font-medium">Manage custom patches and assets</p>
                                     </div>
-                                    <button
-                                        onClick={() => handleSavePatches(true)}
-                                        disabled={isSaving}
-                                        className={`px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm ${saveSuccess === 'patches' ? 'bg-green-500 text-white' : 'bg-pink text-white hover:bg-pink/90'} ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                    >
-                                        {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : saveSuccess === 'patches' ? null : <Palette className="w-4 h-4" />}
-                                        {saveSuccess === 'patches' ? '✅ Saved to Cloud' : '☁️ Save Patches'}
-                                    </button>
+                                    {!usingStaticCms ? (
+                                        <button
+                                            onClick={() => handleSavePatches(true)}
+                                            disabled={isSaving}
+                                            className={`px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm ${saveSuccess === 'patches' ? 'bg-green-500 text-white' : 'bg-pink text-white hover:bg-pink/90'} ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        >
+                                            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : saveSuccess === 'patches' ? null : <Palette className="w-4 h-4" />}
+                                            {saveSuccess === 'patches' ? '✅ Saved to Cloud' : '☁️ Save Patches'}
+                                        </button>
+                                    ) : (
+                                        <div className="text-xs text-gray-400 bg-white px-3 py-1.5 rounded-lg border border-pink/10">
+                                            Changes saved automatically
+                                        </div>
+                                    )}
                                 </div>
                                 <h2 className="font-heading text-xl font-bold">Add New Patch</h2>
                                 <div className="grid gap-4">
@@ -1055,10 +1045,7 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                         )}
 
                         {adminTab === 'orders' && (
-                            <div className="text-center py-12">
-                                <Layers className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                                <p className="text-gray-500">Order management coming soon!</p>
-                            </div>
+                            <AdminOrderManagement />
                         )}
 
                         {/* ───── Pages CMS Tab ───── */}
@@ -1073,14 +1060,20 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                             </button>
                                         ))}
                                     </div>
-                                    <button
-                                        onClick={() => handleSavePages('pages')}
-                                        disabled={isSaving}
-                                        className={`px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm ${saveSuccess === 'pages' ? 'bg-green-500 text-white' : 'bg-pink text-white hover:bg-pink/90'} ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                    >
-                                        {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : saveSuccess === 'pages' ? null : <Layout className="w-4 h-4" />}
-                                        {saveSuccess === 'pages' ? '✅ Saved' : '☁️ Save Site Changes'}
-                                    </button>
+                                    {!usingStaticCms ? (
+                                        <button
+                                            onClick={() => handleSavePages('pages')}
+                                            disabled={isSaving}
+                                            className={`px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm ${saveSuccess === 'pages' ? 'bg-green-500 text-white' : 'bg-pink text-white hover:bg-pink/90'} ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        >
+                                            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : saveSuccess === 'pages' ? null : <Layout className="w-4 h-4" />}
+                                            {saveSuccess === 'pages' ? '✅ Saved' : '☁️ Save Site Changes'}
+                                        </button>
+                                    ) : (
+                                        <div className="text-xs text-gray-400 bg-white px-3 py-1.5 rounded-lg border border-pink/10">
+                                            Changes saved automatically
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* ─── Landing Page Builder ─── */}
@@ -1635,14 +1628,20 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                         <h2 className="font-heading text-xl font-bold text-gray-900">Global Settings</h2>
                                         <p className="text-xs text-gray-500 font-medium">Site branding, fonts, and core style tokens</p>
                                     </div>
-                                    <button
-                                        onClick={() => handleSavePages('global')}
-                                        disabled={isSaving}
-                                        className={`px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm ${saveSuccess === 'global' ? 'bg-green-500 text-white' : 'bg-pink text-white hover:bg-pink/90'} ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                    >
-                                        {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : saveSuccess === 'global' ? null : <Globe className="w-4 h-4" />}
-                                        {saveSuccess === 'global' ? '✅ Saved Successfully' : '☁️ Save Global Settings'}
-                                    </button>
+                                    {!usingStaticCms ? (
+                                        <button
+                                            onClick={() => handleSavePages('global')}
+                                            disabled={isSaving}
+                                            className={`px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm ${saveSuccess === 'global' ? 'bg-green-500 text-white' : 'bg-pink text-white hover:bg-pink/90'} ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        >
+                                            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : saveSuccess === 'global' ? null : <Globe className="w-4 h-4" />}
+                                            {saveSuccess === 'global' ? '✅ Saved Successfully' : '☁️ Save Global Settings'}
+                                        </button>
+                                    ) : (
+                                        <div className="text-xs text-gray-400 bg-white px-3 py-1.5 rounded-lg border border-pink/10">
+                                            Changes saved automatically
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">

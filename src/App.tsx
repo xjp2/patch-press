@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Palette, LogOut, Settings, User, ShoppingCart, X, Plus, Minus, Trash2, Loader2, CheckCircle, ChevronDown, ChevronUp } from 'lucide-react';
+import { Palette, LogOut, Settings, User, ShoppingCart, X, Plus, Minus, Trash2, ChevronDown, ChevronUp, Package, Loader2 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
-import { loadStripe } from '@stripe/stripe-js';
 import './App.css';
 import { AuthModal } from './AuthModal';
 import type { UserType, AuthView } from './AuthModal';
@@ -13,8 +12,11 @@ import { CartProvider, useCart } from './context/CartContext';
 import supabase, { auth } from './lib/supabase';
 import { preloadCmsData, clearCmsCache, hasStaticCms } from './lib/cms';
 import type { Product as DbProduct, Patch as DbPatch } from './lib/cms';
+import { StripeCheckout } from './components/StripeCheckout';
+import { OrderConfirmation } from './components/OrderConfirmation';
+import { OrderDetailPage } from './components/OrderDetailPage';
 
-type AppView = 'landing' | 'customize';
+type AppView = 'landing' | 'customize' | 'order-detail' | 'admin';
 type AdminTab = 'products' | 'patches' | 'orders' | 'pages' | 'global';
 
 const initialPatches: Patch[] = [
@@ -75,8 +77,6 @@ const initialNotices: Notice[] = [
   { id: '1', title: 'New Summer Collection!', content: 'Check out our new fruit-themed patches - strawberries, watermelons, and more!', date: '2025-02-14', type: 'new-product' },
   { id: '2', title: 'Free Shipping', content: 'Get free shipping on orders over $50! Use code FREESHIP at checkout.', date: '2025-02-10', type: 'promotion' }
 ];
-
-const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '');
 
 // Cart Item Component with expandable details
 function CartItemCard({ item, updateQuantity, removeItem }: { 
@@ -237,150 +237,207 @@ function CartItemCard({ item, updateQuantity, removeItem }: {
 }
 
 // Cart Drawer Component
-function CartDrawer() {
+interface CartDrawerProps {
+  currentUser: UserType | null;
+  setShowAuth: (show: boolean) => void;
+  setAuthView: (view: AuthView) => void;
+}
+
+function CartDrawer({ currentUser, setShowAuth, setAuthView }: CartDrawerProps) {
   const { items, isCartOpen, setIsCartOpen, totalPrice, totalItems, updateQuantity, removeItem, clearCart } = useCart();
-  const [checkoutState, setCheckoutState] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
+  const [showCheckout, setShowCheckout] = useState(false);
+  const [, setCheckoutState] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
   const [checkoutError, setCheckoutError] = useState('');
+  const [showOrderConfirmation, setShowOrderConfirmation] = useState(false);
+  const [orderNumber, setOrderNumber] = useState('');
+  const [orderSummary, setOrderSummary] = useState<{items: typeof items, totalPrice: number} | null>(null);
 
-  const handleCheckout = async () => {
-    setCheckoutState('processing');
-    setCheckoutError('');
-    try {
-      // Amount in cents
-      const amountInCents = Math.round(totalPrice * 100);
-
-      // Create payment intent via Edge Function
-      let piData;
+  // Get currency from site content
+  const [currency, setCurrency] = useState('sgd');
+  
+  useEffect(() => {
+    // Load currency from CMS or localStorage
+    const savedContent = localStorage.getItem('cms_site_content');
+    if (savedContent) {
       try {
-        const response = await supabase.functions.invoke('create-payment-intent', {
-          body: { amount: amountInCents, currency: 'usd' },
-        });
-        piData = response.data;
-        if (response.error) throw response.error;
-      } catch (edgeError: any) {
-        console.error('Edge Function error:', edgeError);
-        // Check if Edge Function is not deployed
-        if (edgeError.message?.includes('Failed to send a request') || 
-            edgeError.message?.includes('Edge Function') ||
-            edgeError.status === 404) {
-          throw new Error(
-            'Payment system not configured. Please contact support or try again later. ' +
-            '(Edge Function not deployed)'
-          );
+        const content = JSON.parse(savedContent);
+        if (content?.global?.currency) {
+          setCurrency(content.global.currency.toLowerCase());
         }
-        throw edgeError;
+      } catch (e) {
+        console.error('Failed to parse site content:', e);
       }
-
-      if (!piData?.clientSecret) {
-        throw new Error('Failed to create payment intent');
-      }
-
-      // NOTE: In production, you should use Stripe Elements for secure card input
-      // For demo/testing, we'll use a test card token
-      // In a real app, replace this with proper card element integration
-      const stripe = await stripePromise;
-      if (!stripe) throw new Error('Stripe failed to load');
-
-      // For development/testing only - in production, use Stripe Elements
-      const { error: confirmError } = await stripe.confirmCardPayment(piData.clientSecret, {
-        payment_method: {
-          card: { token: 'tok_visa' }, // Test token - FOR DEVELOPMENT ONLY
-        } as any,
-      });
-
-      if (confirmError) {
-        throw new Error(confirmError.message);
-      }
-
-      // Save order to Supabase
-      const { data: { session } } = await auth.getSession();
-      if (session?.user) {
-        await supabase.from('orders').insert({
-          user_id: session.user.id,
-          customer_email: session.user.email,
-          items: items.map(i => ({ 
-            name: i.productName, 
-            patches: [...(i.frontPatches || []), ...(i.backPatches || [])].map(p => p.name), 
-            qty: i.quantity, 
-            price: i.totalPrice 
-          })),
-          total_amount: totalPrice,
-          status: 'paid',
-          payment_intent_id: piData.clientSecret.split('_secret_')[0],
-        });
-      }
-
-      setCheckoutState('success');
-      setTimeout(() => {
-        clearCart();
-        setCheckoutState('idle');
-        setIsCartOpen(false);
-      }, 2500);
-    } catch (err: any) {
-      console.error('Checkout error:', err);
-      setCheckoutError(err?.message || 'Checkout failed');
-      setCheckoutState('error');
     }
+  }, []);
+
+
+
+  const handleCheckoutSuccess = async (orderData?: { orderId: string; orderNumber: string }) => {
+    setCheckoutState('success');
+    
+    // Capture order summary BEFORE clearing cart
+    setOrderSummary({ items: [...items], totalPrice });
+    
+    // Use order number from created order, or generate fallback
+    const displayOrderNum = orderData?.orderNumber || `ORD-${Date.now().toString(36).toUpperCase().slice(-6)}`;
+    setOrderNumber(displayOrderNum);
+    setShowOrderConfirmation(true);
+    
+    // Clear cart after a delay
+    setTimeout(() => {
+      clearCart();
+    }, 500);
   };
+  
+  const handleCloseOrderConfirmation = () => {
+    setShowOrderConfirmation(false);
+    setCheckoutState('idle');
+    setShowCheckout(false);
+    setIsCartOpen(false);
+  };
+
+  const handleCheckoutError = (error: string) => {
+    setCheckoutError(error);
+    setCheckoutState('error');
+  };
+
+  const handleClose = () => {
+    setIsCartOpen(false);
+    setShowCheckout(false);
+    setCheckoutState('idle');
+    setCheckoutError('');
+    // Clear pending checkout intent when cart is closed
+    localStorage.removeItem('pending_checkout');
+  };
+
+  // Show Order Confirmation as full page overlay (before cart open check)
+  if (showOrderConfirmation && orderSummary) {
+    return (
+      <OrderConfirmation
+        orderNumber={orderNumber}
+        orderDate={new Date().toISOString()}
+        customerEmail={currentUser?.email || 'guest@example.com'}
+        items={orderSummary.items.map(i => ({ 
+          name: i.productName, 
+          patches: [...(i.frontPatches || []), ...(i.backPatches || [])].map(p => p.name), 
+          qty: i.quantity, 
+          price: i.totalPrice,
+          productImage: i.productImage
+        }))}
+        totalAmount={orderSummary.totalPrice}
+        currency={currency}
+        onContinueShopping={handleCloseOrderConfirmation}
+      />
+    );
+  }
 
   if (!isCartOpen) return null;
 
   return (
     <>
-      <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" onClick={() => setIsCartOpen(false)} />
+      <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" onClick={handleClose} />
       <div className="fixed right-0 top-0 h-full w-full max-w-md bg-white z-50 shadow-2xl flex flex-col">
         <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-lg font-bold">Shopping Cart ({totalItems})</h2>
-          <button onClick={() => setIsCartOpen(false)} className="p-2 hover:bg-gray-100 rounded-full">
+          <h2 className="text-lg font-bold">
+            {showCheckout ? 'Checkout' : `Shopping Cart (${totalItems})`}
+          </h2>
+          <button onClick={handleClose} className="p-2 hover:bg-gray-100 rounded-full">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4">
-          {items.length === 0 ? (
-            <div className="text-center py-12">
-              <ShoppingCart className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500">Your cart is empty</p>
+          {showCheckout ? (
+            // Checkout View
+            <div className="space-y-4">
+              <button
+                onClick={() => setShowCheckout(false)}
+                className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
+              >
+                ← Back to cart
+              </button>
+              
+              {/* Show error prominently at top of checkout -->
+              {checkoutError && (
+                <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4 flex items-start gap-3">
+                  <AlertCircle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-red-800">Payment Failed</p>
+                    <p className="text-red-700 text-sm mt-1">{checkoutError}</p>
+                    <p className="text-red-600 text-xs mt-2">Please check your details and try again below.</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Payment Step with AddressElement */}
+              <StripeCheckout
+                amount={Math.round(totalPrice * 100)}
+                currency={currency}
+                userId={currentUser?.id}
+                customerEmail={currentUser?.email}
+                cartItems={items}
+                onSuccess={handleCheckoutSuccess}
+                onError={handleCheckoutError}
+              />
             </div>
           ) : (
-            <div className="space-y-4">
-              {items.map((item) => (
-                <CartItemCard 
-                  key={item.id} 
-                  item={item} 
-                  updateQuantity={updateQuantity}
-                  removeItem={removeItem}
-                />
-              ))}
-            </div>
+            // Cart View
+            items.length === 0 ? (
+              <div className="text-center py-12">
+                <ShoppingCart className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500">Your cart is empty</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {items.map((item) => (
+                  <CartItemCard 
+                    key={item.id} 
+                    item={item} 
+                    updateQuantity={updateQuantity}
+                    removeItem={removeItem}
+                  />
+                ))}
+              </div>
+            )
           )}
         </div>
 
-        {items.length > 0 && (
+        {!showCheckout && items.length > 0 && (
           <div className="border-t p-4 space-y-4">
             <div className="flex justify-between text-lg font-bold">
               <span>Total</span>
-              <span>${totalPrice.toFixed(2)}</span>
+              <span>${totalPrice.toFixed(2)} {currency.toUpperCase()}</span>
             </div>
-            {checkoutError && (
+            {checkoutError && !showCheckout && (
               <div className="text-red-600 text-sm bg-red-50 p-2 rounded">{checkoutError}</div>
             )}
-            {checkoutState === 'success' ? (
-              <div className="flex items-center justify-center gap-2 py-3 text-green-600 font-semibold">
-                <CheckCircle className="w-5 h-5" /> Payment Successful!
-              </div>
-            ) : (
+            {currentUser ? (
+              // Logged in - show checkout button
               <button
-                onClick={handleCheckout}
-                disabled={checkoutState === 'processing'}
-                className={`w-full btn-primary py-3 flex items-center justify-center gap-2 ${checkoutState === 'processing' ? 'opacity-70 cursor-not-allowed' : ''}`}
+                onClick={() => setShowCheckout(true)}
+                className="w-full btn-primary py-3 flex items-center justify-center gap-2"
               >
-                {checkoutState === 'processing' ? (
-                  <><Loader2 className="w-5 h-5 animate-spin" /> Processing...</>
-                ) : (
-                  'Proceed to Checkout'
-                )}
+                Proceed to Checkout
               </button>
+            ) : (
+              // Not logged in - show sign in button
+              <div className="space-y-2">
+                <button
+                  onClick={() => {
+                    // Store intent to checkout after login
+                    localStorage.setItem('pending_checkout', 'true');
+                    setIsCartOpen(false);
+                    setAuthView('login');
+                    setShowAuth(true);
+                  }}
+                  className="w-full btn-primary py-3 flex items-center justify-center gap-2"
+                >
+                  Sign in to Checkout
+                </button>
+                <p className="text-xs text-gray-500 text-center">
+                  Please sign in or create an account to complete your purchase
+                </p>
+              </div>
             )}
           </div>
         )}
@@ -389,17 +446,167 @@ function CartDrawer() {
   );
 }
 
+// User Orders Component
+interface UserOrder {
+    id: string;
+    order_number: string;
+    items: Array<{
+        name: string;
+        patches: string[];
+        qty: number;
+        price: number;
+    }>;
+    total_amount: number;
+    fulfillment_status: string;
+    tracking_number: string | null;
+    created_at: string;
+    shipped_at: string | null;
+    delivered_at: string | null;
+}
+
+function UserOrdersModal({ show, onClose, userId, onViewOrder }: { show: boolean; onClose: () => void; userId: string; onViewOrder: (orderId: string) => void }) {
+    const [orders, setOrders] = useState<UserOrder[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        if (show && userId) {
+            loadOrders();
+        }
+    }, [show, userId]);
+
+    const loadOrders = async () => {
+        setLoading(true);
+        try {
+            const { data, error } = await supabase
+                .from('orders')
+                .select('id, order_number, items, total_amount, fulfillment_status, tracking_number, created_at, shipped_at, delivered_at')
+                .eq('user_id', userId)
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+            setOrders(data || []);
+        } catch (err) {
+            console.error('Failed to load orders:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const getStatusBadge = (status: string) => {
+        const styles: Record<string, string> = {
+            pending: 'bg-yellow-100 text-yellow-800',
+            processing: 'bg-blue-100 text-blue-800',
+            shipped: 'bg-purple-100 text-purple-800',
+            delivered: 'bg-green-100 text-green-800',
+            cancelled: 'bg-red-100 text-red-800',
+        };
+        return styles[status] || 'bg-gray-100 text-gray-800';
+    };
+
+    const getStatusIcon = (status: string) => {
+        switch (status) {
+            case 'pending': return '⏳';
+            case 'processing': return '🔧';
+            case 'shipped': return '📦';
+            case 'delivered': return '✅';
+            default: return '📋';
+        }
+    };
+
+    if (!show) return null;
+
+    return (
+        <>
+            <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+            <div className="fixed right-0 top-0 h-full w-full max-w-md bg-white z-50 shadow-2xl flex flex-col">
+                <div className="flex items-center justify-between p-4 border-b">
+                    <h2 className="text-lg font-bold">My Orders</h2>
+                    <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full">
+                        <X className="w-5 h-5" />
+                    </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-4">
+                    {loading ? (
+                        <div className="flex items-center justify-center py-12">
+                            <Loader2 className="w-8 h-8 animate-spin text-pink" />
+                            <span className="ml-2 text-gray-600">Loading orders...</span>
+                        </div>
+                    ) : orders.length === 0 ? (
+                        <div className="text-center py-12">
+                            <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                            <p className="text-gray-500">No orders yet</p>
+                            <p className="text-sm text-gray-400 mt-2">Your order history will appear here</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            {orders.map((order) => (
+                                <div
+                                    key={order.id}
+                                    className="border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow bg-white cursor-pointer"
+                                    onClick={() => {
+                                        onClose();
+                                        onViewOrder(order.id);
+                                    }}
+                                >
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-bold">#{order.order_number}</span>
+                                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(order.fulfillment_status)}`}>
+                                                    {getStatusIcon(order.fulfillment_status)} {order.fulfillment_status}
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-gray-400 mt-1">
+                                                {new Date(order.created_at).toLocaleDateString()}
+                                            </p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="font-bold">${Number(order.total_amount).toFixed(2)}</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Items Preview */}
+                                    <div className="text-sm text-gray-600">
+                                        {order.items?.map((item, idx) => (
+                                            <span key={idx}>
+                                                {item.name} × {item.qty}
+                                                {idx < (order.items?.length || 0) - 1 && ', '}
+                                            </span>
+                                        ))}
+                                    </div>
+
+                                    {/* Tracking Info */}
+                                    {order.tracking_number && (
+                                        <div className="mt-2 text-sm">
+                                            <span className="text-purple-700">
+                                                📦 Tracking: {order.tracking_number}
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </>
+    );
+}
+
 // Main App Content
 function AppContent() {
   const [currentView, setCurrentView] = useState<AppView>('landing');
   const [currentUser, setCurrentUser] = useState<UserType | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true); // Track auth initialization
 
+
   const [showAuth, setShowAuth] = useState(false);
   const [authView, setAuthView] = useState<AuthView>('login');
 
-  const [showAdmin, setShowAdmin] = useState(false);
   const [adminTab, setAdminTab] = useState<AdminTab>('products');
+  const [showUserOrders, setShowUserOrders] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
   const [notices] = useState<Notice[]>(initialNotices);
   const [products, setProducts] = useState<Product[]>(initialProducts);
@@ -583,56 +790,44 @@ function AppContent() {
     let mounted = true;
 
     const handleUserAuthenticated = async (user: any, isInstant = false) => {
-      // Set user immediately with basic info (don't wait for profile)
+      // Role should be in user_metadata from the updated signIn flow
+      // For existing sessions, try to get it from the database
+      let userRole = user.user_metadata?.role as 'user' | 'admin' | undefined;
+      
+      // If no role in metadata (legacy sessions), fetch it once
+      if (!userRole) {
+        try {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single();
+          
+          if (profile?.role) {
+            userRole = profile.role;
+            // Update the JWT metadata for next time
+            await supabase.auth.updateUser({
+              data: { role: profile.role }
+            });
+          }
+        } catch (err) {
+          console.warn('App: Could not fetch role, defaulting to user');
+        }
+      }
+      
       const baseUser = {
         id: user.id,
         email: user.email || '',
-        role: (user.user_metadata?.role as 'user' | 'admin') || 'user',
+        role: userRole || 'user',
         name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
       };
       
-      console.log('App: Setting user:', baseUser.email, isInstant ? '(instant from cache)' : '(validated)');
+      console.log('App: Setting user:', baseUser.email, 'Role:', baseUser.role, isInstant ? '(instant)' : '(validated)');
       
       if (mounted) {
         setCurrentUser(baseUser);
         setShowAuth(false);
-        // If instant, don't clear loading yet - wait for validation
-        if (!isInstant) {
-          setIsAuthLoading(false);
-        }
-      }
-      
-      // Try to fetch profile with timeout (don't block if it fails)
-      try {
-        const profilePromise = supabase
-          .from('profiles')
-          .select('role, full_name')
-          .eq('id', user.id)
-          .single();
-          
-        // 3 second timeout for profile fetch
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Profile fetch timeout')), 3000)
-        );
-        
-        const { data: profile, error: profileError } = await Promise.race([
-          profilePromise,
-          timeoutPromise
-        ]) as any;
-
-        if (profileError) {
-          console.warn('App: Profile fetch error:', profileError);
-        } else if (profile && mounted) {
-          // Update with profile data if available
-          console.log('App: Updating user with profile data');
-          setCurrentUser({
-            ...baseUser,
-            role: profile.role || baseUser.role,
-            name: profile.full_name || baseUser.name,
-          });
-        }
-      } catch (err) {
-        console.warn('App: Profile fetch failed (using defaults):', err);
+        setIsAuthLoading(false);
       }
     };
 
@@ -663,7 +858,7 @@ function AppContent() {
           console.error('App: Session validation error:', sessionError);
           if (mounted) {
             setCurrentUser(null);
-            setShowAdmin(false);
+            setCurrentView('landing');
           }
           return;
         }
@@ -675,7 +870,7 @@ function AppContent() {
           } else {
             console.log('App: No valid session on server.');
             setCurrentUser(null);
-            setShowAdmin(false);
+            setCurrentView('landing');
           }
         }
       } catch (err) {
@@ -683,7 +878,7 @@ function AppContent() {
         // Keep cached user if validation fails (offline mode)
         if (!currentUser && mounted) {
           setCurrentUser(null);
-          setShowAdmin(false);
+          setCurrentView('landing');
         }
       } finally {
         if (mounted) {
@@ -701,6 +896,14 @@ function AppContent() {
         if (session?.user) {
           try {
             await handleUserAuthenticated(session.user, false);
+            
+            // Check if user was trying to checkout before login
+            const pendingCheckout = localStorage.getItem('pending_checkout');
+            if (pendingCheckout === 'true' && event === 'SIGNED_IN') {
+              localStorage.removeItem('pending_checkout');
+              // Open cart and show checkout
+              setIsCartOpen(true);
+            }
           } catch (err) {
             console.error('App: Error in auth state change handler:', err);
           } finally {
@@ -708,7 +911,7 @@ function AppContent() {
           }
         } else {
           setCurrentUser(null);
-          setShowAdmin(false);
+          setCurrentView('landing');
           setIsAuthLoading(false);
         }
       }
@@ -732,7 +935,7 @@ function AppContent() {
   const handleLogout = async () => {
     await auth.signOut();
     setCurrentUser(null);
-    setShowAdmin(false);
+    setCurrentView('landing');
   };
 
   // Refresh CMS data after admin updates (in dev mode, reloads from Supabase)
@@ -831,7 +1034,7 @@ function AppContent() {
                   <Palette className="w-5 h-5 text-white" />
                 </div>
               )}
-              <span className="font-heading text-xl font-bold text-text-dark">{siteContent.global.logoText || 'Patch & Press'}</span>
+              <span className="font-heading text-xl font-bold text-text-dark">{siteContent.global.logoText || 'Patchuu'}</span>
             </div>
             <div className="flex items-center gap-3">
               {/* Currency Selector */}
@@ -863,13 +1066,27 @@ function AppContent() {
                 <div className="w-5 h-5 border-2 border-pink/30 border-t-pink rounded-full animate-spin" />
               ) : (
                 <>
+                  {/* Admin button - show immediately if role is admin */}
                   {currentUser?.role === 'admin' && (
-                    <button onClick={() => setShowAdmin(true)} className="p-2 hover:bg-pink/20 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink focus-visible:ring-offset-2" title="Admin Panel" aria-label="Open admin panel">
+                    <button 
+                      onClick={() => setCurrentView('admin')} 
+                      className="p-2 hover:bg-pink/20 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink focus-visible:ring-offset-2"
+                      title="Admin Panel"
+                      aria-label="Open admin panel"
+                    >
                       <Settings className="w-5 h-5 text-text-dark" aria-hidden="true" />
                     </button>
                   )}
                   {currentUser ? (
                     <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setShowUserOrders(true)}
+                        className="p-2 hover:bg-pink/20 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink focus-visible:ring-offset-2"
+                        title="My Orders"
+                        aria-label="My Orders"
+                      >
+                        <Package className="w-5 h-5 text-text-dark" aria-hidden="true" />
+                      </button>
                       <span className="text-sm font-semibold hidden sm:block">{currentUser.name}</span>
                       <button onClick={handleLogout} className="p-2 hover:bg-pink/20 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink focus-visible:ring-offset-2" aria-label="Log out">
                         <LogOut className="w-5 h-5 text-text-dark" aria-hidden="true" />
@@ -903,22 +1120,21 @@ function AppContent() {
         setAuthView={setAuthView}
       />
 
-      <AdminPanel
-        showAdmin={showAdmin}
-        setShowAdmin={setShowAdmin}
-        adminTab={adminTab}
-        setAdminTab={setAdminTab}
-        products={products}
-        setProducts={setProducts}
-        patches={patches}
-        setPatches={setPatches}
-        siteContent={siteContent}
-        setSiteContent={setSiteContent}
-        onContentSaved={refreshCmsData}
-        usingStaticCms={usingStaticCms}
+      <CartDrawer 
+        currentUser={currentUser}
+        setShowAuth={setShowAuth}
+        setAuthView={setAuthView}
       />
 
-      <CartDrawer />
+      <UserOrdersModal
+        show={showUserOrders}
+        onClose={() => setShowUserOrders(false)}
+        userId={currentUser?.id || ''}
+        onViewOrder={(orderId) => {
+          setSelectedOrderId(orderId);
+          setCurrentView('order-detail');
+        }}
+      />
 
       {/* Loading indicator for initial data fetch - non-blocking */}
       {isDataLoading && (
@@ -934,15 +1150,43 @@ function AppContent() {
 
       {/* Context7 Best Practice: Main content landmark with id for skip link */}
       <main id="main-content" className="outline-none">
-        {currentView === 'landing' ? (
+        {currentView === 'landing' && (
           <LandingPage notices={notices} startCustomizing={startCustomizing} siteContent={siteContent} />
-        ) : (
+        )}
+        {currentView === 'customize' && (
           <CustomizePage
             products={products}
             patches={patches}
             setCurrentView={setCurrentView}
             siteContent={siteContent}
           />
+        )}
+        {currentView === 'order-detail' && selectedOrderId && (
+          <OrderDetailPage
+            orderId={selectedOrderId}
+            onBack={() => {
+              setCurrentView('landing');
+              setSelectedOrderId(null);
+            }}
+          />
+        )}
+        {currentView === 'admin' && (
+          <div className="min-h-screen bg-gray-50">
+            <AdminPanel
+              showAdmin={true}
+              setShowAdmin={() => setCurrentView('landing')}
+              adminTab={adminTab}
+              setAdminTab={setAdminTab}
+              products={products}
+              setProducts={setProducts}
+              patches={patches}
+              setPatches={setPatches}
+              siteContent={siteContent}
+              setSiteContent={setSiteContent}
+              onContentSaved={refreshCmsData}
+              usingStaticCms={usingStaticCms}
+            />
+          </div>
         )}
       </main>
     </div>
