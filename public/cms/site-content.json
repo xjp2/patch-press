@@ -12,8 +12,15 @@
         "fullWidth": true,
         "isGallery": false,
         "maxHeight": 0,
+        "buttonText": "Start Designing!",
+        "showButton": true,
+        "buttonColor": "#fff8e7",
+        "buttonStyle": "solid",
         "isClickable": false,
-        "galleryItems": []
+        "buttonAction": "customize",
+        "galleryItems": [],
+        "buttonTextColor": "#000000",
+        "buttonVerticalPosition": 141
       },
       "visible": true
     },
@@ -179,7 +186,7 @@
       "Remove patches by clicking the × button"
     ]
   },
-  "updated_at": "2026-03-20T18:46:25.989+00:00",
+  "updated_at": "2026-03-20T21:32:17.194+00:00",
   "navbar": {
     "position": "static"
   }
