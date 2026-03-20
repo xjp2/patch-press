@@ -118,6 +118,8 @@ export interface ImageBannerContent {
     buttonUrl?: string;
     buttonAction?: 'customize' | 'scroll' | 'link';
     buttonPosition?: 'left' | 'center' | 'right';
+    buttonVerticalFrom?: 'top' | 'bottom';
+    buttonVerticalPosition?: number; // pixels from top or bottom
     buttonStyle?: 'solid' | 'outline' | 'ghost';
     buttonColor?: string;
     buttonTextColor?: string;
@@ -1603,12 +1605,25 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                                                                                     </select>
                                                                                                 </div>
                                                                                                 <div>
-                                                                                                    <label className="text-xs text-gray-500 mb-1 block">Position</label>
+                                                                                                    <label className="text-xs text-gray-500 mb-1 block">Horizontal</label>
                                                                                                     <select value={c.buttonPosition || 'center'} onChange={e => updateSectionContent(section.id, { ...c, buttonPosition: e.target.value as any })} className="w-full px-2 py-2 text-xs border border-gray-200 rounded bg-white">
                                                                                                         <option value="left">Left</option>
                                                                                                         <option value="center">Center</option>
                                                                                                         <option value="right">Right</option>
                                                                                                     </select>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                            <div className="grid grid-cols-2 gap-3">
+                                                                                                <div>
+                                                                                                    <label className="text-xs text-gray-500 mb-1 block">Vertical From</label>
+                                                                                                    <select value={c.buttonVerticalFrom || 'bottom'} onChange={e => updateSectionContent(section.id, { ...c, buttonVerticalFrom: e.target.value as any })} className="w-full px-2 py-2 text-xs border border-gray-200 rounded bg-white">
+                                                                                                        <option value="top">Top</option>
+                                                                                                        <option value="bottom">Bottom</option>
+                                                                                                    </select>
+                                                                                                </div>
+                                                                                                <div>
+                                                                                                    <label className="text-xs text-gray-500 mb-1 block">Position (px)</label>
+                                                                                                    <input type="number" value={c.buttonVerticalPosition ?? 24} onChange={e => updateSectionContent(section.id, { ...c, buttonVerticalPosition: parseInt(e.target.value) || 0 })} className="w-full px-2 py-2 text-xs border border-gray-200 rounded" min="0" max="500" />
                                                                                                 </div>
                                                                                             </div>
                                                                                             {(c.buttonAction === 'link' || c.buttonAction === 'scroll') && (

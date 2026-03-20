@@ -409,7 +409,12 @@ function ImageBannerSection({ section, startCustomizing }: { section: PageSectio
                                     onClick={() => handleRedirect(c.linkUrl)}
                                 />
                                 {c.showButton && c.buttonText && (
-                                    <div className={`absolute bottom-6 left-0 right-0 flex ${c.buttonPosition === 'left' ? 'justify-start pl-6' : c.buttonPosition === 'right' ? 'justify-end pr-6' : 'justify-center'}`}>
+                                    <div 
+                                        className={`absolute left-0 right-0 flex ${c.buttonPosition === 'left' ? 'justify-start pl-6' : c.buttonPosition === 'right' ? 'justify-end pr-6' : 'justify-center'}`}
+                                        style={{
+                                            [c.buttonVerticalFrom === 'top' ? 'top' : 'bottom']: `${c.buttonVerticalPosition ?? 24}px`
+                                        }}
+                                    >
                                         <button
                                             onClick={handleButtonClick}
                                             className={`px-6 py-3 rounded-xl font-bold transition-all duration-300 hover:scale-105 ${
