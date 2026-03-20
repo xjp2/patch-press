@@ -410,27 +410,29 @@ function ImageBannerSection({ section, startCustomizing }: { section: PageSectio
                                 />
                                 {c.showButton && c.buttonText && (
                                     <div 
-                                        className={`absolute left-0 right-0 flex ${c.buttonPosition === 'left' ? 'justify-start pl-6' : c.buttonPosition === 'right' ? 'justify-end pr-6' : 'justify-center'}`}
+                                        className={`absolute left-0 right-0 flex px-4 sm:px-6 ${c.buttonPosition === 'left' ? 'justify-start' : c.buttonPosition === 'right' ? 'justify-end' : 'justify-center'}`}
                                         style={{
                                             [c.buttonVerticalFrom === 'top' ? 'top' : 'bottom']: `${c.buttonVerticalPosition ?? 24}px`
                                         }}
                                     >
                                         <button
                                             onClick={handleButtonClick}
-                                            className={`px-6 py-3 rounded-xl font-bold transition-all duration-300 hover:scale-105 ${
+                                            className={`px-6 sm:px-8 py-3 sm:py-4 rounded-full font-bold text-sm sm:text-base transition-all duration-300 hover:scale-105 ${
                                                 c.buttonStyle === 'outline' 
                                                     ? 'border-2 bg-transparent hover:bg-opacity-10' 
                                                     : c.buttonStyle === 'ghost' 
                                                         ? 'bg-transparent hover:bg-opacity-10' 
-                                                        : ''
+                                                        : 'shadow-lg hover:shadow-xl'
                                             }`}
                                             style={{
                                                 backgroundColor: c.buttonStyle === 'solid' ? (c.buttonColor || '#6b8f71') : 'transparent',
                                                 color: c.buttonStyle === 'solid' ? (c.buttonTextColor || '#ffffff') : (c.buttonColor || '#6b8f71'),
                                                 borderColor: c.buttonStyle !== 'ghost' ? (c.buttonColor || '#6b8f71') : 'transparent',
+                                                boxShadow: c.buttonStyle === 'solid' ? '0 10px 30px -10px rgba(0,0,0,0.3)' : undefined,
                                             }}
                                         >
                                             {c.buttonText}
+                                            <span className="ml-2">→</span>
                                         </button>
                                     </div>
                                 )}
