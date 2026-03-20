@@ -112,6 +112,15 @@ export interface ImageBannerContent {
     shadow?: 'none' | 'small' | 'medium' | 'large';
     imageFit?: 'cover' | 'contain' | 'none';
     maxHeight?: number;
+    // Button properties
+    showButton?: boolean;
+    buttonText?: string;
+    buttonUrl?: string;
+    buttonAction?: 'customize' | 'scroll' | 'link';
+    buttonPosition?: 'left' | 'center' | 'right';
+    buttonStyle?: 'solid' | 'outline' | 'ghost';
+    buttonColor?: string;
+    buttonTextColor?: string;
 }
 export interface TestimonialItem {
     id: string;
@@ -1572,6 +1581,65 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                                                                         <p><strong>Tip:</strong> Set Image Fit to "Natural Size" and Max Height to 0 for wide banners. The image will scale down proportionally on mobile.</p>
                                                                                         <p><strong>Mobile:</strong> Images automatically scale to fit screen width while maintaining aspect ratio.</p>
                                                                                     </div>
+                                                                                </div>
+
+                                                                                {/* Button Settings */}
+                                                                                <div className="pt-3 border-t border-gray-100 space-y-3">
+                                                                                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Button</p>
+                                                                                    <label className="flex items-center gap-2 cursor-pointer">
+                                                                                        <input type="checkbox" checked={c.showButton || false} onChange={e => updateSectionContent(section.id, { ...c, showButton: e.target.checked })} className="w-4 h-4 rounded accent-pink" />
+                                                                                        <span className="text-xs font-bold text-gray-600">Show Button</span>
+                                                                                    </label>
+                                                                                    {c.showButton && (
+                                                                                        <div className="space-y-3 pl-4 border-l-2 border-pink/20">
+                                                                                            <input type="text" value={c.buttonText || ''} onChange={e => updateSectionContent(section.id, { ...c, buttonText: e.target.value })} placeholder="Button Text (e.g. Shop Now)" className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-pink outline-none text-sm" />
+                                                                                            <div className="grid grid-cols-2 gap-3">
+                                                                                                <div>
+                                                                                                    <label className="text-xs text-gray-500 mb-1 block">Action</label>
+                                                                                                    <select value={c.buttonAction || 'link'} onChange={e => updateSectionContent(section.id, { ...c, buttonAction: e.target.value as any })} className="w-full px-2 py-2 text-xs border border-gray-200 rounded bg-white">
+                                                                                                        <option value="link">Link</option>
+                                                                                                        <option value="customize">Start Designing</option>
+                                                                                                        <option value="scroll">Scroll to Section</option>
+                                                                                                    </select>
+                                                                                                </div>
+                                                                                                <div>
+                                                                                                    <label className="text-xs text-gray-500 mb-1 block">Position</label>
+                                                                                                    <select value={c.buttonPosition || 'center'} onChange={e => updateSectionContent(section.id, { ...c, buttonPosition: e.target.value as any })} className="w-full px-2 py-2 text-xs border border-gray-200 rounded bg-white">
+                                                                                                        <option value="left">Left</option>
+                                                                                                        <option value="center">Center</option>
+                                                                                                        <option value="right">Right</option>
+                                                                                                    </select>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                            {(c.buttonAction === 'link' || c.buttonAction === 'scroll') && (
+                                                                                                <input type="text" value={c.buttonUrl || ''} onChange={e => updateSectionContent(section.id, { ...c, buttonUrl: e.target.value })} placeholder={c.buttonAction === 'scroll' ? '#section-id (e.g. #gallery)' : 'https://example.com'} className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-pink outline-none text-sm" />
+                                                                                            )}
+                                                                                            <div className="grid grid-cols-2 gap-3">
+                                                                                                <div>
+                                                                                                    <label className="text-xs text-gray-500 mb-1 block">Style</label>
+                                                                                                    <select value={c.buttonStyle || 'solid'} onChange={e => updateSectionContent(section.id, { ...c, buttonStyle: e.target.value as any })} className="w-full px-2 py-2 text-xs border border-gray-200 rounded bg-white">
+                                                                                                        <option value="solid">Solid</option>
+                                                                                                        <option value="outline">Outline</option>
+                                                                                                        <option value="ghost">Ghost</option>
+                                                                                                    </select>
+                                                                                                </div>
+                                                                                                <div>
+                                                                                                    <label className="text-xs text-gray-500 mb-1 block">Button Color</label>
+                                                                                                    <div className="flex gap-2">
+                                                                                                        <input type="color" value={c.buttonColor || '#6b8f71'} onChange={e => updateSectionContent(section.id, { ...c, buttonColor: e.target.value })} className="w-8 h-8 rounded border border-gray-200 cursor-pointer" />
+                                                                                                        <input type="text" value={c.buttonColor || ''} onChange={e => updateSectionContent(section.id, { ...c, buttonColor: e.target.value })} placeholder="#6b8f71" className="flex-1 px-2 py-1 text-xs border border-gray-200 rounded" />
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                            </div>
+                                                                                            <div>
+                                                                                                <label className="text-xs text-gray-500 mb-1 block">Text Color</label>
+                                                                                                <div className="flex gap-2">
+                                                                                                    <input type="color" value={c.buttonTextColor || '#ffffff'} onChange={e => updateSectionContent(section.id, { ...c, buttonTextColor: e.target.value })} className="w-8 h-8 rounded border border-gray-200 cursor-pointer" />
+                                                                                                    <input type="text" value={c.buttonTextColor || ''} onChange={e => updateSectionContent(section.id, { ...c, buttonTextColor: e.target.value })} placeholder="#ffffff" className="flex-1 px-2 py-1 text-xs border border-gray-200 rounded" />
+                                                                                                </div>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    )}
                                                                                 </div>
 
                                                                                 <label className="flex items-center gap-2 cursor-pointer pt-2 border-t border-gray-100">

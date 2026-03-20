@@ -320,7 +320,7 @@ function TextBlockSection({ section }: { section: PageSection }) {
     );
 }
 
-function ImageBannerSection({ section }: { section: PageSection }) {
+function ImageBannerSection({ section, startCustomizing }: { section: PageSection; startCustomizing: () => void }) {
     const c = section.content as ImageBannerContent;
     const { ref, isRevealed } = useScrollReveal();
     const styling = section.styling || {};
@@ -329,6 +329,31 @@ function ImageBannerSection({ section }: { section: PageSection }) {
         if (!url || c.isClickable === false) return;
         if (url.startsWith('http')) window.open(url, '_blank');
         else window.location.href = url;
+    };
+
+    const handleButtonClick = () => {
+        if (!c.showButton) return;
+        
+        switch (c.buttonAction) {
+            case 'customize':
+                startCustomizing();
+                break;
+            case 'scroll':
+                if (c.buttonUrl?.startsWith('#')) {
+                    const el = document.querySelector(c.buttonUrl);
+                    el?.scrollIntoView({ behavior: 'smooth' });
+                } else {
+                    window.location.href = c.buttonUrl || '#';
+                }
+                break;
+            case 'link':
+            default:
+                if (c.buttonUrl?.startsWith('http')) {
+                    window.open(c.buttonUrl, '_blank');
+                } else {
+                    window.location.href = c.buttonUrl || '#';
+                }
+        }
     };
 
     // Container styling
@@ -386,6 +411,27 @@ function ImageBannerSection({ section }: { section: PageSection }) {
                     )}
                 </div>
                 {c.caption && <p className={`text-center text-sm text-[var(--color-primary)] opacity-80 mt-3 scroll-reveal scroll-delay-1 ${isRevealed ? 'scroll-revealed' : ''}`}>{c.caption}</p>}
+                {c.showButton && c.buttonText && (
+                    <div className={`mt-4 flex ${c.buttonPosition === 'left' ? 'justify-start' : c.buttonPosition === 'right' ? 'justify-end' : 'justify-center'}`}>
+                        <button
+                            onClick={handleButtonClick}
+                            className={`px-6 py-3 rounded-xl font-bold transition-all duration-300 hover:scale-105 ${
+                                c.buttonStyle === 'outline' 
+                                    ? 'border-2 bg-transparent hover:bg-opacity-10' 
+                                    : c.buttonStyle === 'ghost' 
+                                        ? 'bg-transparent hover:bg-opacity-10' 
+                                        : ''
+                            }`}
+                            style={{
+                                backgroundColor: c.buttonStyle === 'solid' ? (c.buttonColor || '#6b8f71') : 'transparent',
+                                color: c.buttonStyle === 'solid' ? (c.buttonTextColor || '#ffffff') : (c.buttonColor || '#6b8f71'),
+                                borderColor: c.buttonStyle !== 'ghost' ? (c.buttonColor || '#6b8f71') : 'transparent',
+                            }}
+                        >
+                            {c.buttonText}
+                        </button>
+                    </div>
+                )}
             </div>
         </section>
     );
@@ -630,7 +676,7 @@ export function LandingPage({ notices, startCustomizing, siteContent }: LandingP
                     case 'howItWorks': return <HowItWorksSection key={section.id} section={section} />;
                     case 'gallery': return <GallerySection key={section.id} section={section} startCustomizing={startCustomizing} />;
                     case 'textBlock': return <TextBlockSection key={section.id} section={section} />;
-                    case 'imageBanner': return <ImageBannerSection key={section.id} section={section} />;
+                    case 'imageBanner': return <ImageBannerSection key={section.id} section={section} startCustomizing={startCustomizing} />;
                     case 'testimonials': return <TestimonialsSection key={section.id} section={section} />;
                     case 'cta': return <CtaSection key={section.id} section={section} startCustomizing={startCustomizing} />;
                     case 'divider': return <DividerSection key={section.id} section={section} />;
