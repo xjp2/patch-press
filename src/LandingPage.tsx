@@ -397,41 +397,43 @@ function ImageBannerSection({ section, startCustomizing }: { section: PageSectio
                         </div>
                     ) : (
                         c.image && (
-                            <img
-                                src={c.image}
-                                alt={c.alt}
-                                className={`w-full max-w-full h-auto ${c.imageFit === 'contain' ? 'object-contain' : c.imageFit === 'none' ? 'object-none' : 'object-cover'} ${c.isClickable !== false ? 'cursor-pointer' : ''} hover:scale-[1.01] transition-all duration-700 scroll-reveal-scale ${isRevealed ? 'scroll-revealed' : ''}`}
-                                style={{ 
-                                    borderRadius: `${imageBorderRadius}px`,
-                                    maxHeight: c.maxHeight && c.maxHeight > 0 ? `${c.maxHeight}px` : undefined,
-                                }}
-                                onClick={() => handleRedirect(c.linkUrl)}
-                            />
+                            <div className="relative">
+                                <img
+                                    src={c.image}
+                                    alt={c.alt}
+                                    className={`w-full max-w-full h-auto ${c.imageFit === 'contain' ? 'object-contain' : c.imageFit === 'none' ? 'object-none' : 'object-cover'} ${c.isClickable !== false ? 'cursor-pointer' : ''} hover:scale-[1.01] transition-all duration-700 scroll-reveal-scale ${isRevealed ? 'scroll-revealed' : ''}`}
+                                    style={{ 
+                                        borderRadius: `${imageBorderRadius}px`,
+                                        maxHeight: c.maxHeight && c.maxHeight > 0 ? `${c.maxHeight}px` : undefined,
+                                    }}
+                                    onClick={() => handleRedirect(c.linkUrl)}
+                                />
+                                {c.showButton && c.buttonText && (
+                                    <div className={`absolute bottom-6 left-0 right-0 flex ${c.buttonPosition === 'left' ? 'justify-start pl-6' : c.buttonPosition === 'right' ? 'justify-end pr-6' : 'justify-center'}`}>
+                                        <button
+                                            onClick={handleButtonClick}
+                                            className={`px-6 py-3 rounded-xl font-bold transition-all duration-300 hover:scale-105 ${
+                                                c.buttonStyle === 'outline' 
+                                                    ? 'border-2 bg-transparent hover:bg-opacity-10' 
+                                                    : c.buttonStyle === 'ghost' 
+                                                        ? 'bg-transparent hover:bg-opacity-10' 
+                                                        : ''
+                                            }`}
+                                            style={{
+                                                backgroundColor: c.buttonStyle === 'solid' ? (c.buttonColor || '#6b8f71') : 'transparent',
+                                                color: c.buttonStyle === 'solid' ? (c.buttonTextColor || '#ffffff') : (c.buttonColor || '#6b8f71'),
+                                                borderColor: c.buttonStyle !== 'ghost' ? (c.buttonColor || '#6b8f71') : 'transparent',
+                                            }}
+                                        >
+                                            {c.buttonText}
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                         )
                     )}
                 </div>
                 {c.caption && <p className={`text-center text-sm text-[var(--color-primary)] opacity-80 mt-3 scroll-reveal scroll-delay-1 ${isRevealed ? 'scroll-revealed' : ''}`}>{c.caption}</p>}
-                {c.showButton && c.buttonText && (
-                    <div className={`mt-4 flex ${c.buttonPosition === 'left' ? 'justify-start' : c.buttonPosition === 'right' ? 'justify-end' : 'justify-center'}`}>
-                        <button
-                            onClick={handleButtonClick}
-                            className={`px-6 py-3 rounded-xl font-bold transition-all duration-300 hover:scale-105 ${
-                                c.buttonStyle === 'outline' 
-                                    ? 'border-2 bg-transparent hover:bg-opacity-10' 
-                                    : c.buttonStyle === 'ghost' 
-                                        ? 'bg-transparent hover:bg-opacity-10' 
-                                        : ''
-                            }`}
-                            style={{
-                                backgroundColor: c.buttonStyle === 'solid' ? (c.buttonColor || '#6b8f71') : 'transparent',
-                                color: c.buttonStyle === 'solid' ? (c.buttonTextColor || '#ffffff') : (c.buttonColor || '#6b8f71'),
-                                borderColor: c.buttonStyle !== 'ghost' ? (c.buttonColor || '#6b8f71') : 'transparent',
-                            }}
-                        >
-                            {c.buttonText}
-                        </button>
-                    </div>
-                )}
             </div>
         </section>
     );
