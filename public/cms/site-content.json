@@ -2,6 +2,22 @@
   "id": "current",
   "landing_page": [
     {
+      "id": "acc3ce6c-c9a2-42e7-9a9f-e535e17d9d6d",
+      "type": "imageBanner",
+      "content": {
+        "alt": "",
+        "image": "https://fyadtnkbayeafjmdvymx.supabase.co/storage/v1/object/public/assets/uploads/21ae9723-d103-40a5-bcb7-96fdf5211d1b-Design_your.png",
+        "caption": "",
+        "imageFit": "contain",
+        "fullWidth": true,
+        "isGallery": false,
+        "maxHeight": 0,
+        "isClickable": false,
+        "galleryItems": []
+      },
+      "visible": true
+    },
+    {
       "id": "sec-hero",
       "type": "hero",
       "content": {
@@ -145,8 +161,8 @@
   },
   "global_settings": {
     "bodyFont": "Inter",
-    "logoText": "Patch & Press",
-    "logoImage": "",
+    "logoText": "",
+    "logoImage": "https://fyadtnkbayeafjmdvymx.supabase.co/storage/v1/object/public/assets/uploads/24e99ae2-6e3a-4e7d-98bb-8db23a7ac084-Blue_Red_Yellow_Colorful_Typography_Kindergarten_Logo.png",
     "headingFont": "Outfit",
     "primaryColor": "#3a3530",
     "secondaryColor": "#6b8f71"
@@ -163,6 +179,8 @@
       "Remove patches by clicking the × button"
     ]
   },
-  "updated_at": "2026-03-03T17:06:08.202+00:00",
-  "navbar": {}
+  "updated_at": "2026-03-20T18:46:25.989+00:00",
+  "navbar": {
+    "position": "static"
+  }
 }
