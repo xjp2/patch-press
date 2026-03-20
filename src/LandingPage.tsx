@@ -412,12 +412,13 @@ function ImageBannerSection({ section, startCustomizing }: { section: PageSectio
                                     <div 
                                         className={`absolute left-0 right-0 flex px-4 sm:px-6 ${c.buttonPosition === 'left' ? 'justify-start' : c.buttonPosition === 'right' ? 'justify-end' : 'justify-center'}`}
                                         style={{
-                                            [c.buttonVerticalFrom === 'top' ? 'top' : 'bottom']: `${c.buttonVerticalPosition ?? 24}px`
+                                            // Use percentage for responsive positioning that scales with image
+                                            [c.buttonVerticalFrom === 'top' ? 'top' : 'bottom']: `${(c.buttonVerticalPosition ?? 24) / 5}%`
                                         }}
                                     >
                                         <button
                                             onClick={handleButtonClick}
-                                            className={`px-6 sm:px-8 py-3 sm:py-4 rounded-full font-bold text-sm sm:text-base transition-all duration-300 hover:scale-105 ${
+                                            className={`px-5 sm:px-8 py-2.5 sm:py-4 rounded-full font-bold text-sm sm:text-base whitespace-nowrap transition-all duration-300 hover:scale-105 ${
                                                 c.buttonStyle === 'outline' 
                                                     ? 'border-2 bg-transparent hover:bg-opacity-10' 
                                                     : c.buttonStyle === 'ghost' 
