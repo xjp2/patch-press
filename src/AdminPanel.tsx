@@ -302,31 +302,33 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
         
         setIsRebuilding(true);
         setRebuildStatus('idle');
-        setRebuildMessage('Saving changes...');
+        setRebuildMessage('');
         
         try {
-            // Save any pending changes
-            if (hasUnsavedChanges) {
-                await handleSavePages('pages', false);
+            // Call the rebuild edge function
+            const { data, error } = await supabase.functions.invoke('rebuild-site', {
+                body: {}
+            });
+
+            if (error) {
+                throw error;
             }
-            
-            // Final save to ensure latest state
-            await handleSavePages('pages', false);
-            
-            // Wait for Supabase replication
-            setRebuildMessage('Waiting for database...');
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            
-            // Clear cache and notify app to refresh
-            clearCmsCache();
-            window.dispatchEvent(new CustomEvent('cms-updated'));
-            
-            setRebuildStatus('success');
-            setRebuildMessage('Site updated! Changes are live.');
+
+            if (data.success) {
+                setRebuildStatus('success');
+                setRebuildMessage(data.message || 'Rebuild triggered successfully!');
+            } else {
+                throw new Error(data.error || 'Rebuild failed');
+            }
         } catch (err: any) {
             console.error('Rebuild error:', err);
             setRebuildStatus('error');
-            setRebuildMessage(err.message || 'Failed to update site');
+            
+            if (err.message?.includes('No deploy webhook configured')) {
+                setRebuildMessage('Deploy webhook not configured. Please set DEPLOY_WEBHOOK_URL in Supabase Edge Function secrets.');
+            } else {
+                setRebuildMessage(err.message || 'Failed to trigger rebuild');
+            }
         } finally {
             setIsRebuilding(false);
             setTimeout(() => {
@@ -334,7 +336,7 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                 setRebuildMessage('');
             }, 5000);
         }
-    };
+    }
 
     // Note: CDN export is now integrated into save functions
 
