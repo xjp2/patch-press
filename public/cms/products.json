@@ -17,7 +17,7 @@
     "crop_zone": null,
     "sort_order": 0,
     "created_at": "2026-02-25T17:11:11.153257+00:00",
-    "updated_at": "2026-02-26T06:19:15.289+00:00",
+    "updated_at": "2026-03-18T19:11:56.683+00:00",
     "link_url": null,
     "inventory": 100
   },
@@ -39,7 +39,7 @@
     "crop_zone": null,
     "sort_order": 1,
     "created_at": "2026-02-25T17:11:11.42555+00:00",
-    "updated_at": "2026-02-26T06:19:15.962+00:00",
+    "updated_at": "2026-03-18T19:11:56.683+00:00",
     "link_url": null,
     "inventory": 100
   },
@@ -61,7 +61,7 @@
     "crop_zone": null,
     "sort_order": 2,
     "created_at": "2026-02-25T17:11:11.589144+00:00",
-    "updated_at": "2026-02-26T06:19:16.2+00:00",
+    "updated_at": "2026-03-18T19:11:56.683+00:00",
     "link_url": null,
     "inventory": 100
   },
@@ -83,7 +83,7 @@
     "crop_zone": null,
     "sort_order": 3,
     "created_at": "2026-02-25T17:11:11.741088+00:00",
-    "updated_at": "2026-02-26T06:19:16.383+00:00",
+    "updated_at": "2026-03-18T19:11:56.683+00:00",
     "link_url": null,
     "inventory": 100
   },
@@ -105,7 +105,7 @@
     "crop_zone": null,
     "sort_order": 4,
     "created_at": "2026-02-25T17:11:11.892184+00:00",
-    "updated_at": "2026-02-26T06:19:16.572+00:00",
+    "updated_at": "2026-03-18T19:11:56.683+00:00",
     "link_url": null,
     "inventory": 100
   },
@@ -127,7 +127,73 @@
     "crop_zone": null,
     "sort_order": 5,
     "created_at": "2026-02-25T17:11:12.049073+00:00",
-    "updated_at": "2026-02-26T06:19:16.756+00:00",
+    "updated_at": "2026-03-18T19:11:56.683+00:00",
+    "link_url": null,
+    "inventory": 100
+  },
+  {
+    "id": "5a15315b-7f3c-49f3-b815-e5342e876e0f",
+    "name": "hhii",
+    "front_image_url": "https://fyadtnkbayeafjmdvymx.supabase.co/storage/v1/object/public/assets/products/4d801604-f091-4bad-b05c-e4d7a5af61aa-Screenshot_2025_10_31_151434.png",
+    "back_image_url": "https://fyadtnkbayeafjmdvymx.supabase.co/storage/v1/object/public/assets/products/6f79122f-77e7-4ed1-8ce5-18aad91cb583-Screenshot_2025_09_28_160051.png",
+    "base_price": 1000,
+    "width": 400,
+    "height": 500,
+    "placement_zone": {
+      "x": 8.57626805345236,
+      "y": 61.03038309114927,
+      "type": "rectangle",
+      "width": 28.39922339228022,
+      "height": 26.385167012643898
+    },
+    "crop_zone": null,
+    "sort_order": 6,
+    "created_at": "2026-03-18T18:33:09.962994+00:00",
+    "updated_at": "2026-03-18T19:11:56.683+00:00",
+    "link_url": null,
+    "inventory": 100
+  },
+  {
+    "id": "6165ba2e-6934-4682-bd97-bb7306b32b17",
+    "name": "a",
+    "front_image_url": "https://fyadtnkbayeafjmdvymx.supabase.co/storage/v1/object/public/assets/products/673c3f3a-b200-4b88-9aac-8ff23a062770-Screenshot_2025_11_29_144201.png",
+    "back_image_url": "https://fyadtnkbayeafjmdvymx.supabase.co/storage/v1/object/public/assets/products/cbfb2b25-63d9-4cf1-90b2-f250bd808fa5-Screenshot_2025_11_22_154826.png",
+    "base_price": 10,
+    "width": 400,
+    "height": 500,
+    "placement_zone": {
+      "x": 77.36571709629423,
+      "y": 63.86168094844978,
+      "type": "rectangle",
+      "width": 21.394765972371957,
+      "height": 24.89056074005898
+    },
+    "crop_zone": null,
+    "sort_order": 7,
+    "created_at": "2026-03-18T18:34:25.077541+00:00",
+    "updated_at": "2026-03-18T19:11:56.683+00:00",
+    "link_url": null,
+    "inventory": 100
+  },
+  {
+    "id": "ba41e61d-5367-4caf-b2e7-72b2b64dfccd",
+    "name": "b",
+    "front_image_url": "https://fyadtnkbayeafjmdvymx.supabase.co/storage/v1/object/public/assets/products/0a03308d-2041-4f57-971c-f3085386faed-Screenshot_2026_01_15_193644.png",
+    "back_image_url": "https://fyadtnkbayeafjmdvymx.supabase.co/storage/v1/object/public/assets/products/f05487f2-a9ee-48e5-99ae-9e3d367d6092-Screenshot_2025_11_29_150247.png",
+    "base_price": 111,
+    "width": 400,
+    "height": 500,
+    "placement_zone": {
+      "x": 34.695945212341165,
+      "y": 3.6972593426523725,
+      "type": "rectangle",
+      "width": 31.01000211424897,
+      "height": 81.30274065734763
+    },
+    "crop_zone": null,
+    "sort_order": 8,
+    "created_at": "2026-03-18T18:34:25.077541+00:00",
+    "updated_at": "2026-03-18T19:11:56.683+00:00",
     "link_url": null,
     "inventory": 100
   }

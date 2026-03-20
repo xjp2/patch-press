@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { db, storage, supabase, frontendProductToDb, frontendPatchToDb } from './lib/supabase';
-import { Settings, X, Plus, ShoppingCart, Palette, Layers, Camera, AlertCircle, Trash2, Layout, ChevronDown, ChevronUp, Eye, EyeOff, Facebook, Twitter, Globe, Loader2, ImageIcon, RefreshCw, Wand2, Sparkles, Crop } from 'lucide-react';
+import { Settings, X, Plus, ShoppingCart, Palette, Layers, Camera, AlertCircle, Trash2, Layout, ChevronDown, ChevronUp, Eye, EyeOff, Facebook, Twitter, Globe, Loader2, ImageIcon, RefreshCw, Wand2, Sparkles, Crop, Beaker } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { ImageTracer, type TracedZone } from './ImageTracer';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
@@ -8,6 +8,8 @@ import { arrayMove, SortableContext, verticalListSortingStrategy } from '@dnd-ki
 import { SortableSection } from './SortableSection';
 import { SortableItem } from './SortableItem';
 import { AdminOrderManagement } from './components/AdminOrderManagement';
+import { TestRunner } from './components/TestRunner';
+import { clearCmsCache } from './lib/cms';
 
 export interface Notice {
     id: string;
@@ -99,6 +101,17 @@ export interface ImageBannerContent {
     isGallery?: boolean; // Toggle for carousel/gallery mode
     galleryItems?: { image: string, linkUrl?: string }[];
     linkUrl?: string; // Redirect URL for single image
+    isClickable?: boolean; // Toggle clickability
+    // Container styling
+    hasContainer?: boolean; // Add outer container with background
+    containerBgColor?: string;
+    borderRadius?: number; // Corner roundness (px)
+    borderWidth?: number; // Border thickness (px)
+    borderColor?: string;
+    padding?: number; // Inner padding (px)
+    shadow?: 'none' | 'small' | 'medium' | 'large';
+    imageFit?: 'cover' | 'contain' | 'none';
+    maxHeight?: number;
 }
 export interface TestimonialItem {
     id: string;
@@ -126,6 +139,17 @@ export interface CtaContent {
     subtitleColor?: string;
 }
 export interface DividerContent { style: 'line' | 'dots' | 'wave'; }
+
+// New: Organic transition shapes between sections
+export interface TransitionContent {
+    shape: 'wave' | 'blob' | 'cloud' | 'arch' | 'zigzag' | 'triangle' | 'curve' | 'none';
+    fillColor: string;      // Color of the shape
+    flipVertical?: boolean; // Flip the shape upside down
+    flipHorizontal?: boolean;
+    height?: number;        // Height of the transition (px)
+    marginTop?: number;
+    marginBottom?: number;
+}
 export interface SectionStyling {
     backgroundColor?: string;
     paddingTop?: string;
@@ -133,7 +157,7 @@ export interface SectionStyling {
     textColor?: string;
 }
 
-export type SectionType = 'hero' | 'howItWorks' | 'gallery' | 'textBlock' | 'imageBanner' | 'testimonials' | 'cta' | 'divider';
+export type SectionType = 'hero' | 'howItWorks' | 'gallery' | 'textBlock' | 'imageBanner' | 'testimonials' | 'cta' | 'divider' | 'transition';
 
 export interface CustomizePageContent {
     step1Title: string;
@@ -148,7 +172,7 @@ export interface PageSection {
     id: string;
     type: SectionType;
     visible: boolean;
-    content: HeroContent | HowItWorksContent | GalleryContent | TextBlockContent | ImageBannerContent | TestimonialsContent | CtaContent | DividerContent;
+    content: HeroContent | HowItWorksContent | GalleryContent | TextBlockContent | ImageBannerContent | TestimonialsContent | CtaContent | DividerContent | TransitionContent;
     styling?: SectionStyling;
 }
 
@@ -195,11 +219,28 @@ export interface FooterContent {
     twitterUrl: string;
 }
 
+export interface NavbarContent {
+    links: { label: string; url: string; id?: string }[];
+    showLogo?: boolean;
+    showCart?: boolean;
+    bgColor?: string;
+    textColor?: string;
+    // Enhanced navbar options
+    isFloating?: boolean; // Floating pill-style navbar
+    isTransparent?: boolean; // Transparent background
+    position?: 'fixed' | 'static';
+    height?: number; // Navbar height in px
+    borderRadius?: number; // For floating style
+    shadow?: 'none' | 'small' | 'medium' | 'large';
+    wrapperBgColor?: string; // Background color behind the navbar
+}
+
 export interface SiteContent {
     landingPage: PageSection[];
     footer: FooterContent;
     global: GlobalSettings;
     customizePage: CustomizePageContent;
+    navbar: NavbarContent;
 }
 
 // Helper: section type metadata
@@ -212,9 +253,10 @@ export const SECTION_META: Record<SectionType, { label: string; icon: string }> 
     testimonials: { label: 'Testimonials', icon: '💬' },
     cta: { label: 'Call to Action', icon: '🚀' },
     divider: { label: 'Divider', icon: '➖' },
+    transition: { label: 'Shape Transition', icon: '🌊' },
 };
 
-type AdminTab = 'products' | 'patches' | 'orders' | 'pages' | 'global';
+type AdminTab = 'products' | 'patches' | 'orders' | 'pages' | 'global' | 'tests';
 
 export interface AdminPanelProps {
     showAdmin: boolean;
@@ -242,47 +284,51 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
     const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     
+    // Ref to track latest siteContent for auto-save (avoids stale closure issues)
+    const siteContentRef = useRef(siteContent);
+    useEffect(() => {
+        siteContentRef.current = siteContent;
+    }, [siteContent]);
+    
     // Rebuild state
     const [isRebuilding, setIsRebuilding] = useState(false);
     const [rebuildStatus, setRebuildStatus] = useState<'idle' | 'success' | 'error'>('idle');
     const [rebuildMessage, setRebuildMessage] = useState('');
+    
+
 
     const handleRebuild = async () => {
         if (isRebuilding) return;
         
         setIsRebuilding(true);
         setRebuildStatus('idle');
-        setRebuildMessage('');
+        setRebuildMessage('Saving changes...');
         
         try {
-            // Call the rebuild edge function
-            const { data, error } = await supabase.functions.invoke('rebuild-site', {
-                body: {}
-            });
-
-            if (error) {
-                throw error;
+            // Save any pending changes
+            if (hasUnsavedChanges) {
+                await handleSavePages('pages', false);
             }
-
-            if (data.success) {
-                setRebuildStatus('success');
-                setRebuildMessage(data.message || 'Rebuild triggered successfully!');
-            } else {
-                throw new Error(data.error || 'Rebuild failed');
-            }
+            
+            // Final save to ensure latest state
+            await handleSavePages('pages', false);
+            
+            // Wait for Supabase replication
+            setRebuildMessage('Waiting for database...');
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            // Clear cache and notify app to refresh
+            clearCmsCache();
+            window.dispatchEvent(new CustomEvent('cms-updated'));
+            
+            setRebuildStatus('success');
+            setRebuildMessage('Site updated! Changes are live.');
         } catch (err: any) {
             console.error('Rebuild error:', err);
             setRebuildStatus('error');
-            
-            // Check if it's a configuration error
-            if (err.message?.includes('No deploy webhook configured')) {
-                setRebuildMessage('Deploy webhook not configured. Please set up DEPLOY_WEBHOOK_URL in Supabase.');
-            } else {
-                setRebuildMessage(err.message || 'Failed to trigger rebuild');
-            }
+            setRebuildMessage(err.message || 'Failed to update site');
         } finally {
             setIsRebuilding(false);
-            // Clear status after 5 seconds
             setTimeout(() => {
                 setRebuildStatus('idle');
                 setRebuildMessage('');
@@ -290,15 +336,23 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
         }
     };
 
+    // Note: CDN export is now integrated into save functions
+
     const handleSaveProducts = async (showFeedback = true) => {
         if (isSaving) return;
         setIsSaving(true);
         setSaveSuccess(null);
         try {
-            // Save all products in a single batch
+            console.log('Saving products...', products.length);
+            // Step 1: Save all products to database
             const dbProducts = products.map((p, i) => frontendProductToDb(p, i));
-            const { error } = await db.products.upsert(dbProducts);
-            if (error) throw error;
+            console.log('DB products to upsert:', dbProducts);
+            const { data, error } = await db.products.upsert(dbProducts);
+            if (error) {
+                console.error('Upsert error:', error);
+                throw error;
+            }
+            console.log('Upsert success:', data);
             
             // Clean up deleted products
             const currentIds = products.map(p => p.id);
@@ -307,6 +361,19 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
             
             // Delete in parallel
             await Promise.all(toDelete.map(p => db.products.remove(p.id)));
+            
+            // Step 2: Auto-export to CDN (so changes appear immediately)
+            console.log('Auto-exporting to CDN...');
+            const { error: exportError } = await supabase.functions.invoke('export-products-patches', {
+                body: {}
+            });
+            
+            if (exportError) {
+                console.warn('Auto-export failed:', exportError);
+                // Don't fail the save if export fails
+            } else {
+                console.log('✅ Products exported to CDN');
+            }
             
             // Refresh local data (for dev mode without static files)
             if (onContentSaved) await onContentSaved();
@@ -329,10 +396,16 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
         setIsSaving(true);
         setSaveSuccess(null);
         try {
-            // Save all patches in a single batch
+            console.log('Saving patches...', patches.length);
+            // Step 1: Save all patches to database
             const dbPatches = patches.map((p, i) => frontendPatchToDb(p, i));
-            const { error } = await db.patches.upsert(dbPatches);
-            if (error) throw error;
+            console.log('DB patches to upsert:', dbPatches);
+            const { data, error } = await db.patches.upsert(dbPatches);
+            if (error) {
+                console.error('Upsert error:', error);
+                throw error;
+            }
+            console.log('Upsert success:', data);
             
             // Clean up deleted patches
             const currentIds = patches.map(p => p.id);
@@ -341,6 +414,19 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
             
             // Delete in parallel
             await Promise.all(toDelete.map(p => db.patches.remove(p.id)));
+            
+            // Step 2: Auto-export to CDN (so changes appear immediately)
+            console.log('Auto-exporting to CDN...');
+            const { error: exportError } = await supabase.functions.invoke('export-products-patches', {
+                body: {}
+            });
+            
+            if (exportError) {
+                console.warn('Auto-export failed:', exportError);
+                // Don't fail the save if export fails
+            } else {
+                console.log('✅ Patches exported to CDN');
+            }
             
             // Refresh local data (for dev mode without static files)
             if (onContentSaved) await onContentSaved();
@@ -362,23 +448,32 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
         if (isSaving) return;
         setIsSaving(true);
         setSaveSuccess(null);
+        // Use ref to get latest state (avoids stale closure issues in auto-save)
+        const content = siteContentRef.current;
         try {
+            console.log('💾 handleSavePages saving navbar:', content.navbar);
             const { error } = await db.siteContent.save({
-                landing_page: siteContent.landingPage,
-                footer: siteContent.footer,
-                global_settings: siteContent.global,
-                customize_page: siteContent.customizePage
+                landing_page: content.landingPage,
+                footer: content.footer,
+                global_settings: content.global,
+                customize_page: content.customizePage,
+                navbar: content.navbar
             });
             if (error) throw error;
+            console.log('✅ handleSavePages saved successfully');
             
-            // Refresh local data (for dev mode without static files)
-            if (onContentSaved) await onContentSaved();
+            // Only refresh data for manual saves, NOT auto-saves
+            // This prevents auto-save from overwriting user's ongoing edits
+            if (showFeedback && onContentSaved) {
+                await onContentSaved();
+            }
             
             if (showFeedback) {
                 setSaveSuccess(successType);
-                setHasUnsavedChanges(false);
                 setTimeout(() => setSaveSuccess(null), 3000);
             }
+            // Always mark as saved
+            setHasUnsavedChanges(false);
         } catch (err: any) {
             console.error('Failed to save site settings:', err);
             if (showFeedback) alert('Failed to save site settings: ' + err.message);
@@ -414,16 +509,63 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
     const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
     // ── Section-level operations ──
-    const updateLandingPage = (sections: PageSection[]) => setSiteContent({ ...siteContent, landingPage: sections });
-    const updateFooter = (patch: Partial<SiteContent['footer']>) => setSiteContent({ ...siteContent, footer: { ...siteContent.footer, ...patch } });
-    const updateCustomizePage = (patch: Partial<CustomizePageContent>) => setSiteContent({ ...siteContent, customizePage: { ...siteContent.customizePage, ...patch } });
+    const updateLandingPage = (sections: PageSection[]) => {
+        const newContent = { ...siteContent, landingPage: sections };
+        setSiteContent(newContent);
+        siteContentRef.current = newContent;
+        setHasUnsavedChanges(true);
+        // Auto-save after delay
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = setTimeout(() => handleSavePages('pages', false), 2000);
+    };
+    const updateFooter = (patch: Partial<SiteContent['footer']>) => {
+        const newContent = { ...siteContent, footer: { ...siteContent.footer, ...patch } };
+        setSiteContent(newContent);
+        siteContentRef.current = newContent;
+        setHasUnsavedChanges(true);
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = setTimeout(() => handleSavePages('pages', false), 2000);
+    };
+    const updateCustomizePage = (patch: Partial<CustomizePageContent>) => {
+        const newContent = { ...siteContent, customizePage: { ...siteContent.customizePage, ...patch } };
+        setSiteContent(newContent);
+        siteContentRef.current = newContent;
+        setHasUnsavedChanges(true);
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = setTimeout(() => handleSavePages('pages', false), 2000);
+    };
 
     const updateSectionContent = (sectionId: string, content: PageSection['content']) => {
         updateLandingPage(siteContent.landingPage.map(s => s.id === sectionId ? { ...s, content } : s));
     };
 
+    const updateSectionStyling = (sectionId: string, styling: Partial<SectionStyling>) => {
+        updateLandingPage(siteContent.landingPage.map(s => s.id === sectionId ? { ...s, styling: { ...s.styling, ...styling } } : s));
+    };
+
     const updateGlobalSettings = (patch: Partial<GlobalSettings>) => {
-        setSiteContent({ ...siteContent, global: { ...siteContent.global, ...patch } });
+        const newContent = { ...siteContent, global: { ...siteContent.global, ...patch } };
+        setSiteContent(newContent);
+        siteContentRef.current = newContent;
+        setHasUnsavedChanges(true);
+        // Auto-save after delay
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = setTimeout(() => handleSavePages('global', false), 2000);
+    };
+    
+    const updateNavbar = (patch: Partial<NavbarContent>) => {
+        console.log('📝 updateNavbar called with patch:', patch);
+        // Update state
+        const newContent = { ...siteContent, navbar: { ...siteContent.navbar, ...patch } };
+        setSiteContent(newContent);
+        // Also update ref immediately for auto-save
+        siteContentRef.current = newContent;
+        setHasUnsavedChanges(true);
+        // Auto-save after delay
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = setTimeout(() => {
+            handleSavePages('pages', false);
+        }, 2000);
     };
 
     const toggleSectionVisibility = (sectionId: string) => {
@@ -440,10 +582,11 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
             howItWorks: { sectionTitle: 'How It Works', steps: [{ id: uuidv4(), title: 'Step 1', description: 'Description', image: '', emoji: '✨' }] } as HowItWorksContent,
             gallery: { sectionTitle: 'Gallery', items: [{ id: uuidv4(), image: '', label: 'Item 1' }] } as GalleryContent,
             textBlock: { heading: 'Your Heading', body: 'Your text content here...', alignment: 'center' } as TextBlockContent,
-            imageBanner: { image: '', alt: 'Banner', caption: '', fullWidth: true, isGallery: false, galleryItems: [] } as ImageBannerContent,
+            imageBanner: { image: '', alt: 'Banner', caption: '', fullWidth: true, isGallery: false, galleryItems: [], imageFit: 'none', maxHeight: 0 } as ImageBannerContent,
             testimonials: { sectionTitle: 'What Our Customers Say', items: [{ id: uuidv4(), quote: 'Amazing!', author: 'Happy Customer', avatar: '' }] } as TestimonialsContent,
             cta: { heading: 'Ready to create?', subtitle: 'Start designing your custom accessories today.', buttonText: 'Start Now', buttonAction: 'customize' } as CtaContent,
             divider: { style: 'line' } as DividerContent,
+            transition: { shape: 'wave', fillColor: '#FFB6C1', height: 80, flipVertical: false, flipHorizontal: false } as TransitionContent,
         };
         const newSection: PageSection = { id: uuidv4(), type, visible: true, content: defaults[type] };
         updateLandingPage([...siteContent.landingPage, newSection]);
@@ -569,12 +712,12 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
     // Patch dimensions
     const [newPatchWidth, setNewPatchWidth] = useState('80');
     const [newPatchHeight, setNewPatchHeight] = useState('80');
-    // Patch Sizer State
+    // Patch content zone editor (for trimming patch bounds)
     const [showPatchSizer, setShowPatchSizer] = useState(false);
     const [tempPatchZone, setTempPatchZone] = useState<TracedZone>({ x: 10, y: 10, width: 80, height: 80, type: 'rectangle' });
 
 
-    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, setter: (url: string) => void, folder: string = 'uploads') => {
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, setter: (url: string) => void, folder: string = 'uploads', onLoad?: (width: number, height: number) => void) => {
         const file = e.target.files?.[0];
         if (file) {
             try {
@@ -582,6 +725,15 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                 const fileName = `${uuidv4()}-${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
                 const publicUrl = await storage.upload(folder, fileName, file);
                 setter(publicUrl);
+                
+                // If callback provided, load image to get dimensions
+                if (onLoad) {
+                    const img = new Image();
+                    img.onload = () => {
+                        onLoad(img.naturalWidth, img.naturalHeight);
+                    };
+                    img.src = publicUrl;
+                }
             } catch (err: any) {
                 alert('Upload failed: ' + err.message);
             } finally {
@@ -670,6 +822,7 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
         }
     };
 
+    // Open visual sizer for NEW patches (to define content zone before adding)
     const openPatchSizer = () => {
         if (!newPatchImage) {
             alert("Please upload a patch image first!");
@@ -713,6 +866,14 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                         </div>
                     </div>
 
+                    {/* Unsaved Changes Warning */}
+                    {hasUnsavedChanges && (
+                        <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-2 text-amber-700">
+                            <AlertCircle className="w-5 h-5" />
+                            <span className="text-sm font-medium">You have unsaved changes. Click "Update Live Site" to save and deploy.</span>
+                        </div>
+                    )}
+
                     {/* Rebuild Button - only show if usingStaticCms */}
                     {usingStaticCms && (
                         <div className="mb-6 flex items-center gap-3">
@@ -754,6 +915,19 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                     {rebuildMessage}
                                 </p>
                             )}
+                            
+                            {/* Manual refresh button for admin's browser */}
+                            <button
+                                onClick={() => {
+                                    clearCmsCache();
+                                    window.location.reload();
+                                }}
+                                className="px-4 py-2 text-sm text-gray-600 hover:text-pink hover:bg-pink/10 rounded-lg transition-colors flex items-center gap-2"
+                                title="Force refresh this browser window to see latest changes"
+                            >
+                                <RefreshCw className="w-4 h-4" />
+                                Refresh My View
+                            </button>
                         </div>
                     )}
 
@@ -764,7 +938,8 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                             { id: 'patches', label: 'Patches', icon: Palette },
                             { id: 'orders', label: 'Orders', icon: Layers },
                             { id: 'pages', label: 'Pages', icon: Layout },
-                            { id: 'global', label: 'Global', icon: Globe }
+                            { id: 'global', label: 'Global', icon: Globe },
+                            { id: 'tests', label: 'Tests', icon: Beaker }
                         ].map(tab => (
                             <button
                                 key={tab.id}
@@ -789,21 +964,17 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                         <h2 className="font-heading text-xl font-bold text-gray-900">Products</h2>
                                         <p className="text-xs text-gray-500 font-medium">Add or edit base products for customization</p>
                                     </div>
-                                    {!usingStaticCms ? (
-                                        <button
-                                            onClick={() => handleSaveProducts(true)}
-                                            disabled={isSaving}
-                                            className={`px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm ${saveSuccess === 'products' ? 'bg-green-500 text-white' : 'bg-pink text-white hover:bg-pink/90'} ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                        >
-                                            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : saveSuccess === 'products' ? null : <ShoppingCart className="w-4 h-4" />}
-                                            {saveSuccess === 'products' ? '✅ Saved to Cloud' : '☁️ Save Products'}
-                                        </button>
-                                    ) : (
-                                        <div className="text-xs text-gray-400 bg-white px-3 py-1.5 rounded-lg border border-pink/10">
-                                            Changes saved automatically
-                                        </div>
-                                    )}
+                                    <button
+                                        onClick={() => handleSaveProducts(true)}
+                                        disabled={isSaving}
+                                        className={`px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm ${saveSuccess === 'products' ? 'bg-green-500 text-white' : 'bg-pink text-white hover:bg-pink/90'} ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        title="Saves to database and publishes to live site via CDN"
+                                    >
+                                        {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : saveSuccess === 'products' ? null : <ShoppingCart className="w-4 h-4" />}
+                                        {saveSuccess === 'products' ? '✅ Published Live' : '💾 Save & Publish'}
+                                    </button>
                                 </div>
+
                                 {/* Context7 Best Practice: Section heading with proper spacing */}
                                 <h2 className="font-heading text-xl font-bold text-foreground">Add New Product</h2>
                                 
@@ -853,12 +1024,15 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                 {/* Placement Zone Configuration */}
                                 <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
                                     <div className="flex justify-between items-center mb-4">
-                                        <h3 className="font-bold text-gray-700">Placement Zone</h3>
+                                        <div>
+                                            <h3 className="font-bold text-gray-700">Patch Placement Area</h3>
+                                            <p className="text-xs text-gray-500">Define where customers can place patches on this product</p>
+                                        </div>
                                         <button
                                             onClick={() => openImageTracer('placement')}
                                             className="text-pink hover:text-pink-600 font-semibold text-sm flex items-center gap-1 bg-pink/10 px-3 py-1.5 rounded-lg hover:bg-pink/20 transition-colors"
                                         >
-                                            <Wand2 className="w-4 h-4" /> Auto-Trace Placement
+                                            <Wand2 className="w-4 h-4" /> Edit Placement Area
                                         </button>
                                     </div>
                                     <div className="grid grid-cols-4 gap-2 text-sm">
@@ -886,8 +1060,7 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                         {products.map(product => (
                                             <div key={product.id} className="bg-cream rounded-xl p-3 text-center relative group">
                                                 <div className="absolute top-2 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                                                    <button onClick={() => openImageTracer('placement', product.id)} className="p-1.5 bg-white rounded-lg shadow text-indigo-500 hover:text-indigo-700 hover:scale-110 transition-transform" title="Auto-Trace Placement Zone"><Wand2 className="w-4 h-4" /></button>
-                                                    <button onClick={() => openImageTracer('crop', product.id)} className="p-1.5 bg-white rounded-lg shadow text-green-500 hover:text-green-700 hover:scale-110 transition-transform" title="Auto-Trace Crop Zone"><Camera className="w-4 h-4" /></button>
+                                                    <button onClick={() => openImageTracer('placement', product.id)} className="p-1.5 bg-white rounded-lg shadow text-indigo-500 hover:text-indigo-700 hover:scale-110 transition-transform" title="Edit where patches can be placed"><Wand2 className="w-4 h-4" /></button>
                                                     <button onClick={async () => {
                                                         if (confirm('Delete this product?')) {
                                                             const { error } = await db.products.remove(product.id);
@@ -915,48 +1088,55 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                         <h2 className="font-heading text-xl font-bold text-gray-900">Patches</h2>
                                         <p className="text-xs text-gray-500 font-medium">Manage custom patches and assets</p>
                                     </div>
-                                    {!usingStaticCms ? (
-                                        <button
-                                            onClick={() => handleSavePatches(true)}
-                                            disabled={isSaving}
-                                            className={`px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm ${saveSuccess === 'patches' ? 'bg-green-500 text-white' : 'bg-pink text-white hover:bg-pink/90'} ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                        >
-                                            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : saveSuccess === 'patches' ? null : <Palette className="w-4 h-4" />}
-                                            {saveSuccess === 'patches' ? '✅ Saved to Cloud' : '☁️ Save Patches'}
-                                        </button>
-                                    ) : (
-                                        <div className="text-xs text-gray-400 bg-white px-3 py-1.5 rounded-lg border border-pink/10">
-                                            Changes saved automatically
-                                        </div>
-                                    )}
+                                    <button
+                                        onClick={() => handleSavePatches(true)}
+                                        disabled={isSaving}
+                                        className={`px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm ${saveSuccess === 'patches' ? 'bg-green-500 text-white' : 'bg-pink text-white hover:bg-pink/90'} ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        title="Saves to database and publishes to live site via CDN"
+                                    >
+                                        {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : saveSuccess === 'patches' ? null : <Palette className="w-4 h-4" />}
+                                        {saveSuccess === 'patches' ? '✅ Published Live' : '💾 Save & Publish'}
+                                    </button>
                                 </div>
                                 <h2 className="font-heading text-xl font-bold">Add New Patch</h2>
                                 <div className="grid gap-4">
                                     <input type="text" value={newPatchName || ''} onChange={(e) => setNewPatchName(e.target.value)} placeholder="Patch Name" className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-pink outline-none" />
                                     <input type="number" value={newPatchPrice || ''} onChange={(e) => setNewPatchPrice(e.target.value)} placeholder="Price ($)" className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-pink outline-none" />
 
-                                    {/* Patch Sizer UI Button */}
-                                    <div className="flex justify-end">
-                                        <button
-                                            onClick={openPatchSizer}
-                                            className="text-pink hover:text-pink-600 font-semibold text-sm flex items-center gap-1"
-                                        >
-                                            <Settings className="w-4 h-4" /> Open Visual Sizer
-                                        </button>
-                                    </div>
-                                    <div className="grid md:grid-cols-2 gap-4">
-                                        <input type="number" value={newPatchWidth || ''} onChange={(e) => setNewPatchWidth(e.target.value)} placeholder="Width (px)" className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-pink outline-none" />
-                                        <input type="number" value={newPatchHeight || ''} onChange={(e) => setNewPatchHeight(e.target.value)} placeholder="Height (px)" className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-pink outline-none" />
+                                    <div>
+                                        <label className="block text-sm font-semibold mb-2">Patch Image <span className="text-xs text-gray-500 font-normal">(size auto-detected)</span></label>
+                                        <label className="flex items-center justify-center gap-2 px-4 py-8 bg-cream rounded-xl cursor-pointer hover:bg-pink/10 transition-colors border-2 border-dashed border-gray-300">
+                                            <Camera className="w-6 h-6 text-pink" /><span className="text-sm">Upload Patch Image</span>
+                                            <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, setNewPatchImage, 'patches', (w, h) => {
+                                                setNewPatchWidth(String(w));
+                                                setNewPatchHeight(String(h));
+                                            })} className="hidden" />
+                                        </label>
+                                        {newPatchImage && (
+                                            <div className="mt-2">
+                                                <img src={newPatchImage} alt="Patch Preview" className="w-24 h-24 object-contain" />
+                                                <p className="text-xs text-gray-500 mt-1">Size: {newPatchWidth} × {newPatchHeight} px (auto-detected)</p>
+                                            </div>
+                                        )}
                                     </div>
 
-                                    <div>
-                                        <label className="block text-sm font-semibold mb-2">Patch Image</label>
-                                        <label className="flex items-center justify-center gap-2 px-4 py-8 bg-cream rounded-xl cursor-pointer hover:bg-pink/10 transition-colors border-2 border-dashed border-gray-300">
-                                            <Camera className="w-6 h-6 text-pink" /><span className="text-sm">Upload Patch</span>
-                                            <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, setNewPatchImage, 'patches')} className="hidden" />
-                                        </label>
-                                        {newPatchImage && <img src={newPatchImage} alt="Patch Preview" className="mt-2 w-24 h-24 object-contain" />}
-                                    </div>
+                                    {/* Content Zone Editor for New Patches */}
+                                    {newPatchImage && (
+                                        <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                            <div className="flex justify-between items-center">
+                                                <div>
+                                                    <h4 className="font-bold text-gray-700">Patch Content Zone</h4>
+                                                    <p className="text-xs text-gray-500">Define the usable area of this patch</p>
+                                                </div>
+                                                <button
+                                                    onClick={openPatchSizer}
+                                                    className="text-pink hover:text-pink-600 font-semibold text-sm flex items-center gap-1 bg-pink/10 px-3 py-1.5 rounded-lg hover:bg-pink/20 transition-colors"
+                                                >
+                                                    <Crop className="w-4 h-4" /> Edit Content Zone
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
 
                                     <button onClick={handleAddPatch} className="btn-primary w-fit"><Plus className="w-4 h-4 inline mr-2" />Add Patch</button>
                                 </div>
@@ -981,62 +1161,10 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                                     >
                                                         <X className="w-3 h-3" />
                                                     </button>
-
-                                          {/* Currency Section */}
-                                          <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm md:col-span-2 space-y-5">
-                                              <h4 className="font-heading font-bold text-gray-800 flex items-center gap-2">
-                                                  💱 Currency
-                                              </h4>
-
-                                              <div className="grid md:grid-cols-2 gap-6">
-                                                  <div>
-                                                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 block">Currency Code</label>
-                                                      <select
-                                                          value={siteContent.global.currency || 'USD'}
-                                                          onChange={e => {
-                                                              const currency = e.target.value;
-                                                              const symbols: Record<string, string> = {
-                                                                  'USD': '$',
-                                                                  'SGD': 'S$',
-                                                                  'EUR': '€',
-                                                                  'GBP': '£',
-                                                                  'JPY': '¥',
-                                                                  'KRW': '₩'
-                                                              };
-                                                              updateGlobalSettings({ 
-                                                                  currency: currency as any,
-                                                                  currencySymbol: symbols[currency] || '$'
-                                                              });
-                                                          }}
-                                                          className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-pink outline-none bg-white font-medium"
-                                                      >
-                                                          <option value="USD">USD - US Dollar ($)</option>
-                                                          <option value="SGD">SGD - Singapore Dollar (S$)</option>
-                                                          <option value="EUR">EUR - Euro (€)</option>
-                                                          <option value="GBP">GBP - British Pound (£)</option>
-                                                          <option value="JPY">JPY - Japanese Yen (¥)</option>
-                                                          <option value="KRW">KRW - Korean Won (₩)</option>
-                                                      </select>
-                                                      <p className="mt-2 text-xs text-gray-400">Currency for product prices</p>
-                                                  </div>
-
-                                                  <div>
-                                                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 block">Currency Symbol</label>
-                                                      <input
-                                                          type="text"
-                                                          value={siteContent.global.currencySymbol || '$'}
-                                                          onChange={e => updateGlobalSettings({ currencySymbol: e.target.value })}
-                                                          placeholder="$"
-                                                          className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-pink outline-none"
-                                                      />
-                                                      <p className="mt-2 text-xs text-gray-400">Symbol displayed before prices</p>
-                                                  </div>
-                                              </div>
-                                          </div>
                                                 </div>
                                                 <img src={patch.image} alt={patch.name} className="w-full aspect-square object-contain mb-1" />
                                                 <p className="text-[10px] font-semibold truncate">{patch.name}</p>
-                                                <p className="text-[10px] text-pink">${patch.price}</p>
+                                                <p className="text-[10px] text-gray-400">{patch.width}×{patch.height}px</p>
                                             </div>
                                         ))}
                                     </div>
@@ -1046,6 +1174,10 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
 
                         {adminTab === 'orders' && (
                             <AdminOrderManagement />
+                        )}
+
+                        {adminTab === 'tests' && (
+                            <TestRunner />
                         )}
 
                         {/* ───── Pages CMS Tab ───── */}
@@ -1360,6 +1492,86 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
 
                                                                                 <input type="text" value={c.alt || ''} onChange={e => updateSectionContent(section.id, { ...c, alt: e.target.value })} placeholder="Alt text" className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-pink outline-none text-sm" />
                                                                                 <input type="text" value={c.caption || ''} onChange={e => updateSectionContent(section.id, { ...c, caption: e.target.value })} placeholder="Caption (optional)" className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-pink outline-none text-sm" />
+                                                                                
+                                                                                {/* Clickable Toggle */}
+                                                                                <label className="flex items-center gap-2 cursor-pointer">
+                                                                                    <input type="checkbox" checked={c.isClickable !== false} onChange={e => updateSectionContent(section.id, { ...c, isClickable: e.target.checked })} className="w-4 h-4 rounded accent-pink" />
+                                                                                    <span className="text-xs font-bold text-gray-600">Clickable (links enabled)</span>
+                                                                                </label>
+
+                                                                                {/* Container Styling Options */}
+                                                                                <div className="pt-3 border-t border-gray-100 space-y-3">
+                                                                                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Container Styling</p>
+                                                                                    <label className="flex items-center gap-2 cursor-pointer">
+                                                                                        <input type="checkbox" checked={c.hasContainer || false} onChange={e => updateSectionContent(section.id, { ...c, hasContainer: e.target.checked })} className="w-4 h-4 rounded accent-pink" />
+                                                                                        <span className="text-xs font-bold text-gray-600">Add Outer Container</span>
+                                                                                    </label>
+                                                                                    {c.hasContainer && (
+                                                                                        <div className="grid grid-cols-2 gap-3 pl-4 border-l-2 border-pink/20">
+                                                                                            <div>
+                                                                                                <label className="text-xs text-gray-500 mb-1 block">Container BG</label>
+                                                                                                <div className="flex gap-2">
+                                                                                                    <input type="color" value={c.containerBgColor || '#ffffff'} onChange={(e) => updateSectionContent(section.id, { ...c, containerBgColor: e.target.value })} className="w-8 h-8 rounded border border-gray-200 cursor-pointer" />
+                                                                                                    <input type="text" value={c.containerBgColor || ''} onChange={(e) => updateSectionContent(section.id, { ...c, containerBgColor: e.target.value })} className="flex-1 px-2 py-1 text-xs border border-gray-200 rounded" />
+                                                                                                </div>
+                                                                                            </div>
+                                                                                            <div>
+                                                                                                <label className="text-xs text-gray-500 mb-1 block">Corner Radius (px)</label>
+                                                                                                <input type="number" value={c.borderRadius || 16} onChange={(e) => updateSectionContent(section.id, { ...c, borderRadius: parseInt(e.target.value) || 0 })} className="w-full px-2 py-1 text-xs border border-gray-200 rounded" min="0" max="100" />
+                                                                                            </div>
+                                                                                            <div>
+                                                                                                <label className="text-xs text-gray-500 mb-1 block">Border Width (px)</label>
+                                                                                                <input type="number" value={c.borderWidth || 0} onChange={(e) => updateSectionContent(section.id, { ...c, borderWidth: parseInt(e.target.value) || 0 })} className="w-full px-2 py-1 text-xs border border-gray-200 rounded" min="0" max="20" />
+                                                                                            </div>
+                                                                                            {c.borderWidth ? (
+                                                                                                <div>
+                                                                                                    <label className="text-xs text-gray-500 mb-1 block">Border Color</label>
+                                                                                                    <div className="flex gap-2">
+                                                                                                        <input type="color" value={c.borderColor || '#e5e7eb'} onChange={(e) => updateSectionContent(section.id, { ...c, borderColor: e.target.value })} className="w-8 h-8 rounded border border-gray-200 cursor-pointer" />
+                                                                                                        <input type="text" value={c.borderColor || ''} onChange={(e) => updateSectionContent(section.id, { ...c, borderColor: e.target.value })} className="flex-1 px-2 py-1 text-xs border border-gray-200 rounded" />
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                            ) : null}
+                                                                                            <div>
+                                                                                                <label className="text-xs text-gray-500 mb-1 block">Inner Padding (px)</label>
+                                                                                                <input type="number" value={c.padding || 0} onChange={(e) => updateSectionContent(section.id, { ...c, padding: parseInt(e.target.value) || 0 })} className="w-full px-2 py-1 text-xs border border-gray-200 rounded" min="0" max="100" />
+                                                                                            </div>
+                                                                                            <div>
+                                                                                                <label className="text-xs text-gray-500 mb-1 block">Shadow</label>
+                                                                                                <select value={c.shadow || 'none'} onChange={(e) => updateSectionContent(section.id, { ...c, shadow: e.target.value as any })} className="w-full px-2 py-1 text-xs border border-gray-200 rounded bg-white">
+                                                                                                    <option value="none">None</option>
+                                                                                                    <option value="small">Small</option>
+                                                                                                    <option value="medium">Medium</option>
+                                                                                                    <option value="large">Large</option>
+                                                                                                </select>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+
+                                                                                {/* Image Display Settings */}
+                                                                                <div className="pt-3 border-t border-gray-100 space-y-3">
+                                                                                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Image Display</p>
+                                                                                    <div className="grid grid-cols-2 gap-3">
+                                                                                        <div>
+                                                                                            <label className="text-xs text-gray-500 mb-1 block">Image Fit</label>
+                                                                                            <select value={c.imageFit || 'cover'} onChange={(e) => updateSectionContent(section.id, { ...c, imageFit: e.target.value as any })} className="w-full px-2 py-1 text-xs border border-gray-200 rounded bg-white" title="Cover fills space (may cut off), Contain shows full image">
+                                                                                                <option value="cover">Cover (fill space)</option>
+                                                                                                <option value="contain">Contain (full image)</option>
+                                                                                                <option value="none">Natural Size (no crop)</option>
+                                                                                            </select>
+                                                                                        </div>
+                                                                                        <div>
+                                                                                            <label className="text-xs text-gray-500 mb-1 block">Max Height (px, 0=auto)</label>
+                                                                                            <input type="number" value={c.maxHeight || 0} onChange={(e) => updateSectionContent(section.id, { ...c, maxHeight: parseInt(e.target.value) || 0 })} className="w-full px-2 py-1 text-xs border border-gray-200 rounded" min="0" max="2000" placeholder="Auto" />
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <div className="bg-blue-50 p-2 rounded text-[10px] text-blue-700 space-y-1">
+                                                                                        <p><strong>Tip:</strong> Set Image Fit to "Natural Size" and Max Height to 0 for wide banners. The image will scale down proportionally on mobile.</p>
+                                                                                        <p><strong>Mobile:</strong> Images automatically scale to fit screen width while maintaining aspect ratio.</p>
+                                                                                    </div>
+                                                                                </div>
+
                                                                                 <label className="flex items-center gap-2 cursor-pointer pt-2 border-t border-gray-100">
                                                                                     <input type="checkbox" checked={c.fullWidth || false} onChange={e => updateSectionContent(section.id, { ...c, fullWidth: e.target.checked })} className="w-4 h-4 rounded accent-pink" />
                                                                                     <span className="text-xs font-bold text-gray-600">Full Width Page Section</span>
@@ -1501,6 +1713,83 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                                                             </div>
                                                                         );
                                                                     })()}
+
+                                                                    {/* ── Shape Transition editor ── */}
+                                                                    {section.type === 'transition' && (() => {
+                                                                        const c = section.content as TransitionContent;
+                                                                        const shapes = [
+                                                                            { id: 'wave', label: 'Wave', icon: '〰️' },
+                                                                            { id: 'blob', label: 'Blob', icon: '☁️' },
+                                                                            { id: 'cloud', label: 'Cloud', icon: '🌤️' },
+                                                                            { id: 'arch', label: 'Arch', icon: '⛩️' },
+                                                                            { id: 'zigzag', label: 'Zigzag', icon: '⚡' },
+                                                                            { id: 'triangle', label: 'Triangle', icon: '🔺' },
+                                                                            { id: 'curve', label: 'Curve', icon: '⌒' },
+                                                                        ] as const;
+                                                                        return (
+                                                                            <div className="space-y-4">
+                                                                                <div>
+                                                                                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 block">Shape</label>
+                                                                                    <div className="grid grid-cols-4 gap-2">
+                                                                                        {shapes.map(s => (
+                                                                                            <button key={s.id} onClick={() => updateSectionContent(section.id, { ...c, shape: s.id })} className={`px-2 py-3 rounded-xl text-sm font-semibold transition-all flex flex-col items-center gap-1 ${c.shape === s.id ? 'bg-pink text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                                                                                                <span className="text-lg">{s.icon}</span>
+                                                                                                <span className="text-xs">{s.label}</span>
+                                                                                            </button>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                </div>
+                                                                                <div className="grid grid-cols-2 gap-3">
+                                                                                    <div>
+                                                                                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 block">Fill Color</label>
+                                                                                        <div className="flex gap-2 items-center">
+                                                                                            <input type="color" value={c.fillColor} onChange={(e) => updateSectionContent(section.id, { ...c, fillColor: e.target.value })} className="w-12 h-10 rounded-lg border border-gray-200 cursor-pointer" />
+                                                                                            <input type="text" value={c.fillColor} onChange={(e) => updateSectionContent(section.id, { ...c, fillColor: e.target.value })} className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm" placeholder="#FFB6C1" />
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <div>
+                                                                                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 block">Height (px)</label>
+                                                                                        <input type="number" value={c.height || 80} onChange={(e) => updateSectionContent(section.id, { ...c, height: parseInt(e.target.value) || 80 })} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" min="20" max="200" />
+                                                                                    </div>
+                                                                                </div>
+                                                                                <div className="flex gap-3">
+                                                                                    <label className="flex items-center gap-2 cursor-pointer">
+                                                                                        <input type="checkbox" checked={c.flipVertical || false} onChange={(e) => updateSectionContent(section.id, { ...c, flipVertical: e.target.checked })} className="w-4 h-4 rounded border-gray-300 text-pink focus:ring-pink" />
+                                                                                        <span className="text-sm text-gray-600">Flip Vertical</span>
+                                                                                    </label>
+                                                                                    <label className="flex items-center gap-2 cursor-pointer">
+                                                                                        <input type="checkbox" checked={c.flipHorizontal || false} onChange={(e) => updateSectionContent(section.id, { ...c, flipHorizontal: e.target.checked })} className="w-4 h-4 rounded border-gray-300 text-pink focus:ring-pink" />
+                                                                                        <span className="text-sm text-gray-600">Flip Horizontal</span>
+                                                                                    </label>
+                                                                                </div>
+                                                                            </div>
+                                                                        );
+                                                                    })()}
+
+                                                                    {/* ── Section Styling Editor ── */}
+                                                                    {section.type !== 'divider' && section.type !== 'transition' && (
+                                                                        <div className="mt-4 pt-4 border-t border-gray-200">
+                                                                            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Section Colors</p>
+                                                                            <div className="grid grid-cols-2 gap-3">
+                                                                                {/* Background Color */}
+                                                                                <div>
+                                                                                    <label className="text-xs text-gray-500 mb-1 block">Background</label>
+                                                                                    <div className="flex gap-2">
+                                                                                        <input type="color" value={section.styling?.backgroundColor || '#ffffff'} onChange={(e) => updateSectionStyling(section.id, { backgroundColor: e.target.value })} className="w-10 h-9 rounded-lg border border-gray-200 cursor-pointer" />
+                                                                                        <input type="text" value={section.styling?.backgroundColor || ''} onChange={(e) => updateSectionStyling(section.id, { backgroundColor: e.target.value })} placeholder="transparent" className="flex-1 px-2 py-1.5 text-sm border border-gray-200 rounded-lg" />
+                                                                                    </div>
+                                                                                </div>
+                                                                                {/* Text Color */}
+                                                                                <div>
+                                                                                    <label className="text-xs text-gray-500 mb-1 block">Text Color</label>
+                                                                                    <div className="flex gap-2">
+                                                                                        <input type="color" value={section.styling?.textColor || '#3a3530'} onChange={(e) => updateSectionStyling(section.id, { textColor: e.target.value })} className="w-10 h-9 rounded-lg border border-gray-200 cursor-pointer" />
+                                                                                        <input type="text" value={section.styling?.textColor || ''} onChange={(e) => updateSectionStyling(section.id, { textColor: e.target.value })} placeholder="inherit" className="flex-1 px-2 py-1.5 text-sm border border-gray-200 rounded-lg" />
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                             )}
                                                         </div>
@@ -1525,6 +1814,121 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                                 </div>
                                             )}
                                         </div>
+
+                                        {/* Navbar — always at top */}
+                                        <div className="border border-gray-200 rounded-2xl overflow-hidden mb-4">
+                                            <button onClick={() => toggleSection('navbar')} className="w-full flex items-center justify-between px-5 py-4 bg-gray-50 hover:bg-gray-100 transition-colors">
+                                                <div className="flex items-center gap-3">
+                                                    <span className="text-xl">🧭</span>
+                                                    <span className="font-heading font-bold text-lg">Navbar</span>
+                                                    <span className="text-xs text-gray-400 bg-gray-200 px-2 py-0.5 rounded-full">Pinned</span>
+                                                </div>
+                                                {openSection === 'navbar' ? <ChevronUp className="w-5 h-5 text-gray-500" /> : <ChevronDown className="w-5 h-5 text-gray-500" />}
+                                            </button>
+                                            {openSection === 'navbar' && (
+                                                <div className="p-5 space-y-4">
+                                                                                                        <div className="grid grid-cols-2 gap-4">
+                                                                                                                <div>
+                                                                                                                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Navbar Background</label>
+                                                                                                                        <div className="flex gap-2">
+                                                                                                                                <input type="color" value={siteContent.navbar?.bgColor || '#ffffff'} onChange={e => updateNavbar({ bgColor: e.target.value })} className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer" />
+                                                                                                                                <input type="text" value={siteContent.navbar?.bgColor || ''} onChange={e => updateNavbar({ bgColor: e.target.value })} className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-sm" />
+                                                                                                                        </div>
+                                                                                                                </div>
+                                                                                                                <div>
+                                                                                                                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Text Color</label>
+                                                                                                                        <div className="flex gap-2">
+                                                                                                                                <input type="color" value={siteContent.navbar?.textColor || '#3a3530'} onChange={e => updateNavbar({ textColor: e.target.value })} className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer" />
+                                                                                                                                <input type="text" value={siteContent.navbar?.textColor || ''} onChange={e => updateNavbar({ textColor: e.target.value })} className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-sm" />
+                                                                                                                        </div>
+                                                                                                                </div>
+                                                                                                        </div>
+                                                                                                        <div className="grid grid-cols-2 gap-4">
+                                                                                                                <div>
+                                                                                                                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Background Behind Navbar</label>
+                                                                                                                        <div className="flex gap-2">
+                                                                                                                                <input type="color" value={siteContent.navbar?.wrapperBgColor || '#f5f5dc'} onChange={e => updateNavbar({ wrapperBgColor: e.target.value })} className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer" />
+                                                                                                                                <input type="text" value={siteContent.navbar?.wrapperBgColor || ''} onChange={e => updateNavbar({ wrapperBgColor: e.target.value })} className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-sm" />
+                                                                                                                        </div>
+                                                                                                                </div>
+                                                                                                                <div>
+                                                                                                                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Height (px)</label>
+                                                                                                                        <input type="number" value={siteContent.navbar?.height || 64} onChange={e => updateNavbar({ height: parseInt(e.target.value) || 64 })} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" min="40" max="120" />
+                                                                                                                </div>
+                                                                                                                <div>
+                                                                                                                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Position</label>
+                                                                                                                        <select value={siteContent.navbar?.position || 'fixed'} onChange={e => updateNavbar({ position: e.target.value as any })} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white">
+                                                                                                                                <option value="fixed">Fixed (always visible)</option>
+                                                                                                                                <option value="static">Static (scrolls away)</option>
+                                                                                                                        </select>
+                                                                                                                </div>
+                                                                                                        </div>
+                                                                                                        <div className="flex gap-4">
+                                                                                                                <label className="flex items-center gap-2 cursor-pointer">
+                                                                                                                        <input type="checkbox" checked={siteContent.navbar?.showLogo !== false} onChange={e => updateNavbar({ showLogo: e.target.checked })} className="w-4 h-4 rounded accent-pink" />
+                                                                                                                        <span className="text-sm text-gray-600">Show Logo</span>
+                                                                                                                </label>
+                                                                                                                <label className="flex items-center gap-2 cursor-pointer">
+                                                                                                                        <input type="checkbox" checked={siteContent.navbar?.showCart !== false} onChange={e => updateNavbar({ showCart: e.target.checked })} className="w-4 h-4 rounded accent-pink" />
+                                                                                                                        <span className="text-sm text-gray-600">Show Cart</span>
+                                                                                                                </label>
+                                                                                                                <label className="flex items-center gap-2 cursor-pointer">
+                                                                                                                        <input type="checkbox" checked={siteContent.navbar?.isFloating || false} onChange={e => updateNavbar({ isFloating: e.target.checked })} className="w-4 h-4 rounded accent-pink" />
+                                                                                                                        <span className="text-sm text-gray-600">Floating Style</span>
+                                                                                                                </label>
+                                                                                                                <label className="flex items-center gap-2 cursor-pointer">
+                                                                                                                        <input type="checkbox" checked={siteContent.navbar?.isTransparent || false} onChange={e => updateNavbar({ isTransparent: e.target.checked })} className="w-4 h-4 rounded accent-pink" />
+                                                                                                                        <span className="text-sm text-gray-600">Transparent</span>
+                                                                                                                </label>
+                                                                                                        </div>
+                                                                                                        {siteContent.navbar?.isFloating && (
+                                                                                                                <div className="grid grid-cols-2 gap-4">
+                                                                                                                        <div>
+                                                                                                                                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Border Radius (px)</label>
+                                                                                                                                <input type="number" value={siteContent.navbar?.borderRadius || 32} onChange={e => updateNavbar({ borderRadius: parseInt(e.target.value) || 32 })} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" min="0" max="60" />
+                                                                                                                        </div>
+                                                                                                                        <div>
+                                                                                                                                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 block">Shadow</label>
+                                                                                                                                <select value={siteContent.navbar?.shadow || 'small'} onChange={e => updateNavbar({ shadow: e.target.value as any })} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white">
+                                                                                                                                        <option value="none">None</option>
+                                                                                                                                        <option value="small">Small</option>
+                                                                                                                                        <option value="medium">Medium</option>
+                                                                                                                                        <option value="large">Large</option>
+                                                                                                                                </select>
+                                                                                                                        </div>
+                                                                                                                </div>
+                                                                                                        )}
+                                                                                                        <div className="border-t border-gray-100 pt-4">
+                                                                                                                <div className="flex items-center justify-between mb-3">
+                                                                                                                        <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Navigation Links</label>
+                                                                                                                        <button onClick={() => updateNavbar({ links: [...(siteContent.navbar?.links || []), { label: 'New Link', url: '#', id: uuidv4() }] })} className="text-xs text-pink font-semibold flex items-center gap-1">
+                                                                                                                                <Plus className="w-3 h-3" /> Add Link
+                                                                                                                        </button>
+                                                                                                                </div>
+                                                                                                                <div className="space-y-2">
+                                                                                                                        {(siteContent.navbar?.links || []).map((link, idx) => (
+                                                                                                                                <div key={link.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                                                                                                                                        <input type="text" value={link.label} onChange={e => {
+                                                                                                                                                const links = [...(siteContent.navbar?.links || [])];
+                                                                                                                                                links[idx].label = e.target.value;
+                                                                                                                                                updateNavbar({ links });
+                                                                                                                                        }} className="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded" placeholder="Label" />
+                                                                                                                                        <input type="text" value={link.url} onChange={e => {
+                                                                                                                                                const links = [...(siteContent.navbar?.links || [])];
+                                                                                                                                                links[idx].url = e.target.value;
+                                                                                                                                                updateNavbar({ links });
+                                                                                                                                        }} className="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded" placeholder="URL (#section or /page)" />
+                                                                                                                                        <button onClick={() => {
+                                                                                                                                                const links = (siteContent.navbar?.links || []).filter((_, i) => i !== idx);
+                                                                                                                                                updateNavbar({ links });
+                                                                                                                                        }} className="text-red-400 p-1"><X className="w-4 h-4" /></button>
+                                                                                                                                </div>
+                                                                                                                        ))}
+                                                                                                                </div>
+                                                                                                        </div>
+                                                                                                </div>
+                                                                                        )}
+                                                                                </div>
 
                                         {/* Footer — always at bottom */}
                                         <div className="border border-gray-200 rounded-2xl overflow-hidden mt-4">
@@ -1740,6 +2144,7 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                                         <option value="Inter">Inter (Clean)</option>
                                                         <option value="Playfair Display">Playfair Display (Elegant)</option>
                                                         <option value="Roboto">Roboto (Classic)</option>
+                                                        <option value="210-Claytoy">210 클레이토이 (Korean Cute)</option>
                                                     </select>
                                                     <p className="mt-2 text-xs text-gray-400">Used for titles and large headings</p>
                                                 </div>

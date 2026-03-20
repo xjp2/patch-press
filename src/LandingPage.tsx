@@ -1,7 +1,7 @@
 
 import { ArrowRight, ChevronLeft, ChevronRight, Instagram, Facebook, Twitter, Palette } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback } from 'react';
-import type { Notice, SiteContent, HeroContent, HowItWorksContent, GalleryContent, TextBlockContent, ImageBannerContent, TestimonialsContent, CtaContent, DividerContent, PageSection } from './AdminPanel';
+import type { Notice, SiteContent, HeroContent, HowItWorksContent, GalleryContent, TextBlockContent, ImageBannerContent, TestimonialsContent, CtaContent, DividerContent, TransitionContent, PageSection } from './AdminPanel';
 
 interface LandingPageProps {
     notices: Notice[];
@@ -206,29 +206,27 @@ function HowItWorksSection({ section }: { section: PageSection }) {
                 backgroundColor: styling.backgroundColor,
                 paddingTop: styling.paddingTop || '4rem',
                 paddingBottom: styling.paddingBottom || '4rem',
-                color: styling.textColor
+                color: styling.textColor,
             }}
         >
-            {/* Context7 Best Practice: Consistent container max-width and padding */}
             <div className="max-w-6xl mx-auto px-6">
-                {/* Context7 Best Practice: Proper heading hierarchy with text-balance */}
+                {/* Title with reveal */}
                 <div className={`text-${c.titleAlignment || 'center'} mb-12 lg:mb-16 flex flex-col gap-3 scroll-reveal ${isRevealed ? 'scroll-revealed' : ''}`}>
                     <h2 className="font-heading text-3xl sm:text-4xl font-bold text-balance" style={{ color: c.titleColor || 'var(--color-primary)' }}>{c.sectionTitle}</h2>
-                    <div className="flex items-center justify-center gap-1 text-[var(--color-secondary)]"><span className="text-2xl">✦</span></div>
+                    <div className="flex items-center justify-center gap-1 text-[var(--color-secondary)] scroll-reveal scroll-delay-1"><span className="text-2xl">✦</span></div>
                 </div>
-                {/* Context7 Best Practice: gap-6 for consistent spacing (shadcn/ui field group pattern) */}
+                {/* Steps with staggered reveal */}
                 <div className="grid md:grid-cols-3 gap-6 lg:gap-8">
                     {c.steps.map((step, i) => (
-                        /* Context7 Best Practice: Card-like structure with flex col gap */
                         <div key={i} className={`flex flex-col gap-4 text-center group scroll-reveal scroll-delay-${i + 1} ${isRevealed ? 'scroll-revealed' : ''}`}>
                             <div className="relative mx-auto w-36 h-36">
-                                <div className="absolute inset-0 bg-[var(--color-primary)]/10 rounded-full" />
-                                <div className="absolute top-0 right-0 w-8 h-8 bg-[var(--color-secondary)] text-white rounded-full flex items-center justify-center text-sm font-bold z-10">{i + 1}</div>
+                                <div className="absolute inset-0 bg-[var(--color-primary)]/10 rounded-full scale-0 group-hover:scale-100 transition-transform duration-500" />
+                                <div className="absolute top-0 right-0 w-8 h-8 bg-[var(--color-secondary)] text-white rounded-full flex items-center justify-center text-sm font-bold z-10 group-hover:scale-110 transition-transform">{i + 1}</div>
                                 <div className="relative z-10 w-full h-full flex items-center justify-center">
                                     {step.image ? (
-                                        <img src={step.image} alt={step.title} className="w-20 h-20 object-contain group-hover:scale-110 transition-transform duration-300" />
+                                        <img src={step.image} alt={step.title} className="w-20 h-20 object-contain group-hover:scale-110 group-hover:rotate-3 transition-all duration-300" />
                                     ) : step.emoji ? (
-                                        <span className="text-5xl">{step.emoji}</span>
+                                        <span className="text-5xl group-hover:scale-110 transition-transform">{step.emoji}</span>
                                     ) : (
                                         <div className="flex gap-1">
                                             <img src="/patches/patch-strawberry.png" alt="" className="w-10 h-10 object-contain group-hover:scale-110 transition-transform duration-300" />
@@ -238,7 +236,6 @@ function HowItWorksSection({ section }: { section: PageSection }) {
                                     )}
                                 </div>
                             </div>
-                            {/* Context7 Best Practice: Semantic spacing with gap-2 */}
                             <div className="flex flex-col gap-2">
                                 <h3 className="font-heading text-xl font-bold text-[var(--color-primary)]">{step.title}</h3>
                                 <p className="text-[var(--color-primary)] text-sm leading-relaxed opacity-80 max-w-xs mx-auto">{step.description}</p>
@@ -274,21 +271,21 @@ function GallerySection({ section, startCustomizing }: { section: PageSection; s
                 backgroundColor: styling.backgroundColor,
                 paddingTop: styling.paddingTop || '4rem',
                 paddingBottom: styling.paddingBottom || '4rem',
-                color: styling.textColor
+                color: styling.textColor,
             }}
         >
             <div className="max-w-[1400px] mx-auto px-6">
-                <h2 className="text-4xl font-black mb-12" style={{ 
+                <h2 className={`text-4xl font-black mb-12 scroll-reveal ${isRevealed ? 'scroll-revealed' : ''}`} style={{ 
                     color: c.titleColor || styling.textColor || 'var(--color-primary)',
                     textAlign: c.titleAlignment || 'center'
                 }}>{c.sectionTitle}</h2>
                 <div className="flex gap-6 overflow-x-auto pb-12 snap-x hide-scrollbar justify-center">
                     {c.items.map((item, i) => (
                         <div key={item.id} className={`flex-shrink-0 snap-center group cursor-pointer scroll-reveal-scale scroll-delay-${Math.min(i + 1, 6)} ${isRevealed ? 'scroll-revealed' : ''}`} onClick={() => handleItemClick(item.linkUrl)}>
-                            <div className="w-52 h-52 rounded-2xl overflow-hidden bg-[var(--color-primary)]/10 shadow-md group-hover:shadow-xl transition-all duration-300 group-hover:-translate-y-1">
-                                <img src={item.image} alt={item.label} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                            <div className="w-52 h-52 rounded-2xl overflow-hidden bg-[var(--color-primary)]/10 shadow-md group-hover:shadow-xl transition-all duration-300 group-hover:-translate-y-2 group-hover:scale-105">
+                                <img src={item.image} alt={item.label} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                             </div>
-                            <p className="text-center text-sm font-medium text-[var(--color-primary)] opacity-80 mt-3">{item.label}</p>
+                            <p className="text-center text-sm font-medium text-[var(--color-primary)] opacity-80 mt-3 group-hover:opacity-100 transition-opacity">{item.label}</p>
                         </div>
                     ))}
                 </div>
@@ -302,6 +299,8 @@ function TextBlockSection({ section }: { section: PageSection }) {
     const { ref, isRevealed } = useScrollReveal();
     const styling = section.styling || {};
 
+    const alignmentClass = c.alignment === 'center' ? 'text-center' : c.alignment === 'right' ? 'text-right' : 'text-left';
+
     return (
         <section
             ref={ref}
@@ -310,12 +309,12 @@ function TextBlockSection({ section }: { section: PageSection }) {
                 backgroundColor: styling.backgroundColor,
                 paddingTop: styling.paddingTop,
                 paddingBottom: styling.paddingBottom,
-                color: styling.textColor
+                color: styling.textColor,
             }}
         >
-            <div className={`max-w-4xl mx-auto text-${c.alignment} scroll-reveal ${isRevealed ? 'scroll-revealed' : ''}`}>
-                {c.heading && <h2 className="font-heading text-3xl sm:text-4xl font-bold text-[var(--color-primary)] mb-6">{c.heading}</h2>}
-                {c.body && <p className="text-[var(--color-primary)] text-lg leading-relaxed opacity-80 whitespace-pre-line">{c.body}</p>}
+            <div className={`max-w-4xl mx-auto px-6 ${alignmentClass}`}>
+                {c.heading && <h2 className={`font-heading text-3xl sm:text-4xl font-bold text-[var(--color-primary)] mb-6 scroll-reveal ${isRevealed ? 'scroll-revealed' : ''}`}>{c.heading}</h2>}
+                {c.body && <p className={`text-[var(--color-primary)] text-lg leading-relaxed opacity-80 whitespace-pre-line scroll-reveal scroll-delay-1 ${isRevealed ? 'scroll-revealed' : ''}`}>{c.body}</p>}
             </div>
         </section>
     );
@@ -327,46 +326,66 @@ function ImageBannerSection({ section }: { section: PageSection }) {
     const styling = section.styling || {};
 
     const handleRedirect = (url?: string) => {
-        if (!url) return;
+        if (!url || c.isClickable === false) return;
         if (url.startsWith('http')) window.open(url, '_blank');
         else window.location.href = url;
     };
 
+    // Container styling
+    const containerStyle: React.CSSProperties = {
+        backgroundColor: c.hasContainer ? (c.containerBgColor || '#ffffff') : undefined,
+        borderRadius: c.hasContainer && c.borderRadius ? `${c.borderRadius}px` : undefined,
+        border: c.hasContainer && c.borderWidth ? `${c.borderWidth}px solid ${c.borderColor || '#e5e7eb'}` : undefined,
+        padding: c.hasContainer && c.padding ? `${c.padding}px` : undefined,
+    };
+
+    const shadowClass = c.shadow === 'small' ? 'shadow-md' : c.shadow === 'medium' ? 'shadow-lg' : c.shadow === 'large' ? 'shadow-xl' : '';
+
+    // Image border radius
+    const imageBorderRadius = c.borderRadius || 16;
+
     return (
         <section
             ref={ref}
-            className={`${c.fullWidth ? '' : 'py-12 px-6'} scroll-reveal-scale ${isRevealed ? 'scroll-revealed' : ''}`}
+            className={`${c.fullWidth ? '' : 'py-12 px-6'} scroll-reveal ${isRevealed ? 'scroll-revealed' : ''}`}
             style={{
                 backgroundColor: styling.backgroundColor,
                 paddingTop: styling.paddingTop,
                 paddingBottom: styling.paddingBottom,
-                color: styling.textColor
+                color: styling.textColor,
             }}
         >
-            <div className={`${c.fullWidth ? '' : 'max-w-6xl mx-auto'} scroll-reveal-scale ${isRevealed ? 'scroll-revealed' : ''}`}>
-                {c.isGallery ? (
-                    <div className="flex gap-4 overflow-x-auto pb-4 snap-x scrollbar-hide">
-                        {(c.galleryItems || []).map((item, idx) => (
+            <div className={`${c.fullWidth ? '' : 'max-w-6xl mx-auto'}`}>
+                <div className={`${c.hasContainer ? `${shadowClass} overflow-hidden` : ''}`} style={containerStyle}>
+                    {c.isGallery ? (
+                        <div className="flex gap-4 overflow-x-auto pb-4 snap-x scrollbar-hide">
+                            {(c.galleryItems || []).map((item, idx) => (
+                                <img
+                                    key={idx}
+                                    src={item.image}
+                                    alt={`Banner ${idx}`}
+                                    className={`flex-shrink-0 snap-center min-w-[300px] ${c.imageFit === 'contain' ? 'h-auto max-h-[400px] object-contain' : c.imageFit === 'none' ? 'h-auto object-none' : `h-[${c.maxHeight || 400}px] object-cover`} ${c.isClickable !== false ? 'cursor-pointer' : ''} hover:scale-[1.02] transition-all duration-500 scroll-reveal-scale scroll-delay-${Math.min(idx + 1, 4)} ${isRevealed ? 'scroll-revealed' : ''}`}
+                                    style={{ borderRadius: `${imageBorderRadius}px` }}
+                                    onClick={() => handleRedirect(item.linkUrl)}
+                                />
+                            ))}
+                        </div>
+                    ) : (
+                        c.image && (
                             <img
-                                key={idx}
-                                src={item.image}
-                                alt={`Banner ${idx}`}
-                                className={`flex-shrink-0 snap-center min-w-[300px] h-[400px] object-cover rounded-2xl cursor-pointer hover:opacity-90 transition-opacity`}
-                                onClick={() => handleRedirect(item.linkUrl)}
+                                src={c.image}
+                                alt={c.alt}
+                                className={`w-full max-w-full h-auto ${c.imageFit === 'contain' ? 'object-contain' : c.imageFit === 'none' ? 'object-none' : 'object-cover'} ${c.isClickable !== false ? 'cursor-pointer' : ''} hover:scale-[1.01] transition-all duration-700 scroll-reveal-scale ${isRevealed ? 'scroll-revealed' : ''}`}
+                                style={{ 
+                                    borderRadius: `${imageBorderRadius}px`,
+                                    maxHeight: c.maxHeight && c.maxHeight > 0 ? `${c.maxHeight}px` : undefined,
+                                }}
+                                onClick={() => handleRedirect(c.linkUrl)}
                             />
-                        ))}
-                    </div>
-                ) : (
-                    c.image && (
-                        <img
-                            src={c.image}
-                            alt={c.alt}
-                            className={`${c.fullWidth ? 'w-full max-h-[500px]' : 'w-full max-h-[400px] rounded-2xl'} object-cover cursor-pointer hover:opacity-95 transition-opacity`}
-                            onClick={() => handleRedirect(c.linkUrl)}
-                        />
-                    )
-                )}
-                {c.caption && <p className="text-center text-sm text-[var(--color-primary)] opacity-80 mt-3">{c.caption}</p>}
+                        )
+                    )}
+                </div>
+                {c.caption && <p className={`text-center text-sm text-[var(--color-primary)] opacity-80 mt-3 scroll-reveal scroll-delay-1 ${isRevealed ? 'scroll-revealed' : ''}`}>{c.caption}</p>}
             </div>
         </section>
     );
@@ -383,6 +402,13 @@ function TestimonialsSection({ section }: { section: PageSection }) {
         else window.location.href = url;
     };
 
+    // Alternate between left and right animations for cards
+    const getCardAnimation = (i: number) => {
+        if (i % 3 === 0) return 'scroll-reveal-left';
+        if (i % 3 === 2) return 'scroll-reveal-right';
+        return 'scroll-reveal';
+    };
+
     return (
         <section
             ref={ref}
@@ -391,10 +417,10 @@ function TestimonialsSection({ section }: { section: PageSection }) {
                 backgroundColor: styling.backgroundColor,
                 paddingTop: styling.paddingTop,
                 paddingBottom: styling.paddingBottom,
-                color: styling.textColor
+                color: styling.textColor,
             }}
         >
-            <div className="max-w-5xl mx-auto">
+            <div className="max-w-5xl mx-auto px-6">
                 <h2 className={`font-heading text-3xl sm:text-4xl font-bold mb-12 scroll-reveal ${isRevealed ? 'scroll-revealed' : ''}`} style={{ 
                     color: c.titleColor || 'var(--color-primary)',
                     textAlign: c.titleAlignment || 'center'
@@ -404,22 +430,22 @@ function TestimonialsSection({ section }: { section: PageSection }) {
                         <div
                             key={item.id}
                             onClick={() => handleRedirect(item.linkUrl)}
-                            className={`bg-[var(--color-primary)]/10 rounded-2xl p-6 relative scroll-reveal scroll-delay-${i + 1} ${isRevealed ? 'scroll-revealed' : ''} flex flex-col ${item.linkUrl ? 'cursor-pointer hover:bg-[var(--color-primary)]/15 transition-colors' : ''}`}
+                            className={`bg-[var(--color-primary)]/10 rounded-2xl p-6 relative ${getCardAnimation(i)} scroll-delay-${Math.min(i + 1, 3)} ${isRevealed ? 'scroll-revealed' : ''} flex flex-col ${item.linkUrl ? 'cursor-pointer hover:bg-[var(--color-primary)]/15 hover:-translate-y-1 transition-all' : ''}`}
                         >
-                            <span className="absolute top-4 left-5 text-4xl text-[var(--color-primary)]/20 font-serif">"</span>
+                            <span className="absolute top-4 left-5 text-4xl text-[var(--color-primary)]/20 font-serif group-hover:scale-110 transition-transform">"</span>
                             <p className="text-[var(--color-primary)] text-sm leading-relaxed opacity-80 mt-6 mb-4 flex-1">{item.quote}</p>
 
                             {item.proofImage && (
                                 <div className="mb-4 rounded-lg overflow-hidden border border-white/20 shadow-sm">
-                                    <img src={item.proofImage} alt="Proof" className="w-full h-32 object-cover hover:scale-105 transition-transform" />
+                                    <img src={item.proofImage} alt="Proof" className="w-full h-32 object-cover hover:scale-105 transition-transform duration-500" />
                                 </div>
                             )}
 
                             <div className="flex items-center gap-3">
                                 {item.avatar ? (
-                                    <img src={item.avatar} alt={item.author} className="w-10 h-10 rounded-full object-cover" />
+                                    <img src={item.avatar} alt={item.author} className="w-10 h-10 rounded-full object-cover ring-2 ring-white/50" />
                                 ) : (
-                                    <div className="w-10 h-10 rounded-full bg-[var(--color-secondary)] flex items-center justify-center text-white font-bold text-sm">{item.author?.[0] || '?'}</div>
+                                    <div className="w-10 h-10 rounded-full bg-[var(--color-secondary)] flex items-center justify-center text-white font-bold text-sm ring-2 ring-white/50">{item.author?.[0] || '?'}</div>
                                 )}
                                 <span className="font-heading font-bold text-sm text-[var(--color-primary)]">{item.author}</span>
                             </div>
@@ -457,21 +483,21 @@ function CtaSection({ section, startCustomizing }: { section: PageSection; start
                 backgroundColor: styling.backgroundColor,
                 paddingTop: styling.paddingTop,
                 paddingBottom: styling.paddingBottom,
-                color: styling.textColor
+                color: styling.textColor,
             }}
         >
-            <div className={`max-w-3xl mx-auto text-center scroll-reveal ${isRevealed ? 'scroll-revealed' : ''}`}>
-                <h2 className="font-heading text-3xl sm:text-4xl font-bold mb-4" style={{ 
+            <div className="max-w-3xl mx-auto text-center px-6">
+                <h2 className={`font-heading text-3xl sm:text-4xl font-bold mb-4 scroll-reveal ${isRevealed ? 'scroll-revealed' : ''}`} style={{ 
                     color: c.titleColor || 'white',
                     textAlign: c.titleAlignment || 'center'
                 }}>{c.heading}</h2>
-                {c.subtitle && <p className="text-lg mb-8" style={{ 
+                {c.subtitle && <p className={`text-lg mb-8 scroll-reveal scroll-delay-1 ${isRevealed ? 'scroll-revealed' : ''}`} style={{ 
                     color: c.subtitleColor || 'white',
                     textAlign: c.subtitleAlignment || 'center'
                 }}>{c.subtitle}</p>}
                 <button
                     onClick={handleCtaClick}
-                    className="inline-flex items-center gap-3 bg-white text-[var(--color-primary)] px-8 py-4 rounded-full text-lg font-semibold hover:bg-[var(--color-primary)]/10 transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5"
+                    className={`inline-flex items-center gap-3 bg-white text-[var(--color-primary)] px-8 py-4 rounded-full text-lg font-semibold hover:bg-[var(--color-primary)]/10 hover:scale-105 hover:-translate-y-1 transition-all shadow-lg hover:shadow-xl scroll-reveal scroll-delay-2 ${isRevealed ? 'scroll-revealed' : ''}`}
                 >
                     {c.buttonText} <ArrowRight className="w-5 h-5" />
                 </button>
@@ -482,10 +508,12 @@ function CtaSection({ section, startCustomizing }: { section: PageSection; start
 
 function DividerSection({ section }: { section: PageSection }) {
     const c = section.content as DividerContent;
+    const { ref, isRevealed } = useScrollReveal<HTMLDivElement>();
     const styling = section.styling || {};
 
     return (
         <div
+            ref={ref}
             style={{
                 backgroundColor: styling.backgroundColor,
                 paddingTop: styling.paddingTop,
@@ -493,15 +521,94 @@ function DividerSection({ section }: { section: PageSection }) {
                 color: styling.textColor
             }}
         >
-            <div className="max-w-4xl mx-auto">
+            <div className={`max-w-4xl mx-auto scroll-reveal-scale ${isRevealed ? 'scroll-revealed' : ''}`}>
                 {c.style === 'line' && <hr className="border-t-2 border-[var(--color-primary)]/20" />}
-                {c.style === 'dots' && <div className="flex justify-center gap-3">{[...Array(5)].map((_, i) => <div key={i} className="w-2 h-2 rounded-full bg-[var(--color-primary)]/20" />)}</div>}
+                {c.style === 'dots' && <div className="flex justify-center gap-3">{[...Array(5)].map((_, i) => <div key={i} className="w-2 h-2 rounded-full bg-[var(--color-primary)]/20 animate-pulse" style={{ animationDelay: `${i * 0.1}s` }} />)}</div>}
                 {c.style === 'wave' && (
                     <svg viewBox="0 0 600 20" className="w-full h-5 text-[var(--color-primary)]/20">
                         <path d="M0,10 Q50,0 100,10 Q150,20 200,10 Q250,0 300,10 Q350,20 400,10 Q450,0 500,10 Q550,20 600,10" fill="none" stroke="currentColor" strokeWidth="2" />
                     </svg>
                 )}
             </div>
+        </div>
+    );
+}
+
+// ── Organic Shape Transition Section ──
+function TransitionSection({ section }: { section: PageSection }) {
+    const c = section.content as TransitionContent;
+    const height = c.height || 80;
+    
+    const getTransform = () => {
+        const transforms = [];
+        if (c.flipVertical) transforms.push('scaleY(-1)');
+        if (c.flipHorizontal) transforms.push('scaleX(-1)');
+        return transforms.length > 0 ? transforms.join(' ') : undefined;
+    };
+
+    const renderShape = () => {
+        const fill = c.fillColor || '#FFB6C1';
+        const transform = getTransform();
+        
+        switch (c.shape) {
+            case 'wave':
+                return (
+                    <svg viewBox="0 0 1440 120" preserveAspectRatio="none" className="w-full h-full" style={{ transform }}>
+                        <path fill={fill} d="M0,64L48,69.3C96,75,192,85,288,80C384,75,480,53,576,48C672,43,768,53,864,64C960,75,1056,85,1152,80C1248,75,1344,53,1392,42.7L1440,32L1440,120L1392,120C1344,120,1248,120,1152,120C1056,120,960,120,864,120C768,120,672,120,576,120C480,120,384,120,288,120C192,120,96,120,48,120L0,120Z" />
+                    </svg>
+                );
+            case 'blob':
+                return (
+                    <svg viewBox="0 0 1440 120" preserveAspectRatio="none" className="w-full h-full" style={{ transform }}>
+                        <path fill={fill} d="M0,96L48,90.7C96,85,192,75,288,74.7C384,75,480,85,576,90.7C672,96,768,96,864,85.3C960,75,1056,53,1152,48C1248,43,1344,53,1392,58.7L1440,64L1440,120L1392,120C1344,120,1248,120,1152,120C1056,120,960,120,864,120C768,120,672,120,576,120C480,120,384,120,288,120C192,120,96,120,48,120L0,120Z" />
+                    </svg>
+                );
+            case 'cloud':
+                return (
+                    <svg viewBox="0 0 1440 120" preserveAspectRatio="none" className="w-full h-full" style={{ transform }}>
+                        <path fill={fill} d="M0,64L48,64C96,64,192,64,288,58.7C384,53,480,43,576,48C672,53,768,75,864,80C960,85,1056,75,1152,69.3C1248,64,1344,64,1392,64L1440,64L1440,120L1392,120C1344,120,1248,120,1152,120C1056,120,960,120,864,120C768,120,672,120,576,120C480,120,384,120,288,120C192,120,96,120,48,120L0,120Z" />
+                    </svg>
+                );
+            case 'arch':
+                return (
+                    <svg viewBox="0 0 1440 120" preserveAspectRatio="none" className="w-full h-full" style={{ transform }}>
+                        <path fill={fill} d="M0,120L0,60C240,120,480,120,720,60C960,0,1200,0,1440,60L1440,120Z" />
+                    </svg>
+                );
+            case 'zigzag':
+                return (
+                    <svg viewBox="0 0 1440 120" preserveAspectRatio="none" className="w-full h-full" style={{ transform }}>
+                        <path fill={fill} d="M0,120L0,60L120,120L240,60L360,120L480,60L600,120L720,60L840,120L960,60L1080,120L1200,60L1320,120L1440,60L1440,120Z" />
+                    </svg>
+                );
+            case 'triangle':
+                return (
+                    <svg viewBox="0 0 1440 120" preserveAspectRatio="none" className="w-full h-full" style={{ transform }}>
+                        <path fill={fill} d="M720,0L0,120L1440,120Z" />
+                    </svg>
+                );
+            case 'curve':
+                return (
+                    <svg viewBox="0 0 1440 120" preserveAspectRatio="none" className="w-full h-full" style={{ transform }}>
+                        <path fill={fill} d="M0,120L1440,120L1440,0C1200,80,960,120,720,120C480,120,240,80,0,0Z" />
+                    </svg>
+                );
+            case 'none':
+            default:
+                return <div className="w-full h-full" style={{ backgroundColor: fill }} />;
+        }
+    };
+
+    return (
+        <div 
+            className="w-full overflow-hidden transition-all duration-500"
+            style={{ 
+                height: `${height}px`,
+                marginTop: c.marginTop || 0,
+                marginBottom: c.marginBottom || 0
+            }}
+        >
+            {renderShape()}
         </div>
     );
 }
@@ -516,8 +623,6 @@ export function LandingPage({ notices, startCustomizing, siteContent }: LandingP
             ['--color-primary' as any]: global.primaryColor,
             ['--color-secondary' as any]: global.secondaryColor
         }}>
-            {/* Header / Nav */}
-
             {/* Sections */}
             {visibleSections.map((section) => {
                 switch (section.type) {
@@ -529,6 +634,7 @@ export function LandingPage({ notices, startCustomizing, siteContent }: LandingP
                     case 'testimonials': return <TestimonialsSection key={section.id} section={section} />;
                     case 'cta': return <CtaSection key={section.id} section={section} startCustomizing={startCustomizing} />;
                     case 'divider': return <DividerSection key={section.id} section={section} />;
+                    case 'transition': return <TransitionSection key={section.id} section={section} />;
                     default: return null;
                 }
             })}
@@ -596,6 +702,125 @@ export function LandingPage({ notices, startCustomizing, siteContent }: LandingP
                 }
                 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
                 .scrollbar-hide::-webkit-scrollbar { display: none; }
+                
+                /* ── Scroll Reveal Animations ── */
+                /* Base state - hidden */
+                .scroll-reveal {
+                    opacity: 0;
+                    transform: translateY(40px);
+                    transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), 
+                                transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+                    will-change: opacity, transform;
+                }
+                
+                /* Revealed state */
+                .scroll-reveal.scroll-revealed {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+                
+                /* Scale reveal for images/banners */
+                .scroll-reveal-scale {
+                    opacity: 0;
+                    transform: scale(0.95);
+                    transition: opacity 0.9s cubic-bezier(0.16, 1, 0.3, 1), 
+                                transform 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+                    will-change: opacity, transform;
+                }
+                
+                .scroll-reveal-scale.scroll-revealed {
+                    opacity: 1;
+                    transform: scale(1);
+                }
+                
+                /* Left slide reveal */
+                .scroll-reveal-left {
+                    opacity: 0;
+                    transform: translateX(-60px);
+                    transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), 
+                                transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+                    will-change: opacity, transform;
+                }
+                
+                .scroll-reveal-left.scroll-revealed {
+                    opacity: 1;
+                    transform: translateX(0);
+                }
+                
+                /* Right slide reveal */
+                .scroll-reveal-right {
+                    opacity: 0;
+                    transform: translateX(60px);
+                    transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), 
+                                transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+                    will-change: opacity, transform;
+                }
+                
+                .scroll-reveal-right.scroll-revealed {
+                    opacity: 1;
+                    transform: translateX(0);
+                }
+                
+                /* Down slide reveal (for fade-down) */
+                .scroll-reveal-down {
+                    opacity: 0;
+                    transform: translateY(-40px);
+                    transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), 
+                                transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+                    will-change: opacity, transform;
+                }
+                
+                .scroll-reveal-down.scroll-revealed {
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+                
+                /* Stagger delays for child elements */
+                .scroll-reveal.scroll-delay-1,
+                .scroll-reveal-scale.scroll-delay-1,
+                .scroll-reveal-left.scroll-delay-1,
+                .scroll-reveal-right.scroll-delay-1,
+                .scroll-reveal-down.scroll-delay-1 { transition-delay: 0.1s; }
+                
+                .scroll-reveal.scroll-delay-2,
+                .scroll-reveal-scale.scroll-delay-2,
+                .scroll-reveal-left.scroll-delay-2,
+                .scroll-reveal-right.scroll-delay-2,
+                .scroll-reveal-down.scroll-delay-2 { transition-delay: 0.2s; }
+                
+                .scroll-reveal.scroll-delay-3,
+                .scroll-reveal-scale.scroll-delay-3,
+                .scroll-reveal-left.scroll-delay-3,
+                .scroll-reveal-right.scroll-delay-3,
+                .scroll-reveal-down.scroll-delay-3 { transition-delay: 0.3s; }
+                
+                .scroll-reveal.scroll-delay-4,
+                .scroll-reveal-scale.scroll-delay-4,
+                .scroll-reveal-left.scroll-delay-4,
+                .scroll-reveal-right.scroll-delay-4,
+                .scroll-reveal-down.scroll-delay-4 { transition-delay: 0.4s; }
+                
+                .scroll-reveal.scroll-delay-5,
+                .scroll-reveal-scale.scroll-delay-5,
+                .scroll-reveal-left.scroll-delay-5,
+                .scroll-reveal-right.scroll-delay-5 { transition-delay: 0.5s; }
+                
+                .scroll-reveal.scroll-delay-6,
+                .scroll-reveal-scale.scroll-delay-6,
+                .scroll-reveal-left.scroll-delay-6,
+                .scroll-reveal-right.scroll-delay-6 { transition-delay: 0.6s; }
+                
+                /* Reduced motion support */
+                @media (prefers-reduced-motion: reduce) {
+                    .scroll-reveal,
+                    .scroll-reveal-scale,
+                    .scroll-reveal-left,
+                    .scroll-reveal-right {
+                        opacity: 1;
+                        transform: none;
+                        transition: none;
+                    }
+                }
             `}</style>
         </div>
     );

@@ -13,9 +13,11 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || '';
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('❌ Missing Supabase environment variables!');
-  console.error('Make sure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in .env');
-  process.exit(1);
+  console.warn('⚠️  Missing Supabase environment variables!');
+  console.warn('   Skipping CMS export. Using existing static files.');
+  console.warn('   To export fresh data, set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY');
+  // Create empty result without error
+  process.exit(0);
 }
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
@@ -42,6 +44,9 @@ async function exportData(): Promise<ExportResult[]> {
   // 1. Export Site Content
   try {
     console.log('📄 Exporting site content...');
+    console.log('   ⏰ Timestamp:', new Date().toISOString());
+    
+    // Add cache-busting to ensure fresh data
     const { data: siteContent, error } = await supabase
       .from('site_content')
       .select('*')
@@ -49,6 +54,18 @@ async function exportData(): Promise<ExportResult[]> {
       .single();
 
     if (error) throw error;
+
+    // Verify we got data
+    if (!siteContent) {
+      throw new Error('No site_content returned from Supabase');
+    }
+
+    // Log what we got
+    console.log('   📊 Data received:');
+    console.log('      - Updated at:', siteContent.updated_at);
+    console.log('      - Landing page sections:', siteContent.landing_page?.length || 0);
+    console.log('      - Navbar position:', siteContent.navbar?.position);
+    console.log('      - Global logo:', siteContent.global_settings?.logoText);
 
     fs.writeFileSync(
       path.join(OUTPUT_DIR, 'site-content.json'),

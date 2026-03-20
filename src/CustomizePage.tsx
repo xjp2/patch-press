@@ -92,6 +92,22 @@ const getClipAndCenter = (zone: any) => {
     return { clipPath, transform: `translate(${tx}%, ${ty}%)` };
 };
 
+// Confetti colors for review step
+const confettiColors = ['#ec4899', '#f472b6', '#fbbf24', '#60a5fa', '#a78bfa'];
+
+// Confetti particle component
+const ConfettiParticle = ({ delay, color }: { delay: number, color: string }) => (
+    <div 
+        className="absolute w-2 h-2 rounded-full"
+        style={{
+            backgroundColor: color,
+            animation: `confetti-fall 1s ${delay}ms ease-out forwards`,
+            left: `${Math.random() * 100}%`,
+            top: '-10px'
+        }}
+    />
+);
+
 const categories = [{ id: 'all', name: 'All' }, { id: 'food', name: 'Food' }, { id: 'characters', name: 'Characters' }, { id: 'letters', name: 'Letters' }, { id: 'symbols', name: 'Symbols' }];
 
 export function CustomizePage({ products, patches, setCurrentView, siteContent }: CustomizePageProps) {
@@ -593,19 +609,51 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
 
     return (
         <div className="min-h-screen bg-cream pb-8 pt-20 px-4">
+            <style>{`
+                @keyframes pop-in {
+                    0% { transform: scale(0) rotate(-10deg); opacity: 0; }
+                    70% { transform: scale(1.05) rotate(2deg); }
+                    100% { transform: scale(1) rotate(0deg); opacity: 1; }
+                }
+                @keyframes confetti-fall {
+                    0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+                    100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+                }
+                @keyframes fade-scale-up {
+                    from { transform: scale(0.95); opacity: 0; }
+                    to { transform: scale(1); opacity: 1; }
+                }
+                @keyframes slide-in-right {
+                    from { transform: translateX(30px); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+                @keyframes slide-in-left {
+                    from { transform: translateX(-30px); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+                .animate-pop-in { animation: pop-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+                .animate-fade-scale-up { animation: fade-scale-up 0.4s ease-out forwards; }
+                .animate-slide-in-right { animation: slide-in-right 0.4s ease-out forwards; }
+                .animate-slide-in-left { animation: slide-in-left 0.4s ease-out forwards; }
+            `}</style>
             <div className="max-w-7xl mx-auto">
                 <StepIndicator />
 
                 {/* STEP 1: Product Selection */}
                 {currentStep === 'product' && (
-                    <div className="animate-slide-up">
+                    <div className="animate-fade-scale-up">
                         <div className="text-center mb-8">
                             <h2 className="font-heading text-3xl sm:text-4xl font-bold text-text-dark mb-2">{siteContent.customizePage.step1Title}</h2>
                             <p className="text-text-dark/60">{siteContent.customizePage.step1Subtitle}</p>
                         </div>
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
-                            {products.map(product => (
-                                <div key={product.id} onClick={() => selectProduct(product)} className={`bg-white rounded-2xl p-4 cursor-pointer transition-all duration-300 ${selectedProduct.id === product.id ? 'ring-4 ring-pink shadow-pink-lg scale-105' : 'hover:shadow-soft hover:scale-102'}`}>
+                            {products.map((product, index) => (
+                                <div 
+                                    key={product.id} 
+                                    onClick={() => selectProduct(product)} 
+                                    className={`bg-white rounded-2xl p-4 cursor-pointer transition-all duration-300 animate-pop-in ${selectedProduct.id === product.id ? 'ring-4 ring-pink shadow-pink-lg scale-105' : 'hover:shadow-soft hover:scale-102'}`}
+                                    style={{ animationDelay: `${index * 80}ms`, opacity: 0 }}
+                                >
                                     {(() => {
                                         const s = getClipAndCenter(product.placementZone);
                                         return <img src={product.frontImage} alt={product.name} className="w-full h-24 object-contain mb-3" style={{ clipPath: s.clipPath, transform: s.transform }} />;
@@ -615,18 +663,18 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                 </div>
                             ))}
                         </div>
-                        <div className="text-center">
-                            <button onClick={() => setCurrentStep('design')} className="btn-primary text-lg px-12">Continue to Design <ChevronRight className="w-5 h-5 inline ml-2" /></button>
+                        <div className="text-center animate-slide-in-right" style={{ animationDelay: `${products.length * 80}ms`, opacity: 0 }}>
+                            <button onClick={() => setCurrentStep('design')} className="btn-primary text-lg px-12 hover:scale-105 active:scale-95 transition-transform">Continue to Design <ChevronRight className="w-5 h-5 inline ml-2" /></button>
                         </div>
                     </div>
                 )}
 
                 {/* STEP 2: Design */}
                 {currentStep === 'design' && (
-                    <div className="animate-slide-up relative">
+                    <div className="animate-fade-scale-up relative">
                         <div className="flex flex-col lg:flex-row gap-6">
                             {/* Left Panel: Patches */}
-                            <div className="lg:w-1/4 order-2 lg:order-1">
+                            <div className="lg:w-1/4 order-2 lg:order-1 animate-slide-in-left">
                                 <div className="bg-white rounded-2xl p-4 shadow-soft">
                                     <h3 className="font-heading text-lg font-bold text-text-dark mb-3 flex items-center gap-2"><Sparkles className="w-5 h-5 text-pink" /> Patch Collection <span className="text-sm font-normal text-text-dark/50">({filteredPatches.length})</span></h3>
                                     <div className="relative mb-3">
@@ -672,7 +720,7 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                             </div>
 
                             {/* Center Panel: Canvas */}
-                            <div className="lg:w-2/4 order-1 lg:order-2">
+                            <div className="lg:w-2/4 order-1 lg:order-2 animate-fade-scale-up" style={{ animationDelay: '100ms' }}>
                                 <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                                     <div className="flex items-center gap-2">
                                         <button onClick={handleZoomOut} className="p-2 bg-white rounded-lg shadow-sm hover:bg-pink/20"><ZoomOut className="w-5 h-5" /></button>
@@ -956,7 +1004,7 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                             </div>
 
                             {/* Right Panel: Instructions + Price */}
-                            <div className="lg:w-1/4 order-3">
+                            <div className="lg:w-1/4 order-3 animate-slide-in-right">
                                 <div className="bg-white rounded-2xl p-4 shadow-soft">
                                     <h3 className="font-heading text-lg font-bold text-text-dark mb-4">{siteContent.customizePage.step2PanelTitle}</h3>
                                     <div className="space-y-3 text-sm">
@@ -993,13 +1041,22 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
 
                 {/* STEP 3: Review */}
                 {currentStep === 'review' && (
-                    <div className="animate-slide-up max-w-3xl mx-auto">
+                    <div className="animate-fade-scale-up max-w-3xl mx-auto relative">
+                        {/* Confetti */}
+                        <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
+                            {confettiColors.map((color, i) => (
+                                <ConfettiParticle key={i} delay={i * 100} color={color} />
+                            ))}
+                        </div>
+                        
                         <div className="bg-white rounded-3xl p-5 sm:p-8 shadow-soft">
                             {/* Header */}
                             <div className="text-center mb-6">
-                                <div className="w-20 h-20 bg-green/20 rounded-full flex items-center justify-center mx-auto mb-4"><Check className="w-10 h-10 text-green-600" /></div>
-                                <h2 className="font-heading text-2xl sm:text-3xl font-bold text-text-dark mb-1">{siteContent.customizePage.step3Title}</h2>
-                                <p className="text-text-dark/60 text-sm">{siteContent.customizePage.step3Subtitle}</p>
+                                <div className="w-20 h-20 bg-green/20 rounded-full flex items-center justify-center mx-auto mb-4 animate-pop-in">
+                                    <Check className="w-10 h-10 text-green-600" />
+                                </div>
+                                <h2 className="font-heading text-2xl sm:text-3xl font-bold text-text-dark mb-1 animate-slide-in-right">{siteContent.customizePage.step3Title}</h2>
+                                <p className="text-text-dark/60 text-sm animate-slide-in-left">{siteContent.customizePage.step3Subtitle}</p>
                             </div>
 
                             {/* Side-by-side preview - Show full product like design canvas */}
@@ -1008,8 +1065,11 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                 <div className="relative bg-gray-50 rounded-2xl p-3 sm:p-5">
                                     <h4 className="font-heading text-sm sm:text-base font-bold text-center mb-2 text-text-dark/50">Front</h4>
                                     <div className="relative mx-auto" style={{ maxWidth: 240 }}>
-                                        {/* Full product image - NOT clipped */}
-                                        <img src={selectedProduct.frontImage} alt={`${selectedProduct.name} Front`} className="w-full object-contain" />
+                                        {/* Clipped product image - same as design canvas */}
+                                        {(() => {
+                                            const s = getClipAndCenter(selectedProduct.placementZone);
+                                            return <img src={selectedProduct.frontImage} alt={`${selectedProduct.name} Front`} className="w-full object-contain" style={{ clipPath: s.clipPath, transform: s.transform }} />;
+                                        })()}
                                         {/* Patches positioned on full image */}
                                         {frontPatches.map((patch) => {
                                             const cz = patch.contentZone || { x: 0, y: 0, width: 100, height: 100 };
@@ -1036,8 +1096,11 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                 <div className="relative bg-gray-50 rounded-2xl p-3 sm:p-5">
                                     <h4 className="font-heading text-sm sm:text-base font-bold text-center mb-2 text-text-dark/50">Back</h4>
                                     <div className="relative mx-auto" style={{ maxWidth: 240 }}>
-                                        {/* Full product image - NOT clipped */}
-                                        <img src={selectedProduct.backImage} alt={`${selectedProduct.name} Back`} className="w-full object-contain" />
+                                        {/* Clipped product image - same as design canvas */}
+                                        {(() => {
+                                            const s = getClipAndCenter(selectedProduct.placementZone);
+                                            return <img src={selectedProduct.backImage} alt={`${selectedProduct.name} Back`} className="w-full object-contain" style={{ clipPath: s.clipPath, transform: s.transform }} />;
+                                        })()}
                                         {/* Patches positioned on full image */}
                                         {backPatches.map((patch) => {
                                             const cz = patch.contentZone || { x: 0, y: 0, width: 100, height: 100 };
@@ -1089,12 +1152,12 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                             </div>
 
                             {/* Action Buttons */}
-                            <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                                <button onClick={() => setCurrentStep('design')} className="btn-secondary flex items-center justify-center gap-2"><RotateCcw className="w-4 h-4" /> Edit Design</button>
-                                <button onClick={downloadDesign} disabled={isDownloading} className="btn-secondary flex items-center justify-center gap-2"><Download className="w-4 h-4" /> {isDownloading ? 'Saving...' : 'Save Image'}</button>
-                                <button onClick={handleAddToCart} className="btn-primary flex items-center justify-center gap-2"><ShoppingCart className="w-5 h-5" /> Add to Cart</button>
+                            <div className="flex flex-col sm:flex-row gap-3 justify-center animate-slide-in-right" style={{ animationDelay: '200ms' }}>
+                                <button onClick={() => setCurrentStep('design')} className="btn-secondary flex items-center justify-center gap-2 hover:scale-105 transition-transform"><RotateCcw className="w-4 h-4" /> Edit Design</button>
+                                <button onClick={downloadDesign} disabled={isDownloading} className="btn-secondary flex items-center justify-center gap-2 hover:scale-105 transition-transform"><Download className="w-4 h-4" /> {isDownloading ? 'Saving...' : 'Save Image'}</button>
+                                <button onClick={handleAddToCart} className="btn-primary flex items-center justify-center gap-2 hover:scale-105 active:scale-95 transition-transform animate-pulse"><ShoppingCart className="w-5 h-5" /> Add to Cart</button>
                             </div>
-                            <button onClick={startNewDesign} className="mt-5 text-pink hover:underline text-sm block mx-auto">Start a New Design</button>
+                            <button onClick={startNewDesign} className="mt-5 text-pink hover:underline text-sm block mx-auto hover:scale-105 transition-transform">Start a New Design</button>
                         </div>
                     </div>
                 )}

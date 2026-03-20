@@ -222,12 +222,22 @@ export const db = {
       customize_page: any;
       navbar?: any;
     }) => {
-      console.log('DB: Saving site content...', Object.keys(content));
+      console.log('DB: Saving site content...', {
+        landing_page_sections: content.landing_page?.length,
+        navbar_fields: content.navbar ? Object.keys(content.navbar) : 'none',
+        global_fields: content.global_settings ? Object.keys(content.global_settings) : 'none',
+        first_section_type: content.landing_page?.[0]?.type,
+        first_section_styling: content.landing_page?.[0]?.styling,
+      });
       const { data, error } = await supabase
         .from('site_content')
         .upsert({
           id: 'current',
-          ...content,
+          landing_page: content.landing_page,
+          footer: content.footer,
+          global_settings: content.global_settings,
+          customize_page: content.customize_page,
+          navbar: content.navbar,
           updated_at: new Date().toISOString(),
         })
         .select();

@@ -1,5 +1,18 @@
 @import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&family=Nunito:wght@400;500;600;700&display=swap');
 
+/* Korean Font: 210 Claytoy (210 클레이토이) - Cute rounded display font */
+/* Note: This font requires proper licensing. Below is a placeholder import. */
+/* For production use, please host the font files yourself or use a licensed CDN */
+@font-face {
+  font-family: '210-Claytoy';
+  src: local('210-Claytoy'),
+       url('/fonts/210-Claytoy-Regular.woff2') format('woff2'),
+       url('/fonts/210-Claytoy-Regular.woff') format('woff');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -226,6 +239,41 @@
 
 .animation-delay-300 {
   animation-delay: 300ms;
+}
+
+/* Shake animation for heat press */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-2px); }
+  20%, 40%, 60%, 80% { transform: translateX(2px); }
+}
+
+.animate-shake {
+  animation: shake 0.5s ease-in-out;
+}
+
+/* Heat press animation */
+@keyframes heat-press {
+  0% { transform: scale(1); }
+  20% { transform: scale(0.98); }
+  40% { transform: scale(0.96); }
+  60% { transform: scale(0.95); }
+  80% { transform: scale(0.98); }
+  100% { transform: scale(1); }
+}
+
+.animate-heat-press {
+  animation: heat-press 4s ease-in-out;
+}
+
+/* Spin animation */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
 }
 
 /* Reduced motion support - accessibility */

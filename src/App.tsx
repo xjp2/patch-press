@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Palette, LogOut, Settings, User, ShoppingCart, X, Plus, Minus, Trash2, ChevronDown, ChevronUp, Package, Loader2 } from 'lucide-react';
+import { Palette, LogOut, Settings, User, ShoppingCart, X, Plus, Minus, Trash2, ChevronDown, ChevronUp, Package, Loader2, Menu } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import './App.css';
 import { AuthModal } from './AuthModal';
@@ -17,7 +17,7 @@ import { OrderConfirmation } from './components/OrderConfirmation';
 import { OrderDetailPage } from './components/OrderDetailPage';
 
 type AppView = 'landing' | 'customize' | 'order-detail' | 'admin';
-type AdminTab = 'products' | 'patches' | 'orders' | 'pages' | 'global';
+type AdminTab = 'products' | 'patches' | 'orders' | 'pages' | 'global' | 'tests';
 
 const initialPatches: Patch[] = [
   { id: '1', name: 'Fried Egg', category: 'food', image: '/patch-egg.png', price: 3, width: 80, height: 80 },
@@ -594,6 +594,288 @@ function UserOrdersModal({ show, onClose, userId, onViewOrder }: { show: boolean
     );
 }
 
+// Navbar Component
+interface NavbarProps {
+  navbar: import('./AdminPanel').NavbarContent;
+  global: import('./AdminPanel').GlobalSettings;
+  currentUser: UserType | null;
+  isAuthLoading: boolean;
+  totalItems: number;
+  onCartClick: () => void;
+  onAdminClick: () => void;
+  onUserOrdersClick: () => void;
+  onAuthClick: () => void;
+  onLogout: () => void;
+  onHomeClick: () => void;
+  onCurrencyChange: (currency: 'USD' | 'SGD' | 'EUR' | 'GBP' | 'JPY' | 'KRW', symbol: string) => void;
+  currency: 'USD' | 'SGD' | 'EUR' | 'GBP' | 'JPY' | 'KRW';
+}
+
+function Navbar({ navbar, global, currentUser, isAuthLoading, totalItems, onCartClick, onAdminClick, onUserOrdersClick, onAuthClick, onLogout, onHomeClick, onCurrencyChange, currency }: NavbarProps) {
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const getShadowClass = () => {
+    if (navbar.isTransparent && !scrolled) return '';
+    switch (navbar.shadow) {
+      case 'small': return 'shadow-sm';
+      case 'medium': return 'shadow-md';
+      case 'large': return 'shadow-lg';
+      default: return '';
+    }
+  };
+
+  const navStyle: React.CSSProperties = {
+    backgroundColor: navbar.isTransparent && !scrolled && !navbar.isFloating 
+      ? 'transparent' 
+      : (navbar.bgColor || '#ffffff'),
+    color: navbar.textColor || '#3a3530',
+    height: `${navbar.height || 64}px`,
+    position: navbar.position === 'static' ? 'relative' : 'sticky',
+    top: navbar.isFloating ? '12px' : 0,
+    borderRadius: navbar.isFloating ? `${navbar.borderRadius || 32}px` : 0,
+    margin: navbar.isFloating ? '0 auto' : 0,
+    maxWidth: navbar.isFloating ? 'calc(100% - 48px)' : undefined,
+    zIndex: 40,
+  };
+
+  const currencies: Record<string, string> = {
+    'USD': '$', 'SGD': 'S$', 'EUR': '€', 'GBP': '£', 'JPY': '¥', 'KRW': '₩'
+  };
+
+  return (
+    <nav 
+      className={`transition-all duration-300 ${getShadowClass()}`}
+      style={navStyle}
+      role="navigation"
+      aria-label="Main navigation"
+    >
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full">
+        <div className="flex items-center justify-between h-full">
+          {/* Logo */}
+          {navbar.showLogo !== false && (
+            <button 
+              onClick={onHomeClick}
+              className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+            >
+              {global.logoImage ? (
+                <img src={global.logoImage} alt="" className="h-8 w-auto object-contain" />
+              ) : (
+                <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: global.secondaryColor }}>
+                  <Palette className="w-5 h-5 text-white" />
+                </div>
+              )}
+              <span className="font-heading text-xl font-bold tracking-tight">{global.logoText}</span>
+            </button>
+          )}
+
+          {/* Desktop Links + Controls */}
+          <div className="hidden md:flex items-center gap-6">
+            {/* Navigation Links */}
+            {(navbar.links || []).map((link) => (
+              <button
+                key={link.id || link.url}
+                onClick={() => {
+                  if (link.url.startsWith('#')) {
+                    onHomeClick();
+                    setTimeout(() => {
+                      const el = document.querySelector(link.url);
+                      el?.scrollIntoView({ behavior: 'smooth' });
+                    }, 100);
+                  } else if (link.url.startsWith('http')) {
+                    window.open(link.url, '_blank');
+                  } else {
+                    window.location.href = link.url;
+                  }
+                }}
+                className="text-sm font-medium hover:opacity-70 transition-opacity"
+              >
+                {link.label}
+              </button>
+            ))}
+
+            {/* Currency Selector */}
+            <select
+              value={currency}
+              onChange={e => onCurrencyChange(e.target.value as any, currencies[e.target.value] || '$')}
+              className="px-2 py-1 rounded-lg border border-gray-200 bg-white text-sm font-medium focus:border-pink outline-none cursor-pointer"
+              aria-label="Select currency"
+            >
+              <option value="USD">USD ($)</option>
+              <option value="SGD">SGD (S$)</option>
+              <option value="EUR">EUR (€)</option>
+              <option value="GBP">GBP (£)</option>
+              <option value="JPY">JPY (¥)</option>
+              <option value="KRW">KRW (₩)</option>
+            </select>
+
+            {/* Auth Loading */}
+            {isAuthLoading ? (
+              <div className="w-5 h-5 border-2 border-pink/30 border-t-pink rounded-full animate-spin" />
+            ) : (
+              <>
+                {/* Admin Button */}
+                {currentUser?.role === 'admin' && (
+                  <button 
+                    onClick={onAdminClick}
+                    className="p-2 hover:bg-black/5 rounded-full transition-colors"
+                    title="Admin Panel"
+                    aria-label="Open admin panel"
+                  >
+                    <Settings className="w-5 h-5" />
+                  </button>
+                )}
+
+                {/* User Actions */}
+                {currentUser ? (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={onUserOrdersClick}
+                      className="p-2 hover:bg-black/5 rounded-full transition-colors"
+                      title="My Orders"
+                    >
+                      <Package className="w-5 h-5" />
+                    </button>
+                    <span className="text-sm font-semibold">{currentUser.name}</span>
+                    <button onClick={onLogout} className="p-2 hover:bg-black/5 rounded-full transition-colors" aria-label="Log out">
+                      <LogOut className="w-5 h-5" />
+                    </button>
+                  </div>
+                ) : (
+                  <button onClick={onAuthClick} className="p-2 hover:bg-black/5 rounded-full transition-colors" aria-label="Sign in">
+                    <User className="w-5 h-5" />
+                  </button>
+                )}
+              </>
+            )}
+
+            {/* Cart Button */}
+            {navbar.showCart !== false && (
+              <button 
+                onClick={onCartClick}
+                className="relative p-2 hover:bg-black/5 rounded-full transition-colors"
+                aria-label={`Shopping cart with ${totalItems} items`}
+              >
+                <ShoppingCart className="w-6 h-6" />
+                {totalItems > 0 && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-pink text-white text-xs rounded-full flex items-center justify-center font-bold animate-bounce">
+                    {totalItems}
+                  </span>
+                )}
+              </button>
+            )}
+          </div>
+
+          {/* Mobile Menu Button */}
+          <div className="flex items-center gap-2 md:hidden">
+            {navbar.showCart !== false && (
+              <button 
+                onClick={onCartClick}
+                className="relative p-2 hover:bg-black/5 rounded-full transition-colors"
+              >
+                <ShoppingCart className="w-6 h-6" />
+                {totalItems > 0 && (
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-pink text-white text-xs rounded-full flex items-center justify-center font-bold">
+                    {totalItems}
+                  </span>
+                )}
+              </button>
+            )}
+            <button 
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="p-2 hover:bg-black/5 rounded-full transition-colors"
+            >
+              {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile Menu */}
+      {isMenuOpen && (
+        <div 
+          className="md:hidden absolute top-full left-0 right-0 mt-2 mx-4 rounded-2xl shadow-xl overflow-hidden"
+          style={{ backgroundColor: navbar.bgColor || '#ffffff' }}
+        >
+          <div className="py-2">
+            {/* Mobile Links */}
+            {(navbar.links || []).map((link) => (
+              <button
+                key={link.id || link.url}
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  if (link.url.startsWith('#')) {
+                    onHomeClick();
+                    setTimeout(() => {
+                      const el = document.querySelector(link.url);
+                      el?.scrollIntoView({ behavior: 'smooth' });
+                    }, 100);
+                  } else if (link.url.startsWith('http')) {
+                    window.open(link.url, '_blank');
+                  } else {
+                    window.location.href = link.url;
+                  }
+                }}
+                className="w-full text-left px-6 py-3 text-sm font-medium hover:bg-black/5 transition-colors"
+              >
+                {link.label}
+              </button>
+            ))}
+            
+            {/* Mobile Currency */}
+            <div className="px-6 py-2 border-t border-gray-100">
+              <select
+                value={currency}
+                onChange={e => onCurrencyChange(e.target.value as any, currencies[e.target.value] || '$')}
+                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
+              >
+                <option value="USD">USD ($)</option>
+                <option value="SGD">SGD (S$)</option>
+                <option value="EUR">EUR (€)</option>
+                <option value="GBP">GBP (£)</option>
+                <option value="JPY">JPY (¥)</option>
+                <option value="KRW">KRW (₩)</option>
+              </select>
+            </div>
+
+            {/* Mobile Auth */}
+            <div className="border-t border-gray-100 px-6 py-2">
+              {currentUser ? (
+                <div className="flex items-center justify-between py-2">
+                  <span className="text-sm font-semibold">{currentUser.name}</span>
+                  <div className="flex gap-2">
+                    {currentUser.role === 'admin' && (
+                      <button onClick={() => { setIsMenuOpen(false); onAdminClick(); }} className="p-2 hover:bg-black/5 rounded-full">
+                        <Settings className="w-5 h-5" />
+                      </button>
+                    )}
+                    <button onClick={() => { setIsMenuOpen(false); onUserOrdersClick(); }} className="p-2 hover:bg-black/5 rounded-full">
+                      <Package className="w-5 h-5" />
+                    </button>
+                    <button onClick={() => { setIsMenuOpen(false); onLogout(); }} className="p-2 hover:bg-black/5 rounded-full">
+                      <LogOut className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button onClick={() => { setIsMenuOpen(false); onAuthClick(); }} className="flex items-center gap-2 py-2 text-sm font-medium">
+                  <User className="w-5 h-5" /> Sign In
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </nav>
+  );
+}
+
 // Main App Content
 function AppContent() {
   const [currentView, setCurrentView] = useState<AppView>('landing');
@@ -687,6 +969,24 @@ function AppContent() {
         'Remove patches by clicking the × button',
       ],
     },
+    navbar: {
+      links: [
+        { label: 'Home', url: '#home', id: 'nav-home' },
+        { label: 'Gallery', url: '#gallery', id: 'nav-gallery' },
+        { label: 'Design', url: '#design', id: 'nav-design' },
+      ],
+      showLogo: true,
+      showCart: true,
+      bgColor: '#ffffff',
+      textColor: '#3a3530',
+      isFloating: false,
+      isTransparent: false,
+      position: 'fixed',
+      height: 64,
+      borderRadius: 0,
+      shadow: 'small',
+      wrapperBgColor: 'transparent', // Default transparent background
+    },
   });
 
   // ============================================
@@ -708,8 +1008,10 @@ function AppContent() {
           setUsingStaticCms(hasStatic);
         }
 
-        // Load all CMS data (static or from Supabase)
-        const { siteContent: sc, products: prods, patches: patcs } = await preloadCmsData();
+        // Load all CMS data
+        // Always load from Supabase (forceRefresh=true) to see latest changes immediately
+        // This ensures admin panel changes appear on the live site without needing a rebuild
+        const { siteContent: sc, products: prods, patches: patcs } = await preloadCmsData(true);
 
         if (!mounted) return;
 
@@ -760,11 +1062,19 @@ function AppContent() {
             return section;
           });
 
+          // Check if data exists (not just specific fields) to handle partial updates
+          const hasLandingPage = sc.landing_page && Array.isArray(sc.landing_page) && sc.landing_page.length > 0;
+          const hasFooter = sc.footer && typeof sc.footer === 'object';
+          const hasGlobal = sc.global_settings && typeof sc.global_settings === 'object';
+          const hasCustomize = sc.customize_page && typeof sc.customize_page === 'object';
+          const hasNavbar = sc.navbar && typeof sc.navbar === 'object';
+          
           setSiteContent({
-            landingPage: landingPage.length ? landingPage : siteContent.landingPage,
-            footer: (sc.footer?.brandName ? sc.footer : siteContent.footer) as SiteContent['footer'],
-            global: (sc.global_settings?.logoText ? sc.global_settings : siteContent.global) as SiteContent['global'],
-            customizePage: (sc.customize_page?.step1Title ? sc.customize_page : siteContent.customizePage) as SiteContent['customizePage'],
+            landingPage: hasLandingPage ? landingPage : siteContent.landingPage,
+            footer: (hasFooter ? sc.footer : siteContent.footer) as SiteContent['footer'],
+            global: (hasGlobal ? sc.global_settings : siteContent.global) as SiteContent['global'],
+            customizePage: (hasCustomize ? sc.customize_page : siteContent.customizePage) as SiteContent['customizePage'],
+            navbar: (hasNavbar ? sc.navbar : siteContent.navbar) as SiteContent['navbar'],
           });
         }
 
@@ -938,17 +1248,18 @@ function AppContent() {
     setCurrentView('landing');
   };
 
-  // Refresh CMS data after admin updates (in dev mode, reloads from Supabase)
+  // Refresh CMS data after admin updates (force refresh from Supabase)
   const refreshCmsData = async () => {
-    console.log('🔄 Refreshing CMS data...');
+    console.log('🔄 Refreshing CMS data from Supabase...');
     setIsDataLoading(true);
     
     try {
       // Clear cache to force reload
       clearCmsCache();
       
-      // Reload all data
-      const { siteContent: sc, products: prods, patches: patcs } = await preloadCmsData();
+      // Reload all data with forceRefresh=true to bypass static files
+      // This ensures localhost and Vercel see the same content
+      const { siteContent: sc, products: prods, patches: patcs } = await preloadCmsData(true);
 
       // Update products
       if (prods && prods.length > 0) {
@@ -996,11 +1307,19 @@ function AppContent() {
           return section;
         });
 
+        // Check if data exists (not just specific fields) to handle partial updates
+        const hasLandingPage = sc.landing_page && Array.isArray(sc.landing_page) && sc.landing_page.length > 0;
+        const hasFooter = sc.footer && typeof sc.footer === 'object';
+        const hasGlobal = sc.global_settings && typeof sc.global_settings === 'object';
+        const hasCustomize = sc.customize_page && typeof sc.customize_page === 'object';
+        const hasNavbar = sc.navbar && typeof sc.navbar === 'object'; // Check if navbar exists (not just links)
+        
         setSiteContent({
-          landingPage: landingPage.length ? landingPage : siteContent.landingPage,
-          footer: (sc.footer?.brandName ? sc.footer : siteContent.footer) as SiteContent['footer'],
-          global: (sc.global_settings?.logoText ? sc.global_settings : siteContent.global) as SiteContent['global'],
-          customizePage: (sc.customize_page?.step1Title ? sc.customize_page : siteContent.customizePage) as SiteContent['customizePage'],
+          landingPage: hasLandingPage ? landingPage : siteContent.landingPage,
+          footer: (hasFooter ? sc.footer : siteContent.footer) as SiteContent['footer'],
+          global: (hasGlobal ? sc.global_settings : siteContent.global) as SiteContent['global'],
+          customizePage: (hasCustomize ? sc.customize_page : siteContent.customizePage) as SiteContent['customizePage'],
+          navbar: (hasNavbar ? sc.navbar : siteContent.navbar) as SiteContent['navbar'],
         });
       }
 
@@ -1014,104 +1333,50 @@ function AppContent() {
     }
   };
 
+  // Listen for CMS update events from admin panel
+  useEffect(() => {
+    const handleCmsUpdate = () => {
+      console.log('🔄 CMS update detected, refreshing...');
+      refreshCmsData();
+    };
+    
+    window.addEventListener('cms-updated', handleCmsUpdate);
+    return () => window.removeEventListener('cms-updated', handleCmsUpdate);
+  }, []);
+
   const startCustomizing = () => { setCurrentView('customize'); };
 
   return (
-    <div className="min-h-screen bg-cream font-body overflow-x-hidden">
+    <div 
+      className="min-h-screen bg-cream font-body overflow-x-hidden"
+      style={{
+        ['--font-heading' as any]: siteContent.global.headingFont === '210-Claytoy' 
+          ? "'210-Claytoy', 'Quicksand', sans-serif" 
+          : `'${siteContent.global.headingFont || 'Outfit'}', 'Quicksand', sans-serif`,
+        ['--font-body' as any]: `'${siteContent.global.bodyFont || 'Inter'}', 'Nunito', sans-serif`,
+      }}
+    >
       {/* Context7 Best Practice: Skip link for keyboard accessibility */}
       <a href="#main-content" className="skip-link">
         Skip to main content
       </a>
       
-      <nav className="sticky top-0 z-40 bg-cream/90 backdrop-blur-md" role="navigation" aria-label="Main navigation">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-2 cursor-pointer" onClick={() => setCurrentView('landing')}>
-              {siteContent.global.logoImage ? (
-                <img src={siteContent.global.logoImage} alt="Logo" className="h-10 w-auto object-contain" />
-              ) : (
-                <div className="w-10 h-10 bg-pink rounded-full flex items-center justify-center">
-                  <Palette className="w-5 h-5 text-white" />
-                </div>
-              )}
-              <span className="font-heading text-xl font-bold text-text-dark">{siteContent.global.logoText || 'Patchuu'}</span>
-            </div>
-            <div className="flex items-center gap-3">
-              {/* Currency Selector */}
-              <select
-                value={siteContent.global.currency || 'USD'}
-                onChange={e => {
-                  const currency = e.target.value;
-                  const symbols: Record<string, string> = {
-                    'USD': '$', 'SGD': 'S$', 'EUR': '€', 'GBP': '£', 'JPY': '¥', 'KRW': '₩'
-                  };
-                  setSiteContent({
-                    ...siteContent,
-                    global: { ...siteContent.global, currency: currency as any, currencySymbol: symbols[currency] || '$' }
-                  });
-                }}
-                className="hidden sm:block px-2 py-1 rounded-lg border border-gray-200 bg-white text-sm font-medium focus:border-pink outline-none cursor-pointer"
-                aria-label="Select currency"
-              >
-                <option value="USD">USD ($)</option>
-                <option value="SGD">SGD (S$)</option>
-                <option value="EUR">EUR (€)</option>
-                <option value="GBP">GBP (£)</option>
-                <option value="JPY">JPY (¥)</option>
-                <option value="KRW">KRW (₩)</option>
-              </select>
-
-              {/* Show loading spinner while auth is initializing */}
-              {isAuthLoading ? (
-                <div className="w-5 h-5 border-2 border-pink/30 border-t-pink rounded-full animate-spin" />
-              ) : (
-                <>
-                  {/* Admin button - show immediately if role is admin */}
-                  {currentUser?.role === 'admin' && (
-                    <button 
-                      onClick={() => setCurrentView('admin')} 
-                      className="p-2 hover:bg-pink/20 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink focus-visible:ring-offset-2"
-                      title="Admin Panel"
-                      aria-label="Open admin panel"
-                    >
-                      <Settings className="w-5 h-5 text-text-dark" aria-hidden="true" />
-                    </button>
-                  )}
-                  {currentUser ? (
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setShowUserOrders(true)}
-                        className="p-2 hover:bg-pink/20 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink focus-visible:ring-offset-2"
-                        title="My Orders"
-                        aria-label="My Orders"
-                      >
-                        <Package className="w-5 h-5 text-text-dark" aria-hidden="true" />
-                      </button>
-                      <span className="text-sm font-semibold hidden sm:block">{currentUser.name}</span>
-                      <button onClick={handleLogout} className="p-2 hover:bg-pink/20 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink focus-visible:ring-offset-2" aria-label="Log out">
-                        <LogOut className="w-5 h-5 text-text-dark" aria-hidden="true" />
-                      </button>
-                    </div>
-                  ) : (
-                    <button onClick={() => setShowAuth(true)} className="p-2 hover:bg-pink/20 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink focus-visible:ring-offset-2" aria-label="Sign in">
-                      <User className="w-5 h-5 text-text-dark" aria-hidden="true" />
-                    </button>
-                  )}
-                </>
-              )}
-              {/* Context7 Best Practice: aria-label for icon buttons */}
-              <button
-                onClick={() => setIsCartOpen(true)}
-                className="relative p-2 hover:bg-pink/20 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink focus-visible:ring-offset-2"
-                aria-label={`Shopping cart with ${totalItems} items`}
-              >
-                <ShoppingCart className="w-6 h-6 text-text-dark" aria-hidden="true" />
-                {totalItems > 0 && <span className="absolute -top-1 -right-1 w-5 h-5 bg-pink text-white text-xs rounded-full flex items-center justify-center font-bold animate-bounce" aria-hidden="true">{totalItems}</span>}
-              </button>
-            </div>
-          </div>
-        </div>
-      </nav>
+      {/* Customizable Navbar */}
+      <Navbar 
+        navbar={siteContent.navbar}
+        global={siteContent.global}
+        currentUser={currentUser}
+        isAuthLoading={isAuthLoading}
+        totalItems={totalItems}
+        onCartClick={() => setIsCartOpen(true)}
+        onAdminClick={() => setCurrentView('admin')}
+        onUserOrdersClick={() => setShowUserOrders(true)}
+        onAuthClick={() => setShowAuth(true)}
+        onLogout={handleLogout}
+        onHomeClick={() => setCurrentView('landing')}
+        onCurrencyChange={(currency, symbol) => setSiteContent({ ...siteContent, global: { ...siteContent.global, currency: currency as any, currencySymbol: symbol } })}
+        currency={siteContent.global.currency || 'USD'}
+      />
 
       <AuthModal
         showAuth={showAuth}
@@ -1149,9 +1414,20 @@ function AppContent() {
       )}
 
       {/* Context7 Best Practice: Main content landmark with id for skip link */}
-      <main id="main-content" className="outline-none">
+      <main 
+        id="main-content" 
+        className="outline-none"
+        style={{
+          // Add padding-top when navbar is sticky/fixed to prevent content from going behind it
+          paddingTop: siteContent.navbar?.position !== 'static' 
+            ? `${(siteContent.navbar?.height || 64) + (siteContent.navbar?.isFloating ? 12 : 0)}px` 
+            : 0
+        }}
+      >
         {currentView === 'landing' && (
-          <LandingPage notices={notices} startCustomizing={startCustomizing} siteContent={siteContent} />
+          <div style={{ backgroundColor: siteContent.navbar?.wrapperBgColor || 'transparent' }}>
+            <LandingPage notices={notices} startCustomizing={startCustomizing} siteContent={siteContent} />
+          </div>
         )}
         {currentView === 'customize' && (
           <CustomizePage

@@ -5,12 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "npm run export-cms && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "export-cms": "tsx scripts/export-cms.ts",
     "build:prod": "npm run export-cms && npm run build",
-    "bulk-upload": "tsx scripts/bulk-upload-products.ts"
+    "bulk-upload": "tsx scripts/bulk-upload-products.ts",
+    "export-and-deploy": "tsx scripts/trigger-vercel-deploy.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
