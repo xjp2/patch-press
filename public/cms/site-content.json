@@ -2,59 +2,41 @@
   "id": "current",
   "landing_page": [
     {
-      "id": "acc3ce6c-c9a2-42e7-9a9f-e535e17d9d6d",
-      "type": "imageBanner",
+      "id": "bc082ccf-98e8-498f-9762-f2914bcb2b5f",
+      "type": "patchuuHero",
       "content": {
-        "alt": "",
-        "image": "https://fyadtnkbayeafjmdvymx.supabase.co/storage/v1/object/public/assets/uploads/21ae9723-d103-40a5-bcb7-96fdf5211d1b-Design_your.png",
-        "caption": "",
-        "imageFit": "contain",
-        "fullWidth": true,
-        "isGallery": false,
-        "maxHeight": 0,
-        "buttonText": "Start Designing!",
-        "showButton": true,
-        "buttonColor": "#fff8e7",
-        "buttonStyle": "solid",
-        "isClickable": false,
-        "buttonAction": "customize",
-        "galleryItems": [],
-        "buttonTextColor": "#000000",
-        "buttonVerticalPosition": 141
+        "ctaText": "Start Designing",
+        "logoImage": "/hero/patchuu-logo.png",
+        "heartImage": "/hero/blue-heart.png",
+        "pouchImage": "/hero/pouch.png",
+        "flowerImage": "/hero/flower.png",
+        "catLeftImage": "/hero/cat-left.png",
+        "toteBagImage": "/hero/tote-bag.png",
+        "catRightImage": "/hero/cat-right.png",
+        "headlineImage": "/hero/headline-text.png",
+        "backgroundColor": "#ffffff",
+        "strawberryImage": "/hero/strawberry.png",
+        "descriptionImage": "/hero/description-text.png",
+        "keychainBlueImage": "/hero/keychain-blue.png",
+        "keychainWhiteImage": "/hero/keychain-white.png"
       },
       "visible": true
     },
     {
-      "id": "sec-hero",
+      "id": "540c18b2-c02d-4251-8a58-bc44a84473f5",
       "type": "hero",
       "content": {
         "slides": [
           {
-            "id": "2e4eb04f-01a3-40c1-bb0e-c7e34ca636bc",
-            "image": "https://fyadtnkbayeafjmdvymx.supabase.co/storage/v1/object/public/assets/uploads/bb9ffd8b-2deb-4b8b-9cbb-2c8c21f7b60b-Screenshot_2025_09_28_160051.png",
-            "title": "New Summer\nCollection",
-            "ctaLink": "neural.xjp2automation.online",
-            "ctaText": "hello world",
-            "subtitle": "Check out our new fruit-themed patches — strawberries, watermelons, and more!",
-            "ctaAction": "link",
+            "id": "34891859-1939-4b70-99a8-784f3f8840f1",
+            "image": "https://fyadtnkbayeafjmdvymx.supabase.co/storage/v1/object/public/assets/uploads/16d495c6-b23d-44dd-a4ed-2b2055d2277f-lushgreenbg.png",
+            "title": "New Slide",
+            "subtitle": "Your subtitle here",
+            "ctaAction": "customize",
             "isFullWidth": true
-          },
-          {
-            "id": "57c143ae-d8d1-4649-b96a-f770251a6ed9",
-            "image": "https://fyadtnkbayeafjmdvymx.supabase.co/storage/v1/object/public/assets/uploads/555d6a4e-168a-431a-af56-10a953b2d047-Screenshot_2025_10_31_150612.png",
-            "title": "Design Your\nOwn Style",
-            "subtitle": "Pick your item, choose your patches, and make it uniquely yours."
-          },
-          {
-            "id": "67f1da02-6e9c-422f-bde8-819fe2819e9c",
-            "image": "",
-            "title": "testingslide",
-            "linkUrl": "mission.xjp2automation.online",
-            "subtitle": "5"
           }
         ],
-        "ctaText": "Start Designing",
-        "isFullWidth": false
+        "ctaText": "Get Started"
       },
       "visible": true
     },
@@ -156,6 +138,18 @@
         "sectionTitle": "What Our Customers Say"
       },
       "visible": true
+    },
+    {
+      "id": "ec10fa0d-dd6e-4cc4-9f64-ab41d1e1901b",
+      "type": "transition",
+      "content": {
+        "shape": "wave",
+        "height": 80,
+        "fillColor": "#81c784",
+        "flipVertical": false,
+        "flipHorizontal": false
+      },
+      "visible": true
     }
   ],
   "footer": {
@@ -186,8 +180,9 @@
       "Remove patches by clicking the × button"
     ]
   },
-  "updated_at": "2026-03-20T21:32:17.194+00:00",
+  "updated_at": "2026-05-13T15:14:55.586+00:00",
   "navbar": {
+    "bgColor": "#ffffff",
     "position": "static"
   }
 }
