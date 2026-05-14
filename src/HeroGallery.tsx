@@ -29,7 +29,7 @@ export function HeroGallery({ notices }: HeroGalleryProps) {
         id: n.id,
         title: n.title,
         content: n.content,
-        image: n.image || '/products/tote-bag.png', // Fallback
+        image: n.image || '/tote-bag.png', // Fallback
         type: n.type,
         isDefault: false
     }));
@@ -42,7 +42,7 @@ export function HeroGallery({ notices }: HeroGalleryProps) {
     }
 
     return (
-        <div className="relative overflow-hidden bg-cream h-[80vh] min-h-[600px] group">
+        <div className="relative overflow-hidden bg-paper h-[80vh] min-h-[600px] group">
             <div className="w-full h-full" ref={emblaRef}>
                 <div className="flex h-full">
                     {slides.map((slide) => (
@@ -61,7 +61,7 @@ export function HeroGallery({ notices }: HeroGalleryProps) {
                             <div className="absolute inset-0 flex flex-col justify-end pb-24 px-8 sm:px-16 max-w-7xl mx-auto w-full">
                                 <div className="z-10 text-left animate-slide-up">
                                     <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-md rounded-full mb-6 border border-white/20">
-                                        <Sparkles className="w-4 h-4 text-pink-300" />
+                                        <Sparkles className="w-4 h-4 text-craft-mint/70" />
                                         <span className="text-sm font-semibold text-white tracking-wide uppercase">{slide.type === 'new-product' ? 'New Arrival' : slide.type === 'promotion' ? 'Special Offer' : 'Announcement'}</span>
                                     </div>
                                     <h1 className="font-heading text-5xl sm:text-7xl font-bold text-white mb-6 leading-tight drop-shadow-lg max-w-4xl">
@@ -95,7 +95,7 @@ export function HeroGallery({ notices }: HeroGalleryProps) {
             <style>{`
                 .btn-primary-white {
                     background-color: white;
-                    color: #ec4899;
+                    color: #81c784;
                     font-weight: bold;
                     border-radius: 9999px;
                 }

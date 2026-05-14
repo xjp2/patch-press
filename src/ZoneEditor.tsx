@@ -295,28 +295,28 @@ export function ZoneEditor({ image, initialZone, title, onSave, onCancel }: Zone
 
     return (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl p-4 w-full max-w-4xl max-h-[90vh] flex flex-col">
+            <div className="bg-cardstock rounded-2xl p-4 w-full max-w-4xl max-h-[90vh] flex flex-col">
                 <div className="flex justify-between items-center mb-4">
                     <h3 className="font-heading text-lg font-bold flex items-center gap-2">
                         <MousePointer2 className="w-5 h-5" /> {title || "Define Placement Zone"}
                     </h3>
 
-                    <div className="flex bg-gray-100 rounded-lg p-1">
+                    <div className="flex bg-paper-ruled rounded-lg p-1">
                         <button
                             onClick={() => setZoneType('rectangle')}
-                            className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm font-semibold transition-all ${zoneType === 'rectangle' ? 'bg-white shadow-sm text-pink' : 'text-gray-500 hover:text-gray-700'}`}
+                            className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm font-semibold transition-all ${zoneType === 'rectangle' ? 'bg-cardstock shadow-sm text-craft-mint' : 'text-ink-muted hover:text-ink/70'}`}
                         >
                             <BoxSelect className="w-4 h-4" /> Rectangle
                         </button>
                         <button
                             onClick={() => setZoneType('polygon')}
-                            className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm font-semibold transition-all ${zoneType === 'polygon' ? 'bg-white shadow-sm text-pink' : 'text-gray-500 hover:text-gray-700'}`}
+                            className={`flex items-center gap-2 px-3 py-1 rounded-md text-sm font-semibold transition-all ${zoneType === 'polygon' ? 'bg-cardstock shadow-sm text-craft-mint' : 'text-ink-muted hover:text-ink/70'}`}
                         >
                             <PenTool className="w-4 h-4" /> Polygon
                         </button>
                         <button
                             onClick={handleAutoTrace}
-                            className="flex items-center gap-2 px-3 py-1 rounded-md text-sm font-semibold text-gray-500 hover:text-gray-700 hover:bg-white transition-all ml-1"
+                            className="flex items-center gap-2 px-3 py-1 rounded-md text-sm font-semibold text-ink-muted hover:text-ink/70 hover:bg-cardstock transition-all ml-1"
                             title="Auto-detect clean edges"
                         >
                             <Sparkles className="w-4 h-4 text-purple-500" /> Auto Trace
@@ -324,7 +324,7 @@ export function ZoneEditor({ image, initialZone, title, onSave, onCancel }: Zone
                     </div>
 
                     <div className="flex gap-2">
-                        <button onClick={onCancel} className="p-2 hover:bg-gray-100 rounded-full text-gray-500">
+                        <button onClick={onCancel} className="p-2 hover:bg-paper-ruled rounded-full text-ink-muted">
                             <X className="w-5 h-5" />
                         </button>
                         <button onClick={handleSave} className="btn-primary py-2 px-4 flex items-center gap-2">
@@ -334,7 +334,7 @@ export function ZoneEditor({ image, initialZone, title, onSave, onCancel }: Zone
                 </div>
 
                 <div
-                    className="flex-1 relative bg-gray-100 rounded-xl overflow-hidden flex items-center justify-center select-none cursor-crosshair"
+                    className="flex-1 relative bg-paper-ruled rounded-xl overflow-hidden flex items-center justify-center select-none cursor-crosshair"
                     ref={containerRef}
                     onClick={handleContainerClick}
                 >
@@ -360,7 +360,7 @@ export function ZoneEditor({ image, initialZone, title, onSave, onCancel }: Zone
                                     {['nw', 'ne', 'sw', 'se'].map((h) => (
                                         <div
                                             key={h}
-                                            className={`absolute w-3 h-3 bg-white border-2 border-green-500 rounded-full cursor-${h}-resize z-10`}
+                                            className={`absolute w-3 h-3 bg-cardstock border-2 border-green-500 rounded-full cursor-${h}-resize z-10`}
                                             style={{
                                                 top: h.includes('n') ? '-6px' : 'auto',
                                                 bottom: h.includes('s') ? '-6px' : 'auto',
@@ -395,7 +395,7 @@ export function ZoneEditor({ image, initialZone, title, onSave, onCancel }: Zone
                                         <path
                                             d={polyPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ') + (polyPoints.length > 2 ? ' Z' : '')}
                                             fill="none"
-                                            stroke="#4ade80"
+                                            stroke="#81c784"
                                             strokeWidth="0.5"
                                             vectorEffect="non-scaling-stroke"
                                         />
@@ -406,7 +406,7 @@ export function ZoneEditor({ image, initialZone, title, onSave, onCancel }: Zone
                                 {polyPoints.map((p, i) => (
                                     <div
                                         key={i}
-                                        className="control-point absolute w-3 h-3 bg-white border-2 border-green-500 rounded-full cursor-move pointer-events-auto hover:scale-125 transition-transform"
+                                        className="control-point absolute w-3 h-3 bg-cardstock border-2 border-green-500 rounded-full cursor-move pointer-events-auto hover:scale-125 transition-transform"
                                         style={{ left: `calc(${p.x}% - 6px)`, top: `calc(${p.y}% - 6px)` }}
                                         onMouseDown={(e) => handleMouseDown(e, i)}
                                         onDoubleClick={(e) => {
@@ -427,7 +427,7 @@ export function ZoneEditor({ image, initialZone, title, onSave, onCancel }: Zone
                         )}
                     </div>
                 </div>
-                <div className="flex justify-between items-center mt-2 px-2 text-sm text-gray-500">
+                <div className="flex justify-between items-center mt-2 px-2 text-sm text-ink-muted">
                     <p>{zoneType === 'rectangle' ? 'Drag box to move, drag corners to resize.' : 'Click to add points, drag points to move, double-click a point to remove.'}</p>
                     {zoneType === 'polygon' && (
                         <button onClick={() => setPolyPoints([])} className="text-red-500 flex items-center gap-1 hover:underline text-xs"><Trash2 className="w-3 h-3" /> Clear Points</button>

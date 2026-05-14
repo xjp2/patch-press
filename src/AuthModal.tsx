@@ -125,17 +125,17 @@ export function AuthModal({ showAuth, setShowAuth, authView, setAuthView }: Auth
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-3xl p-8 w-full max-w-md mx-4 relative">
+      <div className="bg-cardstock rounded-3xl p-8 w-full max-w-md mx-4 relative text-ink">
         <button
           type="button"
           onClick={() => setShowAuth(false)}
-          className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded-full"
+          className="absolute top-4 right-4 p-2 hover:bg-paper-ruled rounded-full"
         >
           <X className="w-5 h-5" />
         </button>
         <div className="text-center mb-6">
-          <div className="w-16 h-16 bg-pink/20 rounded-full flex items-center justify-center mx-auto mb-4">
-            <User className="w-8 h-8 text-pink" />
+          <div className="w-16 h-16 bg-craft-mint/20 rounded-full flex items-center justify-center mx-auto mb-4">
+            <User className="w-8 h-8 text-craft-mint" />
           </div>
           <h2 className="font-heading text-2xl font-bold">
             {authView === 'login' ? 'Welcome Back' : authView === 'register' ? 'Create Account' : 'Reset Password'}
@@ -164,10 +164,10 @@ export function AuthModal({ showAuth, setShowAuth, authView, setAuthView }: Auth
 
             <div className="relative my-6">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-200"></div>
+                <div className="w-full border-t border-ink/10"></div>
               </div>
               <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-gray-500">Or continue with email</span>
+                <span className="px-2 bg-cardstock text-ink-muted">Or continue with email</span>
               </div>
             </div>
           </>
@@ -181,7 +181,7 @@ export function AuthModal({ showAuth, setShowAuth, authView, setAuthView }: Auth
                 type="text"
                 value={authName}
                 onChange={(e) => setAuthName(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-pink focus:ring-2 focus:ring-pink/20 outline-none"
+                className="w-full px-4 py-3 rounded-xl border border-ink/10 focus:border-craft-mint focus:ring-2 focus:ring-craft-mint/20 outline-none bg-paper-ruled text-ink placeholder:text-ink/40"
                 placeholder="Your name"
                 required={authView === 'register'}
               />
@@ -194,7 +194,7 @@ export function AuthModal({ showAuth, setShowAuth, authView, setAuthView }: Auth
               type="email"
               value={authEmail}
               onChange={(e) => setAuthEmail(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-pink focus:ring-2 focus:ring-pink/20 outline-none"
+              className="w-full px-4 py-3 rounded-xl border border-ink/10 focus:border-craft-mint focus:ring-2 focus:ring-craft-mint/20 outline-none bg-paper-ruled text-ink placeholder:text-ink/40"
               placeholder="you@example.com"
               required
             />
@@ -208,7 +208,7 @@ export function AuthModal({ showAuth, setShowAuth, authView, setAuthView }: Auth
                   type={showPassword ? 'text' : 'password'}
                   value={authPassword}
                   onChange={(e) => setAuthPassword(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-pink focus:ring-2 focus:ring-pink/20 outline-none"
+                  className="w-full px-4 py-3 rounded-xl border border-ink/10 focus:border-craft-mint focus:ring-2 focus:ring-craft-mint/20 outline-none bg-paper-ruled text-ink placeholder:text-ink/40"
                   placeholder="••••••••"
                   required
                 />
@@ -218,7 +218,7 @@ export function AuthModal({ showAuth, setShowAuth, authView, setAuthView }: Auth
                   className="absolute right-3 top-1/2 -translate-y-1/2 p-1"
                   tabIndex={-1}
                 >
-                  {showPassword ? <EyeOff className="w-4 h-4 text-gray-400" /> : <Eye className="w-4 h-4 text-gray-400" />}
+                  {showPassword ? <EyeOff className="w-4 h-4 text-ink-muted" /> : <Eye className="w-4 h-4 text-ink-muted" />}
                 </button>
               </div>
             </div>
@@ -236,19 +236,19 @@ export function AuthModal({ showAuth, setShowAuth, authView, setAuthView }: Auth
         <div className="mt-6 text-center text-sm">
           {authView === 'login' ? (
             <>
-              <p className="text-gray-500 mb-2">Don't have an account? <button onClick={() => setAuthView('register')} className="text-pink font-semibold">Sign up</button></p>
-              <button onClick={() => setAuthView('forgot')} className="text-gray-400">Forgot password?</button>
+              <p className="text-ink-muted mb-2">Don't have an account? <button onClick={() => setAuthView('register')} className="text-craft-mint font-semibold">Sign up</button></p>
+              <button onClick={() => setAuthView('forgot')} className="text-ink-muted">Forgot password?</button>
             </>
           ) : authView === 'register' ? (
-            <p className="text-gray-500">Already have an account? <button onClick={() => setAuthView('login')} className="text-pink font-semibold">Sign in</button></p>
+            <p className="text-ink-muted">Already have an account? <button onClick={() => setAuthView('login')} className="text-craft-mint font-semibold">Sign in</button></p>
           ) : (
-            <p className="text-gray-500">Remember your password? <button onClick={() => setAuthView('login')} className="text-pink font-semibold">Sign in</button></p>
+            <p className="text-ink-muted">Remember your password? <button onClick={() => setAuthView('login')} className="text-craft-mint font-semibold">Sign in</button></p>
           )}
         </div>
 
-        <div className="mt-4 p-3 bg-cream rounded-xl text-xs text-gray-500">
-          <p className="font-semibold mb-1">Demo Credentials:</p>
-          <p>Admin: admin@patchpress.com / admin123</p>
+        <div className="mt-4 p-3 bg-paper-ruled rounded-xl text-xs text-ink-muted">
+          <p className="font-semibold mb-1 text-ink/70">Need help?</p>
+          <p>Contact your site administrator for access.</p>
         </div>
       </div>
     </div>

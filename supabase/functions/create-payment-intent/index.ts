@@ -72,14 +72,18 @@ serve(async (req) => {
       }
     }
 
+    // Only include timestamp when NOT using idempotency — otherwise Stripe
+    // sees the same key with different metadata and rejects the request.
+    const metadata: Record<string, string> = { user_id: user_id || '' };
+    if (!idempotency_key) {
+      metadata.created_at = new Date().toISOString();
+    }
+
     const paymentIntentParams: any = {
       amount,
       currency: currency.toLowerCase(),
       automatic_payment_methods: { enabled: true },
-      metadata: { 
-        user_id: user_id || '',
-        created_at: new Date().toISOString(),
-      },
+      metadata,
     };
 
     if (customer_email) paymentIntentParams.receipt_email = customer_email;

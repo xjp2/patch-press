@@ -7,13 +7,13 @@ html {
 
 /* Selection color */
 ::selection {
-  background-color: rgba(255, 182, 193, 0.3);
-  color: #4A4A4A;
+  background-color: rgba(129, 199, 132, 0.3);
+  color: #2d2d2d;
 }
 
 /* Focus styles */
 *:focus-visible {
-  outline: 2px solid #FFB6C1;
+  outline: 2.5px solid #2d2d2d;
   outline-offset: 2px;
 }
 
@@ -34,11 +34,62 @@ html {
   .design-canvas {
     min-height: 300px;
   }
-  
+
   .patch-placed img {
     width: 48px !important;
     height: 48px !important;
   }
+}
+
+/* ── Design Effects Animations ── */
+
+@keyframes particle-burst {
+  0% { transform: translate(0, 0) scale(1); opacity: 1; }
+  100% { transform: translate(var(--tx, 30px), var(--ty, -30px)) scale(0); opacity: 0; }
+}
+
+@keyframes curtain-reveal {
+  0% { clip-path: circle(0% at 50% 50%); }
+  100% { clip-path: circle(150% at 50% 50%); }
+}
+
+@keyframes gentle-float {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-8px) rotate(1deg); }
+}
+
+@keyframes orbit {
+  0% { transform: rotate(0deg) translateX(12px) rotate(0deg); }
+  100% { transform: rotate(360deg) translateX(12px) rotate(-360deg); }
+}
+
+@keyframes float-decoration {
+  0%, 100% { transform: translateY(0) rotate(0deg); opacity: 0.08; }
+  33% { transform: translateY(-12px) rotate(5deg); opacity: 0.15; }
+  66% { transform: translateY(-6px) rotate(-3deg); opacity: 0.1; }
+}
+
+@keyframes fresh-patch-pulse {
+  0% { transform: scale(1.3); opacity: 0.8; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+@keyframes selected-ring-pulse {
+  0% { transform: scale(1); opacity: 0.6; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+
+@keyframes fly-in-elastic {
+  0% { transform: scale(0) rotate(-15deg); opacity: 0; }
+  60% { transform: scale(1.08) rotate(2deg); opacity: 1; }
+  80% { transform: scale(0.98) rotate(-1deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+@keyframes sparkle-pop {
+  0% { transform: scale(0) rotate(-45deg); opacity: 0; }
+  50% { transform: scale(1.2) rotate(10deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
 }
 
 /* Reduce motion for accessibility */
@@ -70,4 +121,12 @@ html {
 .scroll-reveal-scale.scroll-revealed {
   opacity: 1;
   transform: scale(1);
+}
+
+/* Grid pattern for design canvas */
+.grid-pattern {
+  background-image:
+    linear-gradient(rgba(45,45,45,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(45,45,45,0.04) 1px, transparent 1px);
+  background-size: 20px 20px;
 }

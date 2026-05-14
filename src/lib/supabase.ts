@@ -279,19 +279,45 @@ export const db = {
       user_id?: string;
     }) => {
       console.log('DB: Creating order...', order.order_number);
+      
+      // Create the main order
       const { data, error } = await supabase
         .from('orders')
         .insert({
           ...order,
-          status: 'pending',  // Webhook will validate and mark as 'paid'
+          status: 'pending',
           payment_verified: false,
           fulfillment_status: 'pending',
         })
         .select()
         .single();
+      
       if (error) {
         console.error('DB Error (orders.create):', error);
+        return { data, error };
       }
+      
+      // Create order items for each cart item
+      if (data && order.items && order.items.length > 0) {
+        const orderItems = order.items.map((item: any) => ({
+          order_id: data.id,
+          product_id: item.productId || item.product_id,
+          patches: [...(item.frontPatches || []), ...(item.backPatches || [])].map((p: any) => p.id),
+          design_image_url: item.design_image_url || item.productImage,
+          quantity: item.quantity || 1,
+          unit_price: item.basePrice || item.unit_price || 0,
+          total_price: item.totalPrice || item.total_price || 0,
+        }));
+        
+        const { error: itemsError } = await supabase
+          .from('order_items')
+          .insert(orderItems);
+        
+        if (itemsError) {
+          console.error('DB Error (order_items.create):', itemsError);
+        }
+      }
+      
       return { data, error };
     },
     updateStatus: async (id: string, status: string) => {
@@ -305,6 +331,314 @@ export const db = {
       return { data, error };
     },
   },
+
+  // ──────────────── Inventory Management ────────────────
+  inventory: {
+    /**
+     * Check if products and patches have sufficient quantity
+     * Returns array of items with insufficient stock
+     */
+    checkAvailability: async (items: Array<{
+      productId: string;
+      patchIds?: string[];
+      quantity?: number;
+    }>) => {
+      console.log('DB: Checking inventory availability...', items.length);
+      const insufficient: Array<{ id: string; name: string; requested: number; available: number; type: 'product' | 'patch' }> = [];
+      
+      for (const item of items) {
+        // Check product quantity
+        const { data: product, error: productError } = await supabase
+          .from('products')
+          .select('id, name, quantity')
+          .eq('id', item.productId)
+          .single();
+        
+        if (productError || !product) {
+          insufficient.push({ id: item.productId, name: 'Unknown Product', requested: item.quantity || 1, available: 0, type: 'product' });
+          continue;
+        }
+        
+        if ((product.quantity ?? 0) < (item.quantity || 1)) {
+          insufficient.push({ id: product.id, name: product.name, requested: item.quantity || 1, available: product.quantity ?? 0, type: 'product' });
+        }
+        
+        // Check patches quantities
+        if (item.patchIds && item.patchIds.length > 0) {
+          for (const patchId of item.patchIds) {
+            const { data: patch, error: patchError } = await supabase
+              .from('patches')
+              .select('id, name, quantity')
+              .eq('id', patchId)
+              .single();
+            
+            if (patchError || !patch) {
+              insufficient.push({ id: patchId, name: 'Unknown Patch', requested: 1, available: 0, type: 'patch' });
+              continue;
+            }
+            
+            if ((patch.quantity ?? 0) < 1) {
+              insufficient.push({ id: patch.id, name: patch.name, requested: 1, available: patch.quantity ?? 0, type: 'patch' });
+            }
+          }
+        }
+      }
+      
+      return { insufficient, available: insufficient.length === 0 };
+    },
+
+    /**
+     * Deduct quantities after successful order
+     * Call this after payment is confirmed
+     */
+    deductFromOrder: async (orderItems: Array<{
+      productId: string;
+      patchIds?: string[];
+      quantity?: number;
+    }>, orderId?: string) => {
+      console.log('DB: Deducting inventory from order...', orderItems.length);
+      const errors: string[] = [];
+      
+      for (const item of orderItems) {
+        // Deduct product quantity
+        const { data: product } = await supabase
+          .from('products')
+          .select('id, quantity, name')
+          .eq('id', item.productId)
+          .single();
+        
+        if (product) {
+          const previousQuantity = product.quantity ?? 0;
+          const newQuantity = Math.max(0, previousQuantity - (item.quantity || 1));
+          
+          const { error } = await supabase
+            .from('products')
+            .update({ quantity: newQuantity, updated_at: new Date().toISOString() })
+            .eq('id', item.productId);
+          
+          if (error) {
+            console.error(`Failed to deduct product ${product.name}:`, error);
+            errors.push(`Failed to update product: ${product.name}`);
+          } else {
+            // Log the inventory change
+            await supabase.from('inventory_logs').insert({
+              product_id: item.productId,
+              item_type: 'product',
+              change_amount: -(item.quantity || 1),
+              previous_quantity: previousQuantity,
+              new_quantity: newQuantity,
+              reason: orderId ? `Order ${orderId}` : 'Order deduction',
+              order_id: orderId,
+            });
+          }
+        }
+        
+        // Deduct patch quantities - group by patch ID to avoid duplicate log entries
+        if (item.patchIds && item.patchIds.length > 0) {
+          // Count occurrences of each patch ID
+          const patchCounts = item.patchIds.reduce((acc, patchId) => {
+            acc[patchId] = (acc[patchId] || 0) + 1;
+            return acc;
+          }, {} as Record<string, number>);
+          
+          // Process each unique patch with its total count
+          for (const [patchId, count] of Object.entries(patchCounts)) {
+            const { data: patch } = await supabase
+              .from('patches')
+              .select('id, quantity, name')
+              .eq('id', patchId)
+              .single();
+            
+            if (patch) {
+              const previousQuantity = patch.quantity ?? 0;
+              const newQuantity = Math.max(0, previousQuantity - count);
+              
+              const { error } = await supabase
+                .from('patches')
+                .update({ quantity: newQuantity, updated_at: new Date().toISOString() })
+                .eq('id', patchId);
+              
+              if (error) {
+                console.error(`Failed to deduct patch ${patch.name}:`, error);
+                errors.push(`Failed to update patch: ${patch.name}`);
+              } else {
+                // Log the inventory change for patch (grouped)
+                await supabase.from('inventory_logs').insert({
+                  product_id: patchId,
+                  item_type: 'patch',
+                  change_amount: -count,
+                  previous_quantity: previousQuantity,
+                  new_quantity: newQuantity,
+                  reason: orderId ? `Order ${orderId} - ${count > 1 ? `${count}x ` : ''}Patch used` : `Order patch deduction (${count})`,
+                  order_id: orderId,
+                });
+              }
+            }
+          }
+        }
+      }
+      
+      return { success: errors.length === 0, errors };
+    },
+
+    /**
+     * Restore quantities when order is cancelled
+     */
+    restoreFromOrder: async (orderItems: Array<{
+      productId: string;
+      patchIds?: string[];
+      quantity?: number;
+    }>) => {
+      console.log('DB: Restoring inventory from cancelled order...', orderItems.length);
+      
+      for (const item of orderItems) {
+        // Restore product quantity
+        const { data: product } = await supabase
+          .from('products')
+          .select('id, quantity')
+          .eq('id', item.productId)
+          .single();
+        
+        if (product) {
+          const newQuantity = (product.quantity ?? 0) + (item.quantity || 1);
+          await supabase
+            .from('products')
+            .update({ quantity: newQuantity, updated_at: new Date().toISOString() })
+            .eq('id', item.productId);
+        }
+        
+        // Restore patch quantities
+        if (item.patchIds && item.patchIds.length > 0) {
+          for (const patchId of item.patchIds) {
+            const { data: patch } = await supabase
+              .from('patches')
+              .select('id, quantity')
+              .eq('id', patchId)
+              .single();
+            
+            if (patch) {
+              const newQuantity = (patch.quantity ?? 0) + 1;
+              await supabase
+                .from('patches')
+                .update({ quantity: newQuantity, updated_at: new Date().toISOString() })
+                .eq('id', patchId);
+            }
+          }
+        }
+      }
+      
+      return { success: true };
+    },
+
+    /**
+     * Get inventory logs for audit trail
+     */
+    getLogs: async (productId?: string, limit: number = 50) => {
+      console.log('DB: Getting inventory logs...', productId || 'all');
+      let query = supabase
+        .from('inventory_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(limit);
+      
+      if (productId) {
+        query = query.eq('product_id', productId);
+      }
+      
+      const { data, error } = await query;
+      if (error) console.error('DB Error (inventory.getLogs):', error);
+      return { data, error };
+    },
+
+    /**
+     * Restock a product or patch
+     */
+    restock: async (productId: string, amount: number, type: 'product' | 'patch', reason?: string) => {
+      console.log('DB: Restocking...', productId, amount, type);
+      
+      const table = type === 'product' ? 'products' : 'patches';
+      
+      // Get current quantity
+      const { data: item } = await supabase
+        .from(table)
+        .select('id, quantity, name')
+        .eq('id', productId)
+        .single();
+      
+      if (!item) {
+        return { success: false, error: `${type} not found` };
+      }
+      
+      const previousQuantity = item.quantity ?? 0;
+      const newQuantity = previousQuantity + amount;
+      
+      // Update quantity
+      const { error: updateError } = await supabase
+        .from(table)
+        .update({ quantity: newQuantity, updated_at: new Date().toISOString() })
+        .eq('id', productId);
+      
+      if (updateError) {
+        console.error('Failed to restock:', updateError);
+        return { success: false, error: updateError.message };
+      }
+      
+      // Log the inventory change
+      const { error: logError } = await supabase.from('inventory_logs').insert({
+        product_id: productId,
+        item_type: type,
+        change_amount: amount,
+        previous_quantity: previousQuantity,
+        new_quantity: newQuantity,
+        reason: reason || `Restock - ${type}`,
+      });
+      
+      if (logError) {
+        console.error('Failed to log restock:', logError);
+      }
+      
+      return { success: true, newQuantity };
+    },
+  },
+
+  // ──────────────── Order Items Helpers ────────────────
+  orderItems: {
+    /**
+     * Get items for a specific order
+     */
+    getByOrderId: async (orderId: string) => {
+      console.log('DB: Getting order items...', orderId);
+      const { data, error } = await supabase
+        .from('order_items')
+        .select('*')
+        .eq('order_id', orderId)
+        .order('created_at', { ascending: true });
+      if (error) console.error('DB Error (orderItems.getByOrderId):', error);
+      return { data, error };
+    },
+    
+    /**
+     * Get sales report by product
+     */
+    getSalesByProduct: async (startDate?: string, endDate?: string) => {
+      console.log('DB: Getting sales by product...');
+      let query = supabase
+        .from('order_items')
+        .select('product_id, quantity, total_price, orders!inner(status, created_at)');
+      
+      if (startDate) {
+        query = query.gte('orders.created_at', startDate);
+      }
+      if (endDate) {
+        query = query.lte('orders.created_at', endDate);
+      }
+      
+      const { data, error } = await query;
+      if (error) console.error('DB Error (orderItems.getSalesByProduct):', error);
+      return { data, error };
+    },
+  },
+
   cart: {
     list: async (userId: string) => {
       console.log('DB: Listing cart items...', userId);
@@ -368,6 +702,7 @@ export function dbProductToFrontend(row: any) {
     basePrice: Number(row.base_price),
     width: row.width,
     height: row.height,
+    quantity: row.quantity ?? 0,
     placementZone: row.placement_zone || { x: 15, y: 25, width: 70, height: 60, type: 'rectangle' },
     cropZone: row.crop_zone,
   };
@@ -382,6 +717,7 @@ export function frontendProductToDb(product: any, sortOrder: number = 0) {
     base_price: product.basePrice,
     width: product.width,
     height: product.height,
+    quantity: product.quantity ?? 0,
     placement_zone: product.placementZone,
     crop_zone: product.cropZone || null,
     sort_order: sortOrder,
@@ -397,6 +733,7 @@ export function dbPatchToFrontend(row: any) {
     price: Number(row.price),
     width: row.width,
     height: row.height,
+    quantity: row.quantity ?? 0,
     contentZone: row.content_zone,
   };
 }
@@ -410,6 +747,7 @@ export function frontendPatchToDb(patch: any, sortOrder: number = 0) {
     price: patch.price,
     width: patch.width,
     height: patch.height,
+    quantity: patch.quantity ?? 0,
     content_zone: patch.contentZone || null,
     sort_order: sortOrder,
   };

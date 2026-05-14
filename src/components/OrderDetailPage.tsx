@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Package, Truck, CheckCircle, Clock, MapPin, CreditCard } from 'lucide-react';
 import supabase from '../lib/supabase';
+import { DesignPreview } from '../components/DesignPreview';
+
 
 interface PlacedPatchData {
   id: string;
@@ -26,6 +28,7 @@ interface OrderItem {
   name: string;
   qty: number;
   price: number;
+  basePrice?: number;
   patches?: string[];
   productImage?: string;
   productBackImage?: string;
@@ -34,6 +37,16 @@ interface OrderItem {
   back_image?: string;
   frontPatches?: PlacedPatchData[];
   backPatches?: PlacedPatchData[];
+  placementZone?: {
+    type: 'rectangle' | 'polygon';
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+    points?: { x: number; y: number }[];
+  };
+  productWidth?: number;
+  productHeight?: number;
 }
 
 interface ShippingAddress {
@@ -159,6 +172,35 @@ export function OrderDetailPage({ orderId, onBack }: OrderDetailPageProps) {
       },
     ];
     return steps;
+  };
+
+  // Calculate patch details for an item
+  // item.price is the TOTAL per unit (base + patches) stored at order time
+  const getPatchDetails = (item: OrderItem) => {
+    const frontPatches = item.frontPatches || [];
+    const backPatches = item.backPatches || [];
+    const allPatches = [...frontPatches, ...backPatches];
+    const qty = item.qty || 1;
+    
+    const patchTotalPerUnit = allPatches.reduce((sum, p) => sum + (p.price || 0), 0);
+    const patchTotal = patchTotalPerUnit * qty;
+    const unitTotal = item.price || 0;
+    const basePricePerUnit = item.basePrice !== undefined ? item.basePrice : Math.max(0, unitTotal - patchTotalPerUnit);
+    const productTotal = basePricePerUnit * qty;
+    const total = unitTotal * qty;
+    
+    return {
+      frontCount: frontPatches.length,
+      backCount: backPatches.length,
+      totalPatches: allPatches.length,
+      patchTotal,
+      patchTotalPerUnit,
+      productTotal,
+      basePricePerUnit,
+      total,
+      frontPatches,
+      backPatches,
+    };
   };
 
   const formatCurrency = (amount: number, currency: string) => {
@@ -289,122 +331,106 @@ export function OrderDetailPage({ orderId, onBack }: OrderDetailPageProps) {
             <div className="bg-white rounded-2xl shadow-sm border p-6">
               <h2 className="text-lg font-bold mb-6">Your Custom Designs</h2>
               <div className="space-y-6">
-                {order.items?.map((item, idx) => (
-                  <div key={idx} className="border rounded-xl overflow-hidden">
-                    {/* Item Header */}
-                    <div className="bg-gray-50 px-4 py-3 flex justify-between items-center">
-                      <div>
-                        <h3 className="font-semibold">{item.name}</h3>
-                        <p className="text-sm text-gray-500">Qty: {item.qty}</p>
-                      </div>
-                      <p className="font-bold">{formatCurrency(item.price * item.qty, order.currency)}</p>
-                    </div>
-
-                    {/* Design Preview */}
-                    <div className="p-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        {/* Front Design */}
+                {order.items?.map((item, idx) => {
+                  const details = getPatchDetails(item);
+                  return (
+                    <div key={idx} className="border rounded-xl overflow-hidden">
+                      {/* Item Header */}
+                      <div className="bg-gray-50 px-4 py-3 flex justify-between items-center">
                         <div>
-                          <p className="text-xs text-gray-500 mb-2 uppercase tracking-wide">Front Design</p>
-                          <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden relative">
-                            <img 
-                              src={item.design_image_url || item.front_image || item.productImage} 
-                              alt="Front design"
-                              className="w-full h-full object-contain"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src = '/placeholder-product.png';
-                              }}
-                            />
-                            {/* Overlay patches if placement data available */}
-                            {item.frontPatches && item.frontPatches.length > 0 && (
-                              <div className="absolute inset-0 pointer-events-none">
-                                {item.frontPatches.map((patch, idx) => (
-                                  <img
-                                    key={idx}
-                                    src={patch.image}
-                                    alt={patch.name}
-                                    className="absolute drop-shadow-md"
-                                    style={{
-                                      left: `${patch.x}%`,
-                                      top: `${patch.y}%`,
-                                      width: `${patch.widthPercent}%`,
-                                      height: `${patch.heightPercent}%`,
-                                      transform: `rotate(${patch.rotation}deg)`,
-                                      transformOrigin: `${(patch.contentZone?.x || 0) + (patch.contentZone?.width || 100) / 2}% ${(patch.contentZone?.y || 0) + (patch.contentZone?.height || 100) / 2}%`,
-                                    }}
-                                  />
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                          {item.frontPatches && item.frontPatches.length > 0 && (
-                            <p className="text-xs text-gray-500 mt-1 text-center">
-                              {item.frontPatches.length} patches placed
-                            </p>
-                          )}
+                          <h3 className="font-semibold">{item.name}</h3>
+                          <p className="text-sm text-gray-500">Qty: {item.qty}</p>
                         </div>
-                        
-                        {/* Back Design */}
-                        <div>
-                          <p className="text-xs text-gray-500 mb-2 uppercase tracking-wide">Back Design</p>
-                          <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden relative">
-                            <img 
-                              src={item.back_image || item.productBackImage || item.productImage} 
-                              alt="Back design"
-                              className="w-full h-full object-contain"
-                              onError={(e) => {
-                                (e.target as HTMLImageElement).src = '/placeholder-product.png';
-                              }}
-                            />
-                            {/* Overlay patches if placement data available */}
-                            {item.backPatches && item.backPatches.length > 0 && (
-                              <div className="absolute inset-0 pointer-events-none">
-                                {item.backPatches.map((patch, idx) => (
-                                  <img
-                                    key={idx}
-                                    src={patch.image}
-                                    alt={patch.name}
-                                    className="absolute drop-shadow-md"
-                                    style={{
-                                      left: `${patch.x}%`,
-                                      top: `${patch.y}%`,
-                                      width: `${patch.widthPercent}%`,
-                                      height: `${patch.heightPercent}%`,
-                                      transform: `rotate(${patch.rotation}deg)`,
-                                      transformOrigin: `${(patch.contentZone?.x || 0) + (patch.contentZone?.width || 100) / 2}% ${(patch.contentZone?.y || 0) + (patch.contentZone?.height || 100) / 2}%`,
-                                    }}
-                                  />
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                          {item.backPatches && item.backPatches.length > 0 && (
-                            <p className="text-xs text-gray-500 mt-1 text-center">
-                              {item.backPatches.length} patches placed
+                        <div className="text-right">
+                          <p className="font-bold">{formatCurrency(details.total, order.currency)}</p>
+                          {details.totalPatches > 0 && (
+                            <p className="text-xs text-gray-400">
+                              Base: {formatCurrency(details.productTotal, order.currency)} + Patches: {formatCurrency(details.patchTotal, order.currency)}
                             </p>
                           )}
                         </div>
                       </div>
-                    </div>
 
-                    {/* Patches Used */}
-                    {item.patches && item.patches.length > 0 && (
-                      <div className="px-4 pb-4">
-                        <p className="text-sm font-medium text-gray-700 mb-2">Patches Used:</p>
-                        <div className="flex flex-wrap gap-2">
-                          {item.patches.map((patch, pidx) => (
-                            <span 
-                              key={pidx}
-                              className="px-3 py-1 bg-pink/10 text-pink rounded-full text-sm"
-                            >
-                              {patch}
-                            </span>
-                          ))}
+                      {/* Price Breakdown */}
+                      <div className="px-4 py-3 border-b bg-white">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600">Base Price</span>
+                          <span>{formatCurrency(details.basePricePerUnit, order.currency)} {item.qty > 1 && <span className="text-gray-400">× {item.qty}</span>}</span>
+                        </div>
+                        {details.totalPatches > 0 && (
+                          <>
+                            <div className="flex justify-between text-sm mt-1">
+                              <span className="text-gray-600">Patches ({details.totalPatches})</span>
+                              <span>{formatCurrency(details.patchTotalPerUnit, order.currency)} {item.qty > 1 && <span className="text-gray-400">× {item.qty}</span>}</span>
+                            </div>
+                            {/* Patch list with prices */}
+                            <div className="mt-2 pl-4 space-y-1">
+                              {details.frontPatches.map((patch, pidx) => (
+                                <div key={`f-${pidx}`} className="flex justify-between text-xs text-gray-500">
+                                  <span>• {patch.name} (front)</span>
+                                  <span>{formatCurrency(patch.price || 0, order.currency)}</span>
+                                </div>
+                              ))}
+                              {details.backPatches.map((patch, pidx) => (
+                                <div key={`b-${pidx}`} className="flex justify-between text-xs text-gray-500">
+                                  <span>• {patch.name} (back)</span>
+                                  <span>{formatCurrency(patch.price || 0, order.currency)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                        <div className="border-t mt-2 pt-2 flex justify-between font-medium text-sm">
+                          <span>Item Total</span>
+                          <span>{formatCurrency(details.total, order.currency)}</span>
                         </div>
                       </div>
-                    )}
-                  </div>
-                ))}
+
+                      {/* Design Preview */}
+                      <div className="p-4">
+                        <div className="grid grid-cols-2 gap-4 items-start">
+                          {/* Front Design */}
+                          <div>
+                            <p className="text-xs text-gray-500 mb-2 uppercase tracking-wide">Front Design</p>
+                            <div className="bg-gray-100 rounded-lg p-2">
+                              <DesignPreview
+                                productImage={item.front_image || item.productImage || '/placeholder-product.png'}
+                                patches={item.frontPatches || []}
+                                placementZone={item.placementZone}
+                                maxWidth={400}
+                              />
+                              {/* Patch count badge */}
+                              {item.frontPatches && item.frontPatches.length > 0 && (
+                                <div className="mt-2 text-xs text-gray-500 text-center">
+                                  {item.frontPatches.length} patch{item.frontPatches.length !== 1 ? 'es' : ''}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          
+                          {/* Back Design */}
+                          <div>
+                            <p className="text-xs text-gray-500 mb-2 uppercase tracking-wide">Back Design</p>
+                            <div className="bg-gray-100 rounded-lg p-2">
+                              <DesignPreview
+                                productImage={item.back_image || item.productBackImage || item.productImage || '/placeholder-product.png'}
+                                patches={item.backPatches || []}
+                                placementZone={item.placementZone}
+                                maxWidth={400}
+                              />
+                              {/* Patch count badge */}
+                              {item.backPatches && item.backPatches.length > 0 && (
+                                <div className="mt-2 text-xs text-gray-500 text-center">
+                                  {item.backPatches.length} patch{item.backPatches.length !== 1 ? 'es' : ''}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -415,12 +441,22 @@ export function OrderDetailPage({ orderId, onBack }: OrderDetailPageProps) {
             <div className="bg-white rounded-2xl shadow-sm border p-6">
               <h2 className="text-lg font-bold mb-4">Order Summary</h2>
               <div className="space-y-3">
-                {order.items?.map((item, idx) => (
-                  <div key={idx} className="flex justify-between text-sm">
-                    <span className="text-gray-600">{item.name} × {item.qty}</span>
-                    <span>{formatCurrency(item.price * item.qty, order.currency)}</span>
-                  </div>
-                ))}
+                {order.items?.map((item, idx) => {
+                  const details = getPatchDetails(item);
+                  return (
+                    <div key={idx}>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">{item.name} × {item.qty}</span>
+                        <span className="font-medium">{formatCurrency(details.total, order.currency)}</span>
+                      </div>
+                      {details.totalPatches > 0 && (
+                        <div className="text-xs text-gray-400 pl-2">
+                          {formatCurrency(details.basePricePerUnit, order.currency)} base + {formatCurrency(details.patchTotal, order.currency)} patches
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
                 <div className="border-t pt-3 mt-3">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Subtotal</span>

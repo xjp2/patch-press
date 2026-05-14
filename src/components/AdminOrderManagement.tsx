@@ -1,11 +1,19 @@
 import { useState, useEffect } from 'react';
 import { 
   RefreshCw, Package, Truck, CheckCircle, Clock, X, ChevronDown, ChevronUp,
-  Search, MapPin, CreditCard, CheckSquare, Square, Play
+  Search, MapPin, CreditCard, CheckSquare, Square, Play, Eye, Palette
 } from 'lucide-react';
 import supabase from '../lib/supabase';
 import { CraftingView } from './CraftingView';
 import { ProductionMode } from './ProductionMode';
+
+import { DesignPreview } from './DesignPreview';
+
+import { Button } from "./ui/button";
+import { Badge } from "./ui/badge";
+import { Separator } from "./ui/separator";
+
+
 
 interface PlacedPatchData {
   id: string;
@@ -31,6 +39,7 @@ interface OrderItem {
   name: string;
   qty: number;
   price: number;
+  basePrice?: number;
   patches?: string[];
   productImage?: string;
   productBackImage?: string;
@@ -39,6 +48,17 @@ interface OrderItem {
   back_image?: string;
   frontPatches?: PlacedPatchData[];
   backPatches?: PlacedPatchData[];
+  // Product details
+  productWidth?: number;
+  productHeight?: number;
+  placementZone?: {
+    type: 'rectangle' | 'polygon';
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+    points?: { x: number; y: number }[];
+  };
 }
 
 interface ShippingAddress {
@@ -88,6 +108,9 @@ export function AdminOrderManagement() {
     productBackImage?: string;
     patches: PlacedPatchData[];
     side: 'front' | 'back';
+    productWidthCm?: number;
+    productHeightCm?: number;
+    placementZone?: OrderItem['placementZone'];
   } | null>(null);
 
   // Production mode state
@@ -99,10 +122,21 @@ export function AdminOrderManagement() {
 
   useEffect(() => {
     loadOrders();
+    
+    // Subscribe to realtime changes
+    const channel = supabase
+      .channel('admin-orders')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+        loadOrders();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const loadOrders = async () => {
-    setLoading(true);
     try {
       const { data, error } = await supabase
         .from('orders')
@@ -118,70 +152,7 @@ export function AdminOrderManagement() {
     }
   };
 
-  const updateOrderStatus = async (orderId: string, status: string, trackingNum?: string) => {
-    setUpdating(orderId);
-    try {
-      const updates: any = { fulfillment_status: status };
-      
-      if (status === 'shipped') {
-        updates.tracking_number = trackingNum || null;
-        updates.shipped_at = new Date().toISOString();
-      } else if (status === 'delivered') {
-        updates.delivered_at = new Date().toISOString();
-      } else if (status === 'processing') {
-        updates.processing_at = new Date().toISOString();
-      }
-
-      const { error } = await supabase
-        .from('orders')
-        .update(updates)
-        .eq('id', orderId);
-
-      if (error) throw error;
-      await loadOrders();
-    } catch (err) {
-      console.error('Failed to update order:', err);
-      alert('Failed to update order status');
-    } finally {
-      setUpdating(null);
-    }
-  };
-
-  const bulkUpdateStatus = async (status: string) => {
-    if (selectedOrders.size === 0) return;
-    
-    const confirmed = confirm(`Mark ${selectedOrders.size} orders as ${status}?`);
-    if (!confirmed) return;
-
-    setUpdating('bulk');
-    try {
-      const updates: any = { fulfillment_status: status };
-      
-      if (status === 'shipped') {
-        updates.shipped_at = new Date().toISOString();
-      } else if (status === 'delivered') {
-        updates.delivered_at = new Date().toISOString();
-      } else if (status === 'processing') {
-        updates.processing_at = new Date().toISOString();
-      }
-
-      const { error } = await supabase
-        .from('orders')
-        .update(updates)
-        .in('id', Array.from(selectedOrders));
-
-      if (error) throw error;
-      await loadOrders();
-      setSelectedOrders(new Set());
-    } catch (err) {
-      console.error('Bulk update failed:', err);
-      alert('Failed to update orders');
-    } finally {
-      setUpdating(null);
-    }
-  };
-
-  const toggleExpand = (orderId: string) => {
+  const toggleExpanded = (orderId: string) => {
     const newExpanded = new Set(expandedOrders);
     if (newExpanded.has(orderId)) {
       newExpanded.delete(orderId);
@@ -191,7 +162,7 @@ export function AdminOrderManagement() {
     setExpandedOrders(newExpanded);
   };
 
-  const toggleSelect = (orderId: string) => {
+  const toggleSelected = (orderId: string) => {
     const newSelected = new Set(selectedOrders);
     if (newSelected.has(orderId)) {
       newSelected.delete(orderId);
@@ -256,12 +227,134 @@ export function AdminOrderManagement() {
   };
 
   const formatCurrency = (amount: number, currency: string) => {
-    // Amount is stored in cents, convert to dollars
-    const dollars = amount / 100;
+    // Amount is stored in dollars (not cents)
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: currency?.toUpperCase() || 'USD',
-    }).format(dollars);
+    }).format(amount);
+  };
+
+  const formatDate = (date: string) => {
+    return new Date(date).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const updateFulfillmentStatus = async (orderId: string, status: string) => {
+    setUpdating(orderId);
+    try {
+      const updates: any = { fulfillment_status: status };
+      
+      if (status === 'shipped') {
+        updates.shipped_at = new Date().toISOString();
+        updates.tracking_number = trackingInput[orderId] || null;
+      } else if (status === 'delivered') {
+        updates.delivered_at = new Date().toISOString();
+      }
+
+      const { error } = await supabase
+        .from('orders')
+        .update(updates)
+        .eq('id', orderId);
+
+      if (error) throw error;
+      
+      // Clear tracking input after successful update
+      if (status === 'shipped') {
+        setTrackingInput(prev => {
+          const newInput = { ...prev };
+          delete newInput[orderId];
+          return newInput;
+        });
+      }
+      
+      await loadOrders();
+    } catch (err) {
+      console.error('Failed to update status:', err);
+      alert('Failed to update status. Please try again.');
+    } finally {
+      setUpdating(null);
+    }
+  };
+
+  const bulkUpdateStatus = async (status: string) => {
+    if (selectedOrders.size === 0) return;
+    
+    const orderIds = Array.from(selectedOrders);
+    setUpdating('bulk');
+    
+    try {
+      const updates: any = { fulfillment_status: status };
+      
+      if (status === 'shipped') {
+        updates.shipped_at = new Date().toISOString();
+      } else if (status === 'delivered') {
+        updates.delivered_at = new Date().toISOString();
+      }
+
+      const { error } = await supabase
+        .from('orders')
+        .update(updates)
+        .in('id', orderIds);
+
+      if (error) throw error;
+      
+      setSelectedOrders(new Set());
+      await loadOrders();
+    } catch (err) {
+      console.error('Failed to bulk update:', err);
+      alert('Failed to update orders. Please try again.');
+    } finally {
+      setUpdating(null);
+    }
+  };
+
+  // Calculate patch details for an item
+  // item.price is the TOTAL per unit (base + patches) stored at order time
+  const getPatchDetails = (item: OrderItem) => {
+    const frontPatches = item.frontPatches || [];
+    const backPatches = item.backPatches || [];
+    const allPatches = [...frontPatches, ...backPatches];
+    const qty = item.qty || 1;
+    
+    const patchTotalPerUnit = allPatches.reduce((sum, p) => sum + (p.price || 0), 0);
+    const patchTotal = patchTotalPerUnit * qty;
+    const unitTotal = item.price || 0;
+    // For newer orders, basePrice is stored directly. For older orders, derive it.
+    const basePricePerUnit = item.basePrice !== undefined ? item.basePrice : Math.max(0, unitTotal - patchTotalPerUnit);
+    const productTotal = basePricePerUnit * qty;
+    const total = unitTotal * qty;
+    
+    return {
+      frontCount: frontPatches.length,
+      backCount: backPatches.length,
+      totalPatches: allPatches.length,
+      patchTotal,
+      patchTotalPerUnit,
+      productTotal,
+      basePricePerUnit,
+      total
+    };
+  };
+
+  // Open crafting view for production/design preview
+  const openCraftingView = (item: OrderItem, side: 'front' | 'back') => {
+    const patches = side === 'front' ? (item.frontPatches || []) : (item.backPatches || []);
+    setCraftingView({
+      show: true,
+      productName: item.name,
+      productImage: item.productImage || '/placeholder-product.png',
+      productBackImage: item.productBackImage,
+      patches,
+      side,
+      productWidthCm: item.productWidth ? item.productWidth / 10 : 40,
+      productHeightCm: item.productHeight ? item.productHeight / 10 : 45,
+      placementZone: item.placementZone,
+    });
   };
 
   if (loading) {
@@ -273,533 +366,446 @@ export function AdminOrderManagement() {
     );
   }
 
+  const activeOrders = filteredOrders.filter(o => o.fulfillment_status !== 'delivered' && o.fulfillment_status !== 'cancelled');
+
   return (
     <div className="space-y-4">
       {/* Header Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        {(['all', 'pending', 'processing', 'shipped', 'delivered'] as const).map((status) => (
-          <button
-            key={status}
-            onClick={() => setFilter(status)}
-            className={`p-3 rounded-xl text-left transition-all ${
-              filter === status 
-                ? 'bg-pink text-white shadow-md' 
-                : 'bg-white border hover:shadow-sm'
-            }`}
-          >
-            <p className="text-xs opacity-80 uppercase tracking-wide">
-              {status === 'all' ? 'Total' : status}
-            </p>
-            <p className="text-2xl font-bold">
-              {status === 'all' 
-                ? orders.length 
-                : orders.filter(o => o.fulfillment_status === status).length}
-            </p>
-          </button>
-        ))}
+      <div className="grid grid-cols-4 gap-4">
+        <div className="bg-white rounded-lg p-4 shadow-sm border">
+          <p className="text-sm text-gray-500">Total Orders</p>
+          <p className="text-2xl font-bold">{orders.length}</p>
+        </div>
+        <div className="bg-yellow-50 rounded-lg p-4 shadow-sm border border-yellow-200">
+          <p className="text-sm text-yellow-700">Pending</p>
+          <p className="text-2xl font-bold text-yellow-800">
+            {orders.filter(o => o.fulfillment_status === 'pending').length}
+          </p>
+        </div>
+        <div className="bg-blue-50 rounded-lg p-4 shadow-sm border border-blue-200">
+          <p className="text-sm text-blue-700">Processing</p>
+          <p className="text-2xl font-bold text-blue-800">
+            {orders.filter(o => o.fulfillment_status === 'processing').length}
+          </p>
+        </div>
+        <div className="bg-green-50 rounded-lg p-4 shadow-sm border border-green-200">
+          <p className="text-sm text-green-700">Active</p>
+          <p className="text-2xl font-bold text-green-800">{activeOrders.length}</p>
+        </div>
       </div>
 
-      {/* Toolbar */}
-      <div className="bg-white rounded-xl border p-4 space-y-3">
-        <div className="flex flex-col md:flex-row gap-3 justify-between">
-          {/* Search */}
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search orders, customers, products..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-pink/20 focus:border-pink"
-            />
-          </div>
-
-          {/* Actions */}
-          <div className="flex gap-2 flex-wrap">
+      {/* Production Mode Button */}
+      {activeOrders.length > 0 && (
+        <div className="bg-gradient-to-r from-pink-50 to-purple-50 rounded-lg p-4 border border-pink-200">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-semibold text-gray-800">Production Mode</h3>
+              <p className="text-sm text-gray-600">
+                {activeOrders.length} active orders ({activeOrders.reduce((sum, o) => sum + (o.items?.length || 0), 0)} items) ready for production
+              </p>
+            </div>
             <button
-              onClick={loadOrders}
-              className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium flex items-center gap-2"
+              onClick={() => setProductionMode({ 
+                show: true, 
+                currentIndex: 0, 
+                orders: activeOrders 
+              })}
+              className="flex items-center gap-2 px-4 py-2 bg-pink text-white rounded-lg hover:bg-pink-600 transition-colors"
             >
-              <RefreshCw className="w-4 h-4" />
-              Refresh
+              <Play className="w-4 h-4" />
+              Start Production
             </button>
-
-            {/* Production Mode Button - Only show for pending/processing orders */}
-            {filteredOrders.filter(o => o.fulfillment_status === 'pending' || o.fulfillment_status === 'processing').length > 0 && (
-              <button
-                onClick={() => {
-                  const ordersToProcess = filteredOrders.filter(
-                    o => o.fulfillment_status === 'pending' || o.fulfillment_status === 'processing'
-                  );
-                  setProductionMode({
-                    show: true,
-                    currentIndex: 0,
-                    orders: ordersToProcess
-                  });
-                }}
-                className="px-3 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-medium flex items-center gap-2"
-              >
-                <Play className="w-4 h-4" />
-                Production Mode ({filteredOrders.filter(o => o.fulfillment_status === 'pending' || o.fulfillment_status === 'processing').length})
-              </button>
-            )}
-            
-            {selectedOrders.size > 0 && (
-              <>
-                <span className="px-3 py-2 bg-pink/10 text-pink rounded-lg text-sm font-medium">
-                  {selectedOrders.size} selected
-                </span>
-                <button
-                  onClick={() => bulkUpdateStatus('processing')}
-                  disabled={updating === 'bulk'}
-                  className="px-3 py-2 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-lg text-sm font-medium"
-                >
-                  Mark Processing
-                </button>
-                <button
-                  onClick={() => bulkUpdateStatus('shipped')}
-                  disabled={updating === 'bulk'}
-                  className="px-3 py-2 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-lg text-sm font-medium"
-                >
-                  Mark Shipped
-                </button>
-              </>
-            )}
           </div>
         </div>
+      )}
 
-        {/* Bulk Select */}
-        {filteredOrders.length > 0 && (
-          <div className="flex items-center gap-2 pt-2 border-t">
-            <button
-              onClick={selectAll}
-              className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900"
+      {/* Filters and Search */}
+      <div className="bg-white rounded-lg p-4 shadow-sm border space-y-4">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-500">Filter:</span>
+            <select
+              value={filter}
+              onChange={(e) => setFilter(e.target.value as any)}
+              className="border rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-pink focus:border-pink"
             >
-              {selectedOrders.size === filteredOrders.length ? (
-                <CheckSquare className="w-4 h-4" />
-              ) : (
-                <Square className="w-4 h-4" />
-              )}
-              Select All ({filteredOrders.length})
-            </button>
+              <option value="all">All Orders</option>
+              <option value="pending">Pending</option>
+              <option value="processing">Processing</option>
+              <option value="shipped">Shipped</option>
+              <option value="delivered">Delivered</option>
+            </select>
           </div>
-        )}
+          
+          <button
+            onClick={selectAll}
+            className="flex items-center gap-2 px-3 py-1.5 border rounded-lg text-sm hover:bg-gray-50"
+          >
+            {selectedOrders.size === filteredOrders.length && filteredOrders.length > 0 ? (
+              <CheckSquare className="w-4 h-4 text-pink" />
+            ) : (
+              <Square className="w-4 h-4" />
+            )}
+            Select All
+          </button>
+          
+          <div className="flex-1 min-w-[200px]">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search orders..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-4 py-1.5 border rounded-lg text-sm focus:ring-2 focus:ring-pink focus:border-pink"
+              />
+            </div>
+          </div>
+
+          {selectedOrders.size > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-500">{selectedOrders.size} selected</span>
+              <button
+                onClick={() => bulkUpdateStatus('processing')}
+                disabled={updating === 'bulk'}
+                className="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-sm hover:bg-blue-200 disabled:opacity-50"
+              >
+                Mark Processing
+              </button>
+              <button
+                onClick={() => bulkUpdateStatus('shipped')}
+                disabled={updating === 'bulk'}
+                className="px-3 py-1.5 bg-purple-100 text-purple-700 rounded-lg text-sm hover:bg-purple-200 disabled:opacity-50"
+              >
+                Mark Shipped
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Orders List */}
-      {filteredOrders.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 rounded-xl">
-          <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-          <p className="text-gray-500">No orders found</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {filteredOrders.map((order) => {
-            const statusConfig = getStatusConfig(order.fulfillment_status);
-            const isExpanded = expandedOrders.has(order.id);
-            const isSelected = selectedOrders.has(order.id);
-            const hasDesignImages = order.items?.some(item => 
-              item.design_image_url || item.front_image || item.back_image
-            );
+      <div className="space-y-3">
+        {filteredOrders.map((order) => {
+          const statusConfig = getStatusConfig(order.fulfillment_status);
+          const isExpanded = expandedOrders.has(order.id);
+          const isSelected = selectedOrders.has(order.id);
 
-            return (
+          return (
+            <div
+              key={order.id}
+              className={`bg-white rounded-lg shadow-sm border overflow-hidden transition-all ${
+                isSelected ? 'ring-2 ring-pink border-pink' : ''
+              }`}
+            >
+              {/* Order Header */}
               <div
-                key={order.id}
-                className={`bg-white rounded-xl border overflow-hidden transition-all ${
-                  isSelected ? 'border-pink ring-1 ring-pink' : 'hover:shadow-md'
-                }`}
+                className="p-4 cursor-pointer hover:bg-gray-50"
+                onClick={() => toggleExpanded(order.id)}
               >
-                {/* Order Header - Always Visible */}
-                <div className="p-4">
-                  <div className="flex items-start gap-3">
-                    {/* Checkbox */}
+                <div className="flex items-center justify-between flex-wrap gap-4">
+                  <div className="flex items-center gap-4">
                     <button
-                      onClick={() => toggleSelect(order.id)}
-                      className="mt-1 text-gray-400 hover:text-pink"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleSelected(order.id);
+                      }}
+                      className="text-gray-400 hover:text-pink"
                     >
                       {isSelected ? (
-                        <CheckSquare className="w-5 h-5" />
+                        <CheckSquare className="w-5 h-5 text-pink" />
                       ) : (
                         <Square className="w-5 h-5" />
                       )}
                     </button>
-
-                    {/* Order Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2 mb-2">
-                        <span className="font-bold text-lg">#{order.order_number}</span>
-                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${statusConfig.bg} ${statusConfig.color}`}>
-                          {statusConfig.icon}
-                          {statusConfig.label}
-                        </span>
-                        {hasDesignImages && (
-                          <span className="px-2 py-1 bg-pink/10 text-pink rounded-full text-xs">
-                            Custom Design
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-                        <div>
-                          <p className="text-gray-400 text-xs">Customer</p>
-                          <p className="font-medium truncate">{order.customer_name || order.customer_email}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-400 text-xs">Date</p>
-                          <p>{new Date(order.created_at).toLocaleDateString()}</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-400 text-xs">Items</p>
-                          <p>{order.items?.length || 0} products</p>
-                        </div>
-                        <div>
-                          <p className="text-gray-400 text-xs">Total</p>
-                          <p className="font-bold">{formatCurrency(order.total_amount, order.currency)}</p>
-                        </div>
-                      </div>
-
-                      {/* Quick Item Preview */}
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {order.items?.slice(0, 3).map((item, idx) => (
-                          <span key={idx} className="text-xs bg-gray-100 px-2 py-1 rounded">
-                            {item.name} × {item.qty}
-                          </span>
-                        ))}
-                        {order.items && order.items.length > 3 && (
-                          <span className="text-xs text-gray-500">
-                            +{order.items.length - 3} more
-                          </span>
-                        )}
-                      </div>
+                    <div>
+                      <p className="font-semibold text-lg">{order.order_number}</p>
+                      <p className="text-sm text-gray-500">{formatDate(order.created_at)}</p>
                     </div>
-
-                    {/* Actions */}
-                    <div className="flex flex-col items-end gap-2">
-                      <button
-                        onClick={() => toggleExpand(order.id)}
-                        className="p-2 hover:bg-gray-100 rounded-lg"
-                      >
-                        {isExpanded ? (
-                          <ChevronUp className="w-5 h-5" />
-                        ) : (
-                          <ChevronDown className="w-5 h-5" />
-                        )}
-                      </button>
-
-                      {/* Quick Status Actions */}
-                      <div className="flex gap-1">
-                        {order.fulfillment_status === 'pending' && (
-                          <button
-                            onClick={() => updateOrderStatus(order.id, 'processing')}
-                            disabled={updating === order.id}
-                            className="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-lg text-xs font-medium"
-                          >
-                            Process
-                          </button>
-                        )}
-                        {order.fulfillment_status === 'processing' && (
-                          <button
-                            onClick={() => updateOrderStatus(order.id, 'shipped', trackingInput[order.id])}
-                            disabled={updating === order.id}
-                            className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-lg text-xs font-medium"
-                          >
-                            Ship
-                          </button>
-                        )}
-                      </div>
-                    </div>
+                    <Badge className={`${statusConfig.bg} ${statusConfig.color} border-0`}>
+                      <span className="flex items-center gap-1">
+                        {statusConfig.icon}
+                        {statusConfig.label}
+                      </span>
+                    </Badge>
                   </div>
 
-                  {/* Tracking Input for Processing Orders */}
-                  {order.fulfillment_status === 'processing' && (
-                    <div className="mt-3 ml-8">
-                      <input
-                        type="text"
-                        placeholder="Tracking number (optional)"
-                        value={trackingInput[order.id] || ''}
-                        onChange={(e) => setTrackingInput({ ...trackingInput, [order.id]: e.target.value })}
-                        className="px-3 py-2 border rounded-lg text-sm w-full max-w-xs"
-                      />
+                  <div className="flex items-center gap-6">
+                    <div className="text-right">
+                      <p className="font-semibold text-lg">{formatCurrency(order.total_amount, order.currency)}</p>
+                      <p className="text-sm text-gray-500">{order.items?.length || 0} item(s)</p>
                     </div>
-                  )}
+                    <div className="flex items-center gap-2">
+                      {isExpanded ? (
+                        <ChevronUp className="w-5 h-5 text-gray-400" />
+                      ) : (
+                        <ChevronDown className="w-5 h-5 text-gray-400" />
+                      )}
+                    </div>
+                  </div>
+                </div>
 
-                  {/* Tracking Display */}
-                  {order.tracking_number && (
-                    <div className="mt-3 ml-8 text-sm">
-                      <span className="text-purple-700">
-                        📦 Tracking: <span className="font-mono">{order.tracking_number}</span>
-                      </span>
+                <div className="mt-3 flex items-center gap-6 text-sm">
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <Package className="w-4 h-4" />
+                    <span>{order.customer_name || 'No name'}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <CreditCard className="w-4 h-4" />
+                    <span>{order.customer_email}</span>
+                  </div>
+                  {order.shipping_country && (
+                    <div className="flex items-center gap-2 text-gray-600">
+                      <MapPin className="w-4 h-4" />
+                      <span>{order.shipping_country}</span>
                     </div>
                   )}
                 </div>
+              </div>
 
-                {/* Expanded Details */}
-                {isExpanded && (
-                  <div className="border-t bg-gray-50 p-4">
-                    <div className="grid md:grid-cols-2 gap-6">
-                      {/* Customer & Shipping */}
-                      <div className="space-y-4">
-                        <div>
-                          <h4 className="font-semibold mb-2 flex items-center gap-2">
-                            <CreditCard className="w-4 h-4" />
-                            Customer Info
-                          </h4>
-                          <div className="bg-white rounded-lg p-3 text-sm">
-                            <p className="font-medium">{order.customer_name || 'N/A'}</p>
-                            <p className="text-gray-600">{order.customer_email}</p>
-                          </div>
-                        </div>
-
-                        {order.shipping_address && (
-                          <div>
-                            <h4 className="font-semibold mb-2 flex items-center gap-2">
-                              <MapPin className="w-4 h-4" />
-                              Shipping Address
-                            </h4>
-                            <div className="bg-white rounded-lg p-3 text-sm">
-                              <p className="font-medium">{order.shipping_address.name}</p>
-                              <p>{order.shipping_address.address_line1}</p>
-                              {order.shipping_address.address_line2 && (
-                                <p>{order.shipping_address.address_line2}</p>
-                              )}
-                              <p>
-                                {order.shipping_address.city}, {order.shipping_address.state} {order.shipping_address.postal_code}
-                              </p>
-                              <p>{order.shipping_address.country}</p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Order Items with Designs */}
-                      <div>
-                        <h4 className="font-semibold mb-2">Order Items & Designs</h4>
-                        <div className="space-y-3">
-                          {order.items?.map((item, idx) => (
-                            <div key={idx} className="bg-white rounded-lg p-3">
-                              <div className="flex justify-between items-start mb-2">
-                                <div>
-                                  <p className="font-medium">{item.name}</p>
-                                  <p className="text-sm text-gray-500">Qty: {item.qty} × {formatCurrency(item.price, order.currency)}</p>
-                                </div>
-                                <p className="font-bold">{formatCurrency(item.price * item.qty, order.currency)}</p>
+              {/* Expanded Details */}
+              {isExpanded && (
+                <div className="border-t bg-gray-50 p-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Order Items with Designs */}
+                    <div className="space-y-4">
+                      <h4 className="font-semibold flex items-center gap-2">
+                        <Palette className="w-4 h-4" />
+                        Order Items & Designs
+                      </h4>
+                      
+                      {order.items?.map((item, idx) => {
+                        const details = getPatchDetails(item);
+                        
+                        return (
+                          <div key={idx} className="bg-white rounded-lg p-4 border shadow-sm">
+                            {/* Item Header */}
+                            <div className="flex justify-between items-start mb-3">
+                              <div>
+                                <p className="font-medium text-lg">{item.name}</p>
+                                <p className="text-sm text-gray-500">
+                                  Qty: {item.qty || 1}
+                                </p>
                               </div>
+                              <div className="text-right">
+                                <p className="font-bold text-lg">
+                                  {formatCurrency(details.total, order.currency)}
+                                </p>
+                                <p className="text-xs text-gray-400">
+                                  Base: {formatCurrency(details.productTotal, order.currency)}
+                                  {details.totalPatches > 0 && ` + Patches: ${formatCurrency(details.patchTotal, order.currency)}`}
+                                </p>
+                              </div>
+                            </div>
 
-                              {/* Design Images with Patch Overlays */}
-                              <div className="grid grid-cols-2 gap-2 mt-3">
-                                {/* Front Side */}
-                                <div>
-                                  <p className="text-xs text-gray-400 mb-1">Front</p>
-                                  <div 
-                                    className="aspect-square bg-gray-100 rounded-lg overflow-hidden relative cursor-pointer"
-                                    onClick={() => item.frontPatches && item.frontPatches.length > 0 && setCraftingView({
-                                      show: true,
-                                      productName: item.name,
-                                      productImage: item.productImage || '/placeholder-product.png',
-                                      productBackImage: item.productBackImage,
-                                      patches: item.frontPatches || [],
-                                      side: 'front'
-                                    })}
-                                  >
-                                    <img 
-                                      src={item.productImage || '/placeholder-product.png'}
-                                      alt="Front design"
-                                      className="w-full h-full object-contain"
-                                      onError={(e) => {
-                                        (e.target as HTMLImageElement).src = '/placeholder-product.png';
-                                      }}
-                                    />
-                                    {/* Patch Overlays - Same positioning as CustomizePage */}
-                                    {item.frontPatches?.map((patch, pidx) => {
-                                      const cz = patch.contentZone || { x: 0, y: 0, width: 100, height: 100 };
-                                      const cx = cz.x + cz.width / 2;
-                                      const cy = cz.y + cz.height / 2;
-                                      return (
-                                        <div
-                                          key={patch.id}
-                                          className="absolute"
-                                          style={{
-                                            left: `${patch.x}%`,
-                                            top: `${patch.y}%`,
-                                            width: `${patch.widthPercent}%`,
-                                            height: `${patch.heightPercent}%`,
-                                            transform: `rotate(${patch.rotation}deg)`,
-                                            transformOrigin: `${cx}% ${cy}%`,
-                                          }}
-                                        >
-                                          <img
-                                            src={patch.image}
-                                            alt={patch.name}
-                                            className="w-full h-full object-contain drop-shadow-md"
-                                            style={{
-                                              clipPath: patch.contentZone
-                                                ? (patch.contentZone.type === 'polygon' && patch.contentZone.points
-                                                  ? `polygon(${patch.contentZone.points.map((p: {x: number, y: number}) => `${p.x}% ${p.y}%`).join(', ')})`
-                                                  : `inset(${patch.contentZone.y}% ${100 - (patch.contentZone.x + patch.contentZone.width)}% ${100 - (patch.contentZone.y + patch.contentZone.height)}% ${patch.contentZone.x}%)`)
-                                                : 'none'
-                                            }}
-                                          />
-                                          <div 
-                                            className="absolute w-5 h-5 bg-pink text-white rounded-full flex items-center justify-center text-xs font-bold shadow"
-                                            style={{
-                                              left: `${cx}%`,
-                                              top: `${cy}%`,
-                                              transform: 'translate(-50%, -50%)'
-                                            }}
-                                          >
-                                            {pidx + 1}
-                                          </div>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                  {/* Front Patches List */}
-                                  {item.frontPatches && item.frontPatches.length > 0 && (
-                                    <div className="mt-2 flex flex-wrap gap-1">
-                                      {item.frontPatches.map((patch, pidx) => (
-                                        <span key={patch.id} className="text-xs bg-pink/10 text-pink px-2 py-0.5 rounded flex items-center gap-1">
-                                          <span className="w-4 h-4 bg-pink text-white rounded-full flex items-center justify-center text-[10px]">{pidx + 1}</span>
-                                          {patch.name}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  )}
+                            {/* Price Breakdown */}
+                            <div className="bg-gray-50 rounded p-2 mb-3 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">Base Price:</span>
+                                <span>{formatCurrency(details.basePricePerUnit, order.currency)} {item.qty > 1 && <span className="text-gray-400">× {item.qty}</span>}</span>
+                              </div>
+                              {details.totalPatches > 0 && (
+                                <div className="flex justify-between mt-1">
+                                  <span className="text-gray-600">
+                                    Patches ({details.totalPatches}):
+                                  </span>
+                                  <span>{formatCurrency(details.patchTotalPerUnit, order.currency)} {item.qty > 1 && <span className="text-gray-400">× {item.qty}</span>}</span>
                                 </div>
-                                
-                                {/* Back Side */}
-                                <div>
-                                  <p className="text-xs text-gray-400 mb-1">Back</p>
-                                  <div 
-                                    className="aspect-square bg-gray-100 rounded-lg overflow-hidden relative cursor-pointer"
-                                    onClick={() => item.backPatches && item.backPatches.length > 0 && setCraftingView({
-                                      show: true,
-                                      productName: item.name,
-                                      productImage: item.productImage || '/placeholder-product.png',
-                                      productBackImage: item.productBackImage,
-                                      patches: item.backPatches || [],
-                                      side: 'back'
-                                    })}
-                                  >
-                                    <img 
-                                      src={item.productBackImage || item.productImage || '/placeholder-product.png'}
-                                      alt="Back design"
-                                      className="w-full h-full object-contain"
-                                      onError={(e) => {
-                                        (e.target as HTMLImageElement).src = '/placeholder-product.png';
-                                      }}
-                                    />
-                                    {/* Patch Overlays - Same positioning as CustomizePage */}
-                                    {item.backPatches?.map((patch, pidx) => {
-                                      const cz = patch.contentZone || { x: 0, y: 0, width: 100, height: 100 };
-                                      const cx = cz.x + cz.width / 2;
-                                      const cy = cz.y + cz.height / 2;
-                                      return (
-                                        <div
-                                          key={patch.id}
-                                          className="absolute"
-                                          style={{
-                                            left: `${patch.x}%`,
-                                            top: `${patch.y}%`,
-                                            width: `${patch.widthPercent}%`,
-                                            height: `${patch.heightPercent}%`,
-                                            transform: `rotate(${patch.rotation}deg)`,
-                                            transformOrigin: `${cx}% ${cy}%`,
-                                          }}
-                                        >
-                                          <img
-                                            src={patch.image}
-                                            alt={patch.name}
-                                            className="w-full h-full object-contain drop-shadow-md"
-                                            style={{
-                                              clipPath: patch.contentZone
-                                                ? (patch.contentZone.type === 'polygon' && patch.contentZone.points
-                                                  ? `polygon(${patch.contentZone.points.map((p: {x: number, y: number}) => `${p.x}% ${p.y}%`).join(', ')})`
-                                                  : `inset(${patch.contentZone.y}% ${100 - (patch.contentZone.x + patch.contentZone.width)}% ${100 - (patch.contentZone.y + patch.contentZone.height)}% ${patch.contentZone.x}%)`)
-                                                : 'none'
-                                            }}
-                                          />
-                                          <div 
-                                            className="absolute w-5 h-5 bg-pink text-white rounded-full flex items-center justify-center text-xs font-bold shadow"
-                                            style={{
-                                              left: `${cx}%`,
-                                              top: `${cy}%`,
-                                              transform: 'translate(-50%, -50%)'
-                                            }}
-                                          >
-                                            {pidx + 1}
-                                          </div>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                  {/* Back Patches List */}
-                                  {item.backPatches && item.backPatches.length > 0 && (
-                                    <div className="mt-2 flex flex-wrap gap-1">
-                                      {item.backPatches.map((patch, pidx) => (
-                                        <span key={patch.id} className="text-xs bg-pink/10 text-pink px-2 py-0.5 rounded flex items-center gap-1">
-                                          <span className="w-4 h-4 bg-pink text-white rounded-full flex items-center justify-center text-[10px]">{pidx + 1}</span>
-                                          {patch.name}
-                                        </span>
-                                      ))}
+                              )}
+                              <Separator className="my-1" />
+                              <div className="flex justify-between font-medium">
+                                <span>Item Total:</span>
+                                <span>{formatCurrency(details.total, order.currency)}</span>
+                              </div>
+                            </div>
+
+                            {/* Design Previews — always show both sides */}
+                            <div className="grid grid-cols-2 gap-3 items-start">
+                              {/* Front */}
+                              <div>
+                                <p className="text-xs text-gray-400 mb-1 flex items-center gap-1">
+                                  <Badge variant="outline" className="text-[10px] h-4 px-1">Front</Badge>
+                                  <span>{details.frontCount} patch(es)</span>
+                                </p>
+                                <div className="bg-gray-100 rounded-lg p-2">
+                                  <DesignPreview
+                                    productImage={item.productImage || '/placeholder-product.png'}
+                                    patches={item.frontPatches || []}
+                                    placementZone={item.placementZone}
+                                    maxWidth={260}
+                                  />
+                                </div>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="w-full mt-2 relative z-10"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    openCraftingView(item, 'front');
+                                  }}
+                                >
+                                  <Eye className="w-4 h-4 mr-1" /> View Design
+                                </Button>
+                                {/* Front patch list */}
+                                <div className="mt-1 space-y-0.5">
+                                  {item.frontPatches?.map((patch) => (
+                                    <div key={patch.id} className="text-[10px] text-gray-500 truncate flex justify-between">
+                                      <span>• {patch.name}</span>
+                                      <span className="text-gray-400">{formatCurrency(patch.price || 0, order.currency)}</span>
                                     </div>
-                                  )}
+                                  ))}
                                 </div>
                               </div>
 
-                              {/* Patches */}
-                              {item.patches && item.patches.length > 0 && (
-                                <div className="mt-2">
-                                  <p className="text-xs text-gray-400 mb-1">Patches:</p>
-                                  <div className="flex flex-wrap gap-1">
-                                    {item.patches.map((patch, pidx) => (
-                                      <span key={pidx} className="text-xs bg-pink/10 text-pink px-2 py-0.5 rounded">
-                                        {patch}
-                                      </span>
-                                    ))}
-                                  </div>
+                              {/* Back — always show, even if empty */}
+                              <div>
+                                <p className="text-xs text-gray-400 mb-1 flex items-center gap-1">
+                                  <Badge variant="outline" className="text-[10px] h-4 px-1">Back</Badge>
+                                  <span>{details.backCount} patch(es)</span>
+                                </p>
+                                <div className="bg-gray-100 rounded-lg p-2">
+                                  <DesignPreview
+                                    productImage={item.productBackImage || item.productImage || '/placeholder-product.png'}
+                                    patches={item.backPatches || []}
+                                    placementZone={item.placementZone}
+                                    maxWidth={260}
+                                  />
                                 </div>
-                              )}
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="w-full mt-2 relative z-10"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    openCraftingView(item, 'back');
+                                  }}
+                                >
+                                  <Eye className="w-4 h-4 mr-1" /> View Design
+                                </Button>
+                                {/* Back patch list */}
+                                <div className="mt-1 space-y-0.5">
+                                  {item.backPatches?.map((patch) => (
+                                    <div key={patch.id} className="text-[10px] text-gray-500 truncate flex justify-between">
+                                      <span>• {patch.name}</span>
+                                      <span className="text-gray-400">{formatCurrency(patch.price || 0, order.currency)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
                             </div>
-                          ))}
-                        </div>
-
-                        {/* Total */}
-                        <div className="flex justify-between items-center pt-3 border-t mt-3">
-                          <span className="font-bold">Total</span>
-                          <span className="font-bold text-lg">{formatCurrency(order.total_amount, order.currency)}</span>
-                        </div>
-                      </div>
+                          </div>
+                        );
+                      })}
                     </div>
 
-                    {/* Full Timeline */}
-                    <div className="mt-4 pt-4 border-t">
-                      <h4 className="font-semibold mb-3">Order Timeline</h4>
-                      <div className="flex gap-4 text-sm">
-                        <div className="flex items-center gap-2">
-                          <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                          <span>Ordered: {new Date(order.created_at).toLocaleString()}</span>
+                    {/* Shipping & Actions */}
+                    <div className="space-y-4">
+                      {/* Shipping Address */}
+                      {order.shipping_address && (
+                        <div className="bg-white rounded-lg p-4 border shadow-sm">
+                          <h4 className="font-semibold mb-2 flex items-center gap-2">
+                            <MapPin className="w-4 h-4" />
+                            Shipping Address
+                          </h4>
+                          <div className="text-sm text-gray-600">
+                            <p className="font-medium">{order.shipping_address.name}</p>
+                            <p>{order.shipping_address.address_line1}</p>
+                            {order.shipping_address.address_line2 && (
+                              <p>{order.shipping_address.address_line2}</p>
+                            )}
+                            <p>
+                              {order.shipping_address.city}, {order.shipping_address.state} {order.shipping_address.postal_code}
+                            </p>
+                            <p>{order.shipping_address.country}</p>
+                          </div>
                         </div>
-                        {order.shipped_at && (
-                          <div className="flex items-center gap-2">
-                            <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
-                            <span>Shipped: {new Date(order.shipped_at).toLocaleString()}</span>
-                          </div>
-                        )}
-                        {order.delivered_at && (
-                          <div className="flex items-center gap-2">
-                            <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                            <span>Delivered: {new Date(order.delivered_at).toLocaleString()}</span>
-                          </div>
-                        )}
+                      )}
+
+                      {/* Fulfillment Actions */}
+                      <div className="bg-white rounded-lg p-4 border shadow-sm">
+                        <h4 className="font-semibold mb-3">Fulfillment Actions</h4>
+                        
+                        <div className="space-y-3">
+                          {order.fulfillment_status === 'pending' && (
+                            <Button
+                              onClick={() => updateFulfillmentStatus(order.id, 'processing')}
+                              disabled={updating === order.id}
+                              className="w-full bg-blue-500 hover:bg-blue-600"
+                            >
+                              <Package className="w-4 h-4 mr-2" />
+                              Start Processing
+                            </Button>
+                          )}
+
+                          {order.fulfillment_status === 'processing' && (
+                            <div className="space-y-2">
+                              <input
+                                type="text"
+                                placeholder="Tracking number (optional)"
+                                value={trackingInput[order.id] || ''}
+                                onChange={(e) => setTrackingInput(prev => ({ ...prev, [order.id]: e.target.value }))}
+                                className="w-full px-3 py-2 border rounded-lg text-sm"
+                              />
+                              <Button
+                                onClick={() => updateFulfillmentStatus(order.id, 'shipped')}
+                                disabled={updating === order.id}
+                                className="w-full bg-purple-500 hover:bg-purple-600"
+                              >
+                                <Truck className="w-4 h-4 mr-2" />
+                                Mark as Shipped
+                              </Button>
+                            </div>
+                          )}
+
+                          {order.fulfillment_status === 'shipped' && (
+                            <Button
+                              onClick={() => updateFulfillmentStatus(order.id, 'delivered')}
+                              disabled={updating === order.id}
+                              className="w-full bg-green-500 hover:bg-green-600"
+                            >
+                              <CheckCircle className="w-4 h-4 mr-2" />
+                              Mark as Delivered
+                            </Button>
+                          )}
+
+                          {order.tracking_number && (
+                            <div className="text-sm bg-gray-50 p-2 rounded">
+                              <span className="text-gray-500">Tracking:</span>{' '}
+                              <span className="font-medium">{order.tracking_number}</span>
+                            </div>
+                          )}
+
+                          {(order.fulfillment_status === 'shipped' || order.fulfillment_status === 'delivered') && order.shipped_at && (
+                            <div className="text-xs text-gray-500">
+                              Shipped: {formatDate(order.shipped_at)}
+                            </div>
+                          )}
+
+                          {order.fulfillment_status === 'delivered' && order.delivered_at && (
+                            <div className="text-xs text-gray-500">
+                              Delivered: {formatDate(order.delivered_at)}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {filteredOrders.length === 0 && (
+          <div className="text-center py-12 text-gray-500">
+            <Package className="w-12 h-12 mx-auto mb-3 opacity-30" />
+            <p className="text-lg font-medium">No orders found</p>
+            <p className="text-sm">Try adjusting your filters or search query</p>
+          </div>
+        )}
+      </div>
 
       {/* Crafting View Modal */}
       {craftingView?.show && (
@@ -809,6 +815,9 @@ export function AdminOrderManagement() {
           productBackImage={craftingView.productBackImage}
           patches={craftingView.patches}
           side={craftingView.side}
+          productWidthCm={craftingView.productWidthCm}
+          productHeightCm={craftingView.productHeightCm}
+          placementZone={craftingView.placementZone}
           onClose={() => setCraftingView(null)}
         />
       )}
@@ -819,43 +828,10 @@ export function AdminOrderManagement() {
           orders={productionMode.orders}
           currentIndex={productionMode.currentIndex}
           onClose={() => setProductionMode(null)}
-          onNext={() => {
-            if (productionMode.currentIndex < productionMode.orders.length - 1) {
-              setProductionMode({
-                ...productionMode,
-                currentIndex: productionMode.currentIndex + 1
-              });
-            }
-          }}
-          onPrevious={() => {
-            if (productionMode.currentIndex > 0) {
-              setProductionMode({
-                ...productionMode,
-                currentIndex: productionMode.currentIndex - 1
-              });
-            }
-          }}
-          onMarkComplete={async (orderId) => {
-            await updateOrderStatus(orderId, 'processing');
-            // Move to next order
-            if (productionMode.currentIndex < productionMode.orders.length - 1) {
-              setProductionMode({
-                ...productionMode,
-                currentIndex: productionMode.currentIndex + 1
-              });
-            } else {
-              // All done
-              setProductionMode(null);
-            }
-          }}
-          onSkip={() => {
-            if (productionMode.currentIndex < productionMode.orders.length - 1) {
-              setProductionMode({
-                ...productionMode,
-                currentIndex: productionMode.currentIndex + 1
-              });
-            }
-          }}
+          onNext={() => setProductionMode(prev => prev ? { ...prev, currentIndex: Math.min(prev.currentIndex + 1, prev.orders.length - 1) } : null)}
+          onPrevious={() => setProductionMode(prev => prev ? { ...prev, currentIndex: Math.max(prev.currentIndex - 1, 0) } : null)}
+          onMarkComplete={(orderId) => updateFulfillmentStatus(orderId, 'processing')}
+          onSkip={() => setProductionMode(prev => prev ? { ...prev, currentIndex: Math.min(prev.currentIndex + 1, prev.orders.length - 1) } : null)}
         />
       )}
     </div>

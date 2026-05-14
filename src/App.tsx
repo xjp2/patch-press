@@ -1,81 +1,84 @@
 import { useState, useEffect } from 'react';
-import { Palette, LogOut, Settings, User, ShoppingCart, X, Plus, Minus, Trash2, ChevronDown, ChevronUp, Package, Loader2, Menu } from 'lucide-react';
+import { LogOut, Settings, User, ShoppingCart, X, Plus, Minus, Trash2, ChevronDown, ChevronUp, Package, Loader2, Menu } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import './App.css';
 import { AuthModal } from './AuthModal';
 import type { UserType, AuthView } from './AuthModal';
 import { AdminPanel } from './AdminPanel';
-import type { Notice, Product, Patch, SiteContent } from './AdminPanel';
+import { PatchuuLogo } from './components/PatchuuLogo';
+import type { Product, Patch, SiteContent } from './AdminPanel';
 import { LandingPage } from './LandingPage';
 import { CustomizePage } from './CustomizePage';
 import { CartProvider, useCart } from './context/CartContext';
+import { CurrencyProvider, useCurrency } from './context/CurrencyContext';
 import supabase, { auth } from './lib/supabase';
 import { preloadCmsData, clearCmsCache, hasStaticCms } from './lib/cms';
 import type { Product as DbProduct, Patch as DbPatch } from './lib/cms';
+import { fixImagePath } from './lib/utils';
+import { CroppedThumbnail } from './components/CroppedThumbnail';
 import { StripeCheckout } from './components/StripeCheckout';
 import { OrderConfirmation } from './components/OrderConfirmation';
 import { OrderDetailPage } from './components/OrderDetailPage';
+import { PrivacyPolicyPage } from './components/PrivacyPolicyPage';
+import { TermsOfServicePage } from './components/TermsOfServicePage';
+import { RefundPolicyPage } from './components/RefundPolicyPage';
+import { ShippingPolicyPage } from './components/ShippingPolicyPage';
 
-type AppView = 'landing' | 'customize' | 'order-detail' | 'admin';
-type AdminTab = 'products' | 'patches' | 'orders' | 'pages' | 'global' | 'tests';
+type AppView = 'landing' | 'customize' | 'order-detail' | 'admin' | 'privacy' | 'terms' | 'refund' | 'shipping';
+
 
 const initialPatches: Patch[] = [
-  { id: '1', name: 'Fried Egg', category: 'food', image: '/patch-egg.png', price: 3, width: 80, height: 80 },
-  { id: '2', name: 'Burger', category: 'food', image: '/patch-burger.png', price: 4, width: 90, height: 90 },
-  { id: '3', name: 'Fries', category: 'food', image: '/patch-fries.png', price: 3, width: 70, height: 90 },
-  { id: '11', name: 'Beer', category: 'food', image: '/patch-beer.png', price: 3, width: 50, height: 90 },
-  { id: '15', name: 'Ice Cream', category: 'food', image: '/patch-icecream.png', price: 3, width: 60, height: 100 },
-  { id: '16', name: 'Watermelon', category: 'food', image: '/patch-watermelon.png', price: 3, width: 90, height: 70 },
-  { id: '17', name: 'Pizza', category: 'food', image: '/patch-pizza.png', price: 3, width: 90, height: 90 },
-  { id: '19', name: 'Strawberry', category: 'food', image: '/patch-strawberry.png', price: 3, width: 70, height: 80 },
-  { id: '20', name: 'Banana', category: 'food', image: '/patch-banana.png', price: 3, width: 80, height: 70 },
-  { id: '21', name: 'Donut', category: 'food', image: '/patch-donut.png', price: 3, width: 80, height: 80 },
-  { id: '22', name: 'Croissant', category: 'food', image: '/patch-croissant.png', price: 3, width: 90, height: 70 },
-  { id: '23', name: 'Cupcake', category: 'food', image: '/patch-cupcake.png', price: 3, width: 70, height: 90 },
-  { id: '24', name: 'Boba Tea', category: 'food', image: '/patch-boba.png', price: 4, width: 60, height: 100 },
-  { id: '25', name: 'Coffee', category: 'food', image: '/patch-coffee.png', price: 3, width: 70, height: 90 },
-  { id: '26', name: 'Milk', category: 'food', image: '/patch-milk.png', price: 3, width: 60, height: 90 },
-  { id: '27', name: 'Lemon', category: 'food', image: '/patch-lemon.png', price: 3, width: 80, height: 70 },
-  { id: '28', name: 'Peach', category: 'food', image: '/patch-peach.png', price: 3, width: 80, height: 80 },
-  { id: '29', name: 'Cherry', category: 'food', image: '/patch-cherry.png', price: 3, width: 80, height: 80 },
-  { id: '7', name: 'Cat', category: 'characters', image: '/patch-cat.png', price: 4, width: 90, height: 90 },
-  { id: '8', name: 'Dog', category: 'characters', image: '/patch-dog.png', price: 4, width: 90, height: 90 },
-  { id: '14', name: 'Bear', category: 'characters', image: '/patch-bear.png', price: 4, width: 90, height: 90 },
-  { id: '18', name: 'Cactus', category: 'characters', image: '/patch-cactus.png', price: 4, width: 70, height: 100 },
-  { id: '30', name: 'Panda', category: 'characters', image: '/patch-panda.png', price: 4, width: 90, height: 90 },
-  { id: '31', name: 'Rabbit', category: 'characters', image: '/patch-rabbit.png', price: 4, width: 80, height: 100 },
-  { id: '32', name: 'Hamster', category: 'characters', image: '/patch-hamster.png', price: 4, width: 90, height: 90 },
-  { id: '33', name: 'Penguin', category: 'characters', image: '/patch-penguin.png', price: 4, width: 70, height: 100 },
-  { id: '34', name: 'Chick', category: 'characters', image: '/patch-chick.png', price: 4, width: 80, height: 90 },
-  { id: '9', name: 'Letter S', category: 'letters', image: '/patch-letter-s.png', price: 2, width: 70, height: 90 },
-  { id: '10', name: 'Letter J', category: 'letters', image: '/patch-letter-j.png', price: 2, width: 70, height: 90 },
-  { id: '4', name: 'Pink Bow', category: 'symbols', image: '/patch-bow.png', price: 2, width: 90, height: 70 },
-  { id: '5', name: 'Rainbow', category: 'symbols', image: '/patch-rainbow.png', price: 3, width: 100, height: 70 },
-  { id: '6', name: 'Heart', category: 'symbols', image: '/patch-heart.png', price: 2, width: 80, height: 80 },
-  { id: '12', name: 'Car', category: 'symbols', image: '/patch-car.png', price: 4, width: 100, height: 70 },
-  { id: '13', name: 'Star', category: 'symbols', image: '/patch-star.png', price: 2, width: 90, height: 90 },
-  { id: '35', name: 'Flower', category: 'symbols', image: '/patch-flower.png', price: 3, width: 80, height: 80 },
-  { id: '36', name: 'Sunflower', category: 'symbols', image: '/patch-sunflower.png', price: 3, width: 90, height: 90 },
-  { id: '37', name: 'Tulip', category: 'symbols', image: '/patch-tulip.png', price: 3, width: 70, height: 90 },
-  { id: '38', name: 'Clover', category: 'symbols', image: '/patch-clover.png', price: 2, width: 80, height: 80 },
-  { id: '39', name: 'Butterfly', category: 'symbols', image: '/patch-butterfly.png', price: 3, width: 100, height: 80 },
-  { id: '40', name: 'Bee', category: 'symbols', image: '/patch-bee.png', price: 3, width: 90, height: 80 },
-  { id: '41', name: 'Music Note', category: 'symbols', image: '/patch-music.png', price: 2, width: 60, height: 90 },
-  { id: '42', name: 'Lightning', category: 'symbols', image: '/patch-lightning.png', price: 2, width: 60, height: 100 },
+  { id: '1', name: 'Fried Egg', category: 'food', image: '/patch-egg.png', price: 3, quantity: 50, width: 80, height: 80 },
+  { id: '2', name: 'Burger', category: 'food', image: '/patch-burger.png', price: 4, quantity: 50, width: 90, height: 90 },
+  { id: '3', name: 'Fries', category: 'food', image: '/patch-fries.png', price: 3, quantity: 50, width: 70, height: 90 },
+  { id: '11', name: 'Beer', category: 'food', image: '/patch-beer.png', price: 3, quantity: 50, width: 50, height: 90 },
+  { id: '15', name: 'Ice Cream', category: 'food', image: '/patch-icecream.png', price: 3, quantity: 50, width: 60, height: 100 },
+  { id: '16', name: 'Watermelon', category: 'food', image: '/patch-watermelon.png', price: 3, quantity: 50, width: 90, height: 70 },
+  { id: '17', name: 'Pizza', category: 'food', image: '/patch-pizza.png', price: 3, quantity: 50, width: 90, height: 90 },
+  { id: '19', name: 'Strawberry', category: 'food', image: '/patch-strawberry.png', price: 3, quantity: 50, width: 70, height: 80 },
+  { id: '20', name: 'Banana', category: 'food', image: '/patch-banana.png', price: 3, quantity: 50, width: 80, height: 70 },
+  { id: '21', name: 'Donut', category: 'food', image: '/patch-donut.png', price: 3, quantity: 50, width: 80, height: 80 },
+  { id: '22', name: 'Croissant', category: 'food', image: '/patch-croissant.png', price: 3, quantity: 50, width: 90, height: 70 },
+  { id: '23', name: 'Cupcake', category: 'food', image: '/patch-cupcake.png', price: 3, quantity: 50, width: 70, height: 90 },
+  { id: '24', name: 'Boba Tea', category: 'food', image: '/patch-boba.png', price: 4, quantity: 50, width: 60, height: 100 },
+  { id: '25', name: 'Coffee', category: 'food', image: '/patch-coffee.png', price: 3, quantity: 50, width: 70, height: 90 },
+  { id: '26', name: 'Milk', category: 'food', image: '/patch-milk.png', price: 3, quantity: 50, width: 60, height: 90 },
+  { id: '27', name: 'Lemon', category: 'food', image: '/patch-lemon.png', price: 3, quantity: 50, width: 80, height: 70 },
+  { id: '28', name: 'Peach', category: 'food', image: '/patch-peach.png', price: 3, quantity: 50, width: 80, height: 80 },
+  { id: '29', name: 'Cherry', category: 'food', image: '/patch-cherry.png', price: 3, quantity: 50, width: 80, height: 80 },
+  { id: '7', name: 'Cat', category: 'characters', image: '/patch-cat.png', price: 4, quantity: 50, width: 90, height: 90 },
+  { id: '8', name: 'Dog', category: 'characters', image: '/patch-dog.png', price: 4, quantity: 50, width: 90, height: 90 },
+  { id: '14', name: 'Bear', category: 'characters', image: '/patch-bear.png', price: 4, quantity: 50, width: 90, height: 90 },
+  { id: '18', name: 'Cactus', category: 'characters', image: '/patch-cactus.png', price: 4, quantity: 50, width: 70, height: 100 },
+  { id: '30', name: 'Panda', category: 'characters', image: '/patch-panda.png', price: 4, quantity: 50, width: 90, height: 90 },
+  { id: '31', name: 'Rabbit', category: 'characters', image: '/patch-rabbit.png', price: 4, quantity: 50, width: 80, height: 100 },
+  { id: '32', name: 'Hamster', category: 'characters', image: '/patch-hamster.png', price: 4, quantity: 50, width: 90, height: 90 },
+  { id: '33', name: 'Penguin', category: 'characters', image: '/patch-penguin.png', price: 4, quantity: 50, width: 70, height: 100 },
+  { id: '34', name: 'Chick', category: 'characters', image: '/patch-chick.png', price: 4, quantity: 50, width: 80, height: 90 },
+  { id: '9', name: 'Letter S', category: 'letters', image: '/patch-letter-s.png', price: 2, quantity: 50, width: 70, height: 90 },
+  { id: '10', name: 'Letter J', category: 'letters', image: '/patch-letter-j.png', price: 2, quantity: 50, width: 70, height: 90 },
+  { id: '4', name: 'Pink Bow', category: 'symbols', image: '/patch-bow.png', price: 2, quantity: 50, width: 90, height: 70 },
+  { id: '5', name: 'Rainbow', category: 'symbols', image: '/patch-rainbow.png', price: 3, quantity: 50, width: 100, height: 70 },
+  { id: '6', name: 'Heart', category: 'symbols', image: '/patch-heart.png', price: 2, quantity: 50, width: 80, height: 80 },
+  { id: '12', name: 'Car', category: 'symbols', image: '/patch-car.png', price: 4, quantity: 50, width: 100, height: 70 },
+  { id: '13', name: 'Star', category: 'symbols', image: '/patch-star.png', price: 2, quantity: 50, width: 90, height: 90 },
+  { id: '35', name: 'Flower', category: 'symbols', image: '/patch-flower.png', price: 3, quantity: 50, width: 80, height: 80 },
+  { id: '36', name: 'Sunflower', category: 'symbols', image: '/patch-sunflower.png', price: 3, quantity: 50, width: 90, height: 90 },
+  { id: '37', name: 'Tulip', category: 'symbols', image: '/patch-tulip.png', price: 3, quantity: 50, width: 70, height: 90 },
+  { id: '38', name: 'Clover', category: 'symbols', image: '/patch-clover.png', price: 2, quantity: 50, width: 80, height: 80 },
+  { id: '39', name: 'Butterfly', category: 'symbols', image: '/patch-butterfly.png', price: 3, quantity: 50, width: 100, height: 80 },
+  { id: '40', name: 'Bee', category: 'symbols', image: '/patch-bee.png', price: 3, quantity: 50, width: 90, height: 80 },
+  { id: '41', name: 'Music Note', category: 'symbols', image: '/patch-music.png', price: 2, quantity: 50, width: 60, height: 90 },
+  { id: '42', name: 'Lightning', category: 'symbols', image: '/patch-lightning.png', price: 2, quantity: 50, width: 60, height: 100 },
 ];
 
 const initialProducts: Product[] = [
-  { id: 'tote', name: 'Canvas Tote', frontImage: '/tote-bag.png', backImage: '/tote-bag.png', basePrice: 25, width: 400, height: 500, placementZone: { x: 15, y: 25, width: 70, height: 60, type: 'rectangle' } },
-  { id: 'keychain-blue', name: 'Blue Keychain', frontImage: '/keychain-strap-blue.png', backImage: '/keychain-strap-blue.png', basePrice: 12, width: 300, height: 100, placementZone: { x: 10, y: 20, width: 80, height: 60, type: 'rectangle' } },
-  { id: 'keychain-purple', name: 'Purple Keychain', frontImage: '/keychain-strap-purple.png', backImage: '/keychain-strap-purple.png', basePrice: 12, width: 300, height: 100, placementZone: { x: 10, y: 20, width: 80, height: 60, type: 'rectangle' } },
-  { id: 'keychain-white', name: 'White Keychain', frontImage: '/keychain-strap-white.png', backImage: '/keychain-strap-white.png', basePrice: 12, width: 300, height: 100, placementZone: { x: 10, y: 20, width: 80, height: 60, type: 'rectangle' } },
-  { id: 'pouch', name: 'Beige Pouch', frontImage: '/pouch-beige.png', backImage: '/pouch-beige.png', basePrice: 18, width: 350, height: 250, placementZone: { x: 15, y: 20, width: 70, height: 65, type: 'rectangle' } },
-  { id: 'cardholder', name: 'Cardholder', frontImage: '/cardholder-yellow.png', backImage: '/cardholder-yellow.png', basePrice: 15, width: 300, height: 200, placementZone: { x: 10, y: 15, width: 80, height: 70, type: 'rectangle' } },
-];
-
-const initialNotices: Notice[] = [
-  { id: '1', title: 'New Summer Collection!', content: 'Check out our new fruit-themed patches - strawberries, watermelons, and more!', date: '2025-02-14', type: 'new-product' },
-  { id: '2', title: 'Free Shipping', content: 'Get free shipping on orders over $50! Use code FREESHIP at checkout.', date: '2025-02-10', type: 'promotion' }
+  { id: 'tote', name: 'Canvas Tote', frontImage: '/tote-bag.png', backImage: '/tote-bag.png', basePrice: 25, quantity: 10, width: 400, height: 500, placementZone: { x: 15, y: 25, width: 70, height: 60, type: 'rectangle' } },
+  { id: 'keychain-blue', name: 'Blue Keychain', frontImage: '/keychain-strap-blue.png', backImage: '/keychain-strap-blue.png', basePrice: 12, quantity: 20, width: 300, height: 100, placementZone: { x: 10, y: 20, width: 80, height: 60, type: 'rectangle' } },
+  { id: 'keychain-purple', name: 'Purple Keychain', frontImage: '/keychain-strap-purple.png', backImage: '/keychain-strap-purple.png', basePrice: 12, quantity: 20, width: 300, height: 100, placementZone: { x: 10, y: 20, width: 80, height: 60, type: 'rectangle' } },
+  { id: 'keychain-white', name: 'White Keychain', frontImage: '/keychain-strap-white.png', backImage: '/keychain-strap-white.png', basePrice: 12, quantity: 20, width: 300, height: 100, placementZone: { x: 10, y: 20, width: 80, height: 60, type: 'rectangle' } },
+  { id: 'pouch', name: 'Beige Pouch', frontImage: '/pouch-beige.png', backImage: '/pouch-beige.png', basePrice: 18, quantity: 15, width: 350, height: 250, placementZone: { x: 15, y: 20, width: 70, height: 65, type: 'rectangle' } },
+  { id: 'cardholder', name: 'Cardholder', frontImage: '/cardholder-yellow.png', backImage: '/cardholder-yellow.png', basePrice: 15, quantity: 15, width: 300, height: 200, placementZone: { x: 10, y: 15, width: 80, height: 70, type: 'rectangle' } },
 ];
 
 // Cart Item Component with expandable details
@@ -84,6 +87,7 @@ function CartItemCard({ item, updateQuantity, removeItem }: {
   updateQuantity: (id: string, qty: number) => void;
   removeItem: (id: string) => void;
 }) {
+  const { formatPrice } = useCurrency();
   const [expanded, setExpanded] = useState(false);
   // Handle old cart data that may not have frontPatches/backPatches
   const frontPatches = item.frontPatches || [];
@@ -99,25 +103,24 @@ function CartItemCard({ item, updateQuantity, removeItem }: {
     <div className="bg-gray-50 rounded-xl p-4">
       {/* Main Preview Row */}
       <div className="flex gap-3">
-        {/* Product Preview Image */}
-        <div className="w-20 h-20 bg-white rounded-lg border flex-shrink-0 overflow-hidden">
-          <img 
-            src={item.productImage || '/products/tote-bag.png'} 
-            alt={item.productName}
-            className="w-full h-full object-contain"
-          />
-        </div>
+        {/* Product Preview Image — measures actual image, matches ProductCard */}
+        <CroppedThumbnail
+          src={fixImagePath(item.productImage) || '/tote-bag.png'}
+          zone={item.placementZone}
+          className="w-20 h-20 bg-cardstock rounded-lg border border-ink/10 flex-shrink-0"
+          alt={item.productName}
+        />
         
         {/* Product Info */}
         <div className="flex-1 min-w-0">
           <div className="flex justify-between items-start">
             <div>
               <h4 className="font-semibold text-sm">{item.productName}</h4>
-              <p className="text-xs text-gray-500 mt-0.5">
-                Base: ${(item.basePrice || 0).toFixed(2)}
+              <p className="text-xs text-ink-muted mt-0.5">
+                Base: {formatPrice(item.basePrice || 0)}
               </p>
-              <p className="text-xs text-gray-500">
-                {totalPatches} patch{totalPatches !== 1 ? 'es' : ''} (+${patchPrice.toFixed(2)})
+              <p className="text-xs text-ink-muted">
+                {totalPatches} patch{totalPatches !== 1 ? 'es' : ''} (+{formatPrice(patchPrice)})
               </p>
             </div>
             <button
@@ -133,26 +136,26 @@ function CartItemCard({ item, updateQuantity, removeItem }: {
       {/* Expandable Details */}
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-center gap-1 py-2 mt-2 text-xs text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+        className="w-full flex items-center justify-center gap-1 py-2 mt-2 text-xs text-ink-muted hover:text-ink/80 hover:bg-cardstock rounded-lg transition-colors"
       >
         {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
         {expanded ? 'Hide Details' : 'View Patches'}
       </button>
 
       {expanded && (
-        <div className="mt-2 pt-2 border-t border-gray-200 space-y-3">
+        <div className="mt-2 pt-2 border-t border-ink/10 space-y-3">
           {/* Front Side Patches */}
           {frontPatches.length > 0 && (
             <div>
-              <h5 className="text-xs font-semibold text-gray-600 mb-2">Front Side</h5>
+              <h5 className="text-xs font-semibold text-ink/70 mb-2">Front Side</h5>
               <div className="space-y-1.5">
                 {frontPatches.map((patch) => (
-                  <div key={patch.id} className="flex items-center justify-between bg-white rounded-lg px-2 py-1.5">
+                  <div key={patch.id} className="flex items-center justify-between bg-cardstock rounded-lg px-2 py-1.5">
                     <div className="flex items-center gap-2">
                       <img src={patch.image} alt={patch.name} className="w-6 h-6 object-contain" />
                       <span className="text-xs">{patch.name}</span>
                     </div>
-                    <span className="text-xs font-medium">${(patch.price || 0).toFixed(2)}</span>
+                    <span className="text-xs font-medium">{formatPrice(patch.price || 0)}</span>
                   </div>
                 ))}
               </div>
@@ -162,15 +165,15 @@ function CartItemCard({ item, updateQuantity, removeItem }: {
           {/* Back Side Patches */}
           {backPatches.length > 0 && (
             <div>
-              <h5 className="text-xs font-semibold text-gray-600 mb-2">Back Side</h5>
+              <h5 className="text-xs font-semibold text-ink/70 mb-2">Back Side</h5>
               <div className="space-y-1.5">
                 {backPatches.map((patch) => (
-                  <div key={patch.id} className="flex items-center justify-between bg-white rounded-lg px-2 py-1.5">
+                  <div key={patch.id} className="flex items-center justify-between bg-cardstock rounded-lg px-2 py-1.5">
                     <div className="flex items-center gap-2">
                       <img src={patch.image} alt={patch.name} className="w-6 h-6 object-contain" />
                       <span className="text-xs">{patch.name}</span>
                     </div>
-                    <span className="text-xs font-medium">${(patch.price || 0).toFixed(2)}</span>
+                    <span className="text-xs font-medium">{formatPrice(patch.price || 0)}</span>
                   </div>
                 ))}
               </div>
@@ -180,7 +183,7 @@ function CartItemCard({ item, updateQuantity, removeItem }: {
           {/* Legacy Patches (old cart data) */}
           {legacyPatches.length > 0 && (
             <div>
-              <h5 className="text-xs font-semibold text-gray-600 mb-2">Patches</h5>
+              <h5 className="text-xs font-semibold text-ink/70 mb-2">Patches</h5>
               <div className="space-y-1.5">
                 {legacyPatches.map((patch: any) => (
                   <div key={patch.id} className="flex items-center justify-between bg-white rounded-lg px-2 py-1.5">
@@ -188,7 +191,7 @@ function CartItemCard({ item, updateQuantity, removeItem }: {
                       <img src={patch.image} alt={patch.name} className="w-6 h-6 object-contain" />
                       <span className="text-xs">{patch.name}</span>
                     </div>
-                    <span className="text-xs font-medium">${(patch.price || 0).toFixed(2)}</span>
+                    <span className="text-xs font-medium">{formatPrice(patch.price || 0)}</span>
                   </div>
                 ))}
               </div>
@@ -196,41 +199,41 @@ function CartItemCard({ item, updateQuantity, removeItem }: {
           )}
 
           {/* Price Breakdown */}
-          <div className="pt-2 border-t border-gray-200 text-xs space-y-1">
-            <div className="flex justify-between text-gray-500">
+          <div className="pt-2 border-t border-ink/10 text-xs space-y-1">
+            <div className="flex justify-between text-ink-muted">
               <span>Base Product</span>
-              <span>${(item.basePrice || 0).toFixed(2)}</span>
+              <span>{formatPrice(item.basePrice || 0)}</span>
             </div>
-            <div className="flex justify-between text-gray-500">
+            <div className="flex justify-between text-ink-muted">
               <span>Patches ({totalPatches})</span>
-              <span>${patchPrice.toFixed(2)}</span>
+              <span>{formatPrice(patchPrice)}</span>
             </div>
-            <div className="flex justify-between font-semibold text-gray-700 pt-1 border-t">
+            <div className="flex justify-between font-semibold text-ink/80 pt-1 border-t">
               <span>Item Total</span>
-              <span>${item.totalPrice.toFixed(2)}</span>
+              <span>{formatPrice(item.totalPrice)}</span>
             </div>
           </div>
         </div>
       )}
 
       {/* Quantity & Price Controls */}
-      <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-200">
+      <div className="flex items-center justify-between mt-3 pt-3 border-t border-ink/10">
         <div className="flex items-center gap-2">
           <button
             onClick={() => updateQuantity(item.id, item.quantity - 1)}
-            className="p-1 hover:bg-gray-200 rounded-full bg-white"
+            className="p-1 hover:bg-cardstock rounded-full bg-cardstock"
           >
             <Minus className="w-4 h-4" />
           </button>
           <span className="w-8 text-center font-medium text-sm">{item.quantity}</span>
           <button
             onClick={() => updateQuantity(item.id, item.quantity + 1)}
-            className="p-1 hover:bg-gray-200 rounded-full bg-white"
+            className="p-1 hover:bg-cardstock rounded-full bg-cardstock"
           >
             <Plus className="w-4 h-4" />
           </button>
         </div>
-        <span className="font-bold">${(item.totalPrice * item.quantity).toFixed(2)}</span>
+        <span className="font-bold">{formatPrice(item.totalPrice * item.quantity)}</span>
       </div>
     </div>
   );
@@ -245,32 +248,13 @@ interface CartDrawerProps {
 
 function CartDrawer({ currentUser, setShowAuth, setAuthView }: CartDrawerProps) {
   const { items, isCartOpen, setIsCartOpen, totalPrice, totalItems, updateQuantity, removeItem, clearCart } = useCart();
+  const { formatPrice } = useCurrency();
   const [showCheckout, setShowCheckout] = useState(false);
   const [, setCheckoutState] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
   const [checkoutError, setCheckoutError] = useState('');
   const [showOrderConfirmation, setShowOrderConfirmation] = useState(false);
   const [orderNumber, setOrderNumber] = useState('');
   const [orderSummary, setOrderSummary] = useState<{items: typeof items, totalPrice: number} | null>(null);
-
-  // Get currency from site content
-  const [currency, setCurrency] = useState('sgd');
-  
-  useEffect(() => {
-    // Load currency from CMS or localStorage
-    const savedContent = localStorage.getItem('cms_site_content');
-    if (savedContent) {
-      try {
-        const content = JSON.parse(savedContent);
-        if (content?.global?.currency) {
-          setCurrency(content.global.currency.toLowerCase());
-        }
-      } catch (e) {
-        console.error('Failed to parse site content:', e);
-      }
-    }
-  }, []);
-
-
 
   const handleCheckoutSuccess = async (orderData?: { orderId: string; orderNumber: string }) => {
     setCheckoutState('success');
@@ -301,6 +285,43 @@ function CartDrawer({ currentUser, setShowAuth, setAuthView }: CartDrawerProps) 
     setCheckoutState('error');
   };
 
+  // Check inventory before proceeding to checkout
+  const [inventoryError, setInventoryError] = useState<string | null>(null);
+  const [isCheckingInventory, setIsCheckingInventory] = useState(false);
+
+  const handleProceedToCheckout = async () => {
+    setIsCheckingInventory(true);
+    setInventoryError(null);
+    
+    try {
+      const { db } = await import('./lib/supabase');
+      
+      // Prepare items for inventory check
+      const inventoryItems = items.map(item => ({
+        productId: item.productId,
+        patchIds: [...(item.frontPatches || []), ...(item.backPatches || [])].map((p: any) => p.id),
+        quantity: item.quantity,
+      }));
+      
+      const { insufficient, available } = await db.inventory.checkAvailability(inventoryItems);
+      
+      if (!available) {
+        const errorMessages = insufficient.map(item => 
+          `${item.name} (${item.type}): ${item.available} available, ${item.requested} requested`
+        );
+        setInventoryError(`Insufficient stock:\n${errorMessages.join('\n')}`);
+      } else {
+        setShowCheckout(true);
+      }
+    } catch (err) {
+      console.error('Error checking inventory:', err);
+      // Allow checkout to proceed even if inventory check fails
+      setShowCheckout(true);
+    } finally {
+      setIsCheckingInventory(false);
+    }
+  };
+
   const handleClose = () => {
     setIsCartOpen(false);
     setShowCheckout(false);
@@ -319,13 +340,13 @@ function CartDrawer({ currentUser, setShowAuth, setAuthView }: CartDrawerProps) 
         customerEmail={currentUser?.email || 'guest@example.com'}
         items={orderSummary.items.map(i => ({ 
           name: i.productName, 
-          patches: [...(i.frontPatches || []), ...(i.backPatches || [])].map(p => p.name), 
+          basePrice: i.basePrice,
+          patches: [...(i.frontPatches || []), ...(i.backPatches || [])].map(p => ({ name: p.name, image: p.image, price: p.price })), 
           qty: i.quantity, 
-          price: i.totalPrice,
-          productImage: i.productImage
+          productImage: i.productImage,
+          placementZone: i.placementZone
         }))}
         totalAmount={orderSummary.totalPrice}
-        currency={currency}
         onContinueShopping={handleCloseOrderConfirmation}
       />
     );
@@ -336,12 +357,12 @@ function CartDrawer({ currentUser, setShowAuth, setAuthView }: CartDrawerProps) 
   return (
     <>
       <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" onClick={handleClose} />
-      <div className="fixed right-0 top-0 h-full w-full max-w-md bg-white z-50 shadow-2xl flex flex-col">
+      <div className="fixed right-0 top-0 h-full w-full max-w-md bg-cardstock z-50 shadow-paper-lg border-[2.5px] border-ink rounded-[1.25rem] flex flex-col">
         <div className="flex items-center justify-between p-4 border-b">
           <h2 className="text-lg font-bold">
             {showCheckout ? 'Checkout' : `Shopping Cart (${totalItems})`}
           </h2>
-          <button onClick={handleClose} className="p-2 hover:bg-gray-100 rounded-full">
+          <button onClick={handleClose} className="p-2 hover:bg-cardstock rounded-full">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -352,7 +373,7 @@ function CartDrawer({ currentUser, setShowAuth, setAuthView }: CartDrawerProps) 
             <div className="space-y-4">
               <button
                 onClick={() => setShowCheckout(false)}
-                className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1"
+                className="text-sm text-ink-muted hover:text-ink/80 flex items-center gap-1"
               >
                 ← Back to cart
               </button>
@@ -371,8 +392,7 @@ function CartDrawer({ currentUser, setShowAuth, setAuthView }: CartDrawerProps) 
 
               {/* Payment Step with AddressElement */}
               <StripeCheckout
-                amount={Math.round(totalPrice * 100)}
-                currency={currency}
+                amount={totalPrice}
                 userId={currentUser?.id}
                 customerEmail={currentUser?.email}
                 cartItems={items}
@@ -384,8 +404,8 @@ function CartDrawer({ currentUser, setShowAuth, setAuthView }: CartDrawerProps) 
             // Cart View
             items.length === 0 ? (
               <div className="text-center py-12">
-                <ShoppingCart className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-500">Your cart is empty</p>
+                <ShoppingCart className="w-16 h-16 text-ink/20 mx-auto mb-4" />
+                <p className="text-ink-muted">Your cart is empty</p>
               </div>
             ) : (
               <div className="space-y-4">
@@ -406,18 +426,29 @@ function CartDrawer({ currentUser, setShowAuth, setAuthView }: CartDrawerProps) 
           <div className="border-t p-4 space-y-4">
             <div className="flex justify-between text-lg font-bold">
               <span>Total</span>
-              <span>${totalPrice.toFixed(2)} {currency.toUpperCase()}</span>
+              <span>{formatPrice(totalPrice)}</span>
             </div>
+            <p className="text-[10px] text-ink/40 text-right">Prices converted using current exchange rates</p>
             {checkoutError && !showCheckout && (
               <div className="text-red-600 text-sm bg-red-50 p-2 rounded">{checkoutError}</div>
+            )}
+            {inventoryError && (
+              <div className="text-red-600 text-sm bg-red-50 p-3 rounded whitespace-pre-line">
+                {inventoryError}
+              </div>
             )}
             {currentUser ? (
               // Logged in - show checkout button
               <button
-                onClick={() => setShowCheckout(true)}
-                className="w-full btn-primary py-3 flex items-center justify-center gap-2"
+                onClick={handleProceedToCheckout}
+                disabled={isCheckingInventory}
+                className="w-full bg-craft-mint text-ink border-[2.5px] border-ink rounded-[1.25rem] shadow-paper py-3 flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                Proceed to Checkout
+                {isCheckingInventory ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> Checking Stock...</>
+                ) : (
+                  'Proceed to Checkout'
+                )}
               </button>
             ) : (
               // Not logged in - show sign in button
@@ -430,11 +461,11 @@ function CartDrawer({ currentUser, setShowAuth, setAuthView }: CartDrawerProps) 
                     setAuthView('login');
                     setShowAuth(true);
                   }}
-                  className="w-full btn-primary py-3 flex items-center justify-center gap-2"
+                  className="w-full bg-craft-mint text-ink border-[2.5px] border-ink rounded-[1.25rem] shadow-paper py-3 flex items-center justify-center gap-2"
                 >
                   Sign in to Checkout
                 </button>
-                <p className="text-xs text-gray-500 text-center">
+                <p className="text-xs text-ink-muted text-center">
                   Please sign in or create an account to complete your purchase
                 </p>
               </div>
@@ -457,16 +488,25 @@ interface UserOrder {
         price: number;
     }>;
     total_amount: number;
+    status: string;
     fulfillment_status: string;
     tracking_number: string | null;
     created_at: string;
     shipped_at: string | null;
     delivered_at: string | null;
+    currency: string;
 }
 
 function UserOrdersModal({ show, onClose, userId, onViewOrder }: { show: boolean; onClose: () => void; userId: string; onViewOrder: (orderId: string) => void }) {
     const [orders, setOrders] = useState<UserOrder[]>([]);
     const [loading, setLoading] = useState(true);
+
+    const formatOrderCurrency = (amount: number, currency: string) => {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: currency?.toUpperCase() || 'SGD',
+      }).format(amount);
+    };
 
     useEffect(() => {
         if (show && userId) {
@@ -479,7 +519,7 @@ function UserOrdersModal({ show, onClose, userId, onViewOrder }: { show: boolean
         try {
             const { data, error } = await supabase
                 .from('orders')
-                .select('id, order_number, items, total_amount, fulfillment_status, tracking_number, created_at, shipped_at, delivered_at')
+                .select('id, order_number, items, total_amount, status, fulfillment_status, tracking_number, created_at, shipped_at, delivered_at, currency')
                 .eq('user_id', userId)
                 .order('created_at', { ascending: false });
 
@@ -499,16 +539,21 @@ function UserOrdersModal({ show, onClose, userId, onViewOrder }: { show: boolean
             shipped: 'bg-purple-100 text-purple-800',
             delivered: 'bg-green-100 text-green-800',
             cancelled: 'bg-red-100 text-red-800',
+            paid: 'bg-green-100 text-green-800',
+            amount_mismatch: 'bg-red-100 text-red-800',
         };
-        return styles[status] || 'bg-gray-100 text-gray-800';
+        return styles[status] || 'bg-cardstock text-ink/80';
     };
 
     const getStatusIcon = (status: string) => {
         switch (status) {
             case 'pending': return '⏳';
+            case 'paid': return '✅';
             case 'processing': return '🔧';
             case 'shipped': return '📦';
             case 'delivered': return '✅';
+            case 'cancelled': return '❌';
+            case 'amount_mismatch': return '⚠️';
             default: return '📋';
         }
     };
@@ -518,10 +563,10 @@ function UserOrdersModal({ show, onClose, userId, onViewOrder }: { show: boolean
     return (
         <>
             <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-            <div className="fixed right-0 top-0 h-full w-full max-w-md bg-white z-50 shadow-2xl flex flex-col">
+            <div className="fixed right-0 top-0 h-full w-full max-w-md bg-cardstock z-50 shadow-paper-lg border-[2.5px] border-ink rounded-[1.25rem] flex flex-col">
                 <div className="flex items-center justify-between p-4 border-b">
                     <h2 className="text-lg font-bold">My Orders</h2>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full">
+                    <button onClick={onClose} className="p-2 hover:bg-cardstock rounded-full">
                         <X className="w-5 h-5" />
                     </button>
                 </div>
@@ -529,21 +574,21 @@ function UserOrdersModal({ show, onClose, userId, onViewOrder }: { show: boolean
                 <div className="flex-1 overflow-y-auto p-4">
                     {loading ? (
                         <div className="flex items-center justify-center py-12">
-                            <Loader2 className="w-8 h-8 animate-spin text-pink" />
-                            <span className="ml-2 text-gray-600">Loading orders...</span>
+                            <Loader2 className="w-8 h-8 animate-spin text-craft-mint" />
+                            <span className="ml-2 text-ink/70">Loading orders...</span>
                         </div>
                     ) : orders.length === 0 ? (
                         <div className="text-center py-12">
-                            <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                            <p className="text-gray-500">No orders yet</p>
-                            <p className="text-sm text-gray-400 mt-2">Your order history will appear here</p>
+                            <Package className="w-16 h-16 text-ink/20 mx-auto mb-4" />
+                            <p className="text-ink-muted">No orders yet</p>
+                            <p className="text-sm text-ink/40 mt-2">Your order history will appear here</p>
                         </div>
                     ) : (
                         <div className="space-y-3">
                             {orders.map((order) => (
                                 <div
                                     key={order.id}
-                                    className="border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow bg-white cursor-pointer"
+                                    className="border border-ink/10 rounded-xl p-4 hover:shadow-md transition-shadow bg-cardstock cursor-pointer"
                                     onClick={() => {
                                         onClose();
                                         onViewOrder(order.id);
@@ -553,21 +598,21 @@ function UserOrdersModal({ show, onClose, userId, onViewOrder }: { show: boolean
                                         <div>
                                             <div className="flex items-center gap-2">
                                                 <span className="font-bold">#{order.order_number}</span>
-                                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(order.fulfillment_status)}`}>
-                                                    {getStatusIcon(order.fulfillment_status)} {order.fulfillment_status}
+                                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(order.status)}`}>
+                                                    {getStatusIcon(order.status)} {order.status}
                                                 </span>
                                             </div>
-                                            <p className="text-xs text-gray-400 mt-1">
+                                            <p className="text-xs text-ink/40 mt-1">
                                                 {new Date(order.created_at).toLocaleDateString()}
                                             </p>
                                         </div>
                                         <div className="text-right">
-                                            <p className="font-bold">${Number(order.total_amount).toFixed(2)}</p>
+                                            <p className="font-bold">{formatOrderCurrency(Number(order.total_amount), order.currency)}</p>
                                         </div>
                                     </div>
 
                                     {/* Items Preview */}
-                                    <div className="text-sm text-gray-600">
+                                    <div className="text-sm text-ink/70">
                                         {order.items?.map((item, idx) => (
                                             <span key={idx}>
                                                 {item.name} × {item.qty}
@@ -607,11 +652,12 @@ interface NavbarProps {
   onAuthClick: () => void;
   onLogout: () => void;
   onHomeClick: () => void;
-  onCurrencyChange: (currency: 'USD' | 'SGD' | 'EUR' | 'GBP' | 'JPY' | 'KRW', symbol: string) => void;
-  currency: 'USD' | 'SGD' | 'EUR' | 'GBP' | 'JPY' | 'KRW';
+  onCurrencyChange: () => void;
+  currency: string;
 }
 
-function Navbar({ navbar, global, currentUser, isAuthLoading, totalItems, onCartClick, onAdminClick, onUserOrdersClick, onAuthClick, onLogout, onHomeClick, onCurrencyChange, currency }: NavbarProps) {
+function Navbar({ navbar, global: _global, currentUser, isAuthLoading, totalItems, onCartClick, onAdminClick, onUserOrdersClick, onAuthClick, onLogout, onHomeClick }: NavbarProps) {
+  const { currency, setCurrency } = useCurrency();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
 
@@ -634,8 +680,8 @@ function Navbar({ navbar, global, currentUser, isAuthLoading, totalItems, onCart
   const navStyle: React.CSSProperties = {
     backgroundColor: navbar.isTransparent && !scrolled && !navbar.isFloating 
       ? 'transparent' 
-      : (navbar.bgColor || '#ffffff'),
-    color: navbar.textColor || '#3a3530',
+      : (navbar.bgColor || '#fdfbf7'),
+    color: navbar.textColor || '#2d2d2d',
     height: `${navbar.height || 64}px`,
     position: navbar.position === 'static' ? 'relative' : 'sticky',
     top: navbar.isFloating ? '12px' : 0,
@@ -649,6 +695,11 @@ function Navbar({ navbar, global, currentUser, isAuthLoading, totalItems, onCart
     'USD': '$', 'SGD': 'S$', 'EUR': '€', 'GBP': '£', 'JPY': '¥', 'KRW': '₩'
   };
 
+  const handleCurrencyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    setCurrency(val, currencies[val] || '$');
+  };
+
   return (
     <nav 
       className={`transition-all duration-300 ${getShadowClass()}`}
@@ -656,27 +707,20 @@ function Navbar({ navbar, global, currentUser, isAuthLoading, totalItems, onCart
       role="navigation"
       aria-label="Main navigation"
     >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full relative">
         <div className="flex items-center justify-between h-full">
-          {/* Logo */}
-          {navbar.showLogo !== false && (
-            <button 
-              onClick={onHomeClick}
-              className="flex items-center gap-2 hover:opacity-80 transition-opacity"
-            >
-              {global.logoImage ? (
-                <img src={global.logoImage} alt="" className="h-8 w-auto object-contain" />
-              ) : (
-                <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: global.secondaryColor }}>
-                  <Palette className="w-5 h-5 text-white" />
-                </div>
-              )}
-              <span className="font-heading text-xl font-bold tracking-tight">{global.logoText}</span>
-            </button>
-          )}
+          {/* Desktop — Left: Logo + Links */}
+          <div className="hidden md:flex items-center gap-6 flex-1">
+            {/* Logo */}
+            {navbar.showLogo !== false && (
+              <button
+                onClick={onHomeClick}
+                className="hover:scale-105 transition-transform duration-300 flex-shrink-0"
+              >
+                <PatchuuLogo height={40} />
+              </button>
+            )}
 
-          {/* Desktop Links + Controls */}
-          <div className="hidden md:flex items-center gap-6">
             {/* Navigation Links */}
             {(navbar.links || []).map((link) => (
               <button
@@ -699,21 +743,27 @@ function Navbar({ navbar, global, currentUser, isAuthLoading, totalItems, onCart
                 {link.label}
               </button>
             ))}
+          </div>
 
+          {/* Desktop — Right: Currency + Auth + Cart */}
+          <div className="hidden md:flex items-center gap-4 flex-1 justify-end">
             {/* Currency Selector */}
-            <select
-              value={currency}
-              onChange={e => onCurrencyChange(e.target.value as any, currencies[e.target.value] || '$')}
-              className="px-2 py-1 rounded-lg border border-gray-200 bg-white text-sm font-medium focus:border-pink outline-none cursor-pointer"
-              aria-label="Select currency"
-            >
+            <div className="flex flex-col items-end">
+              <select
+                value={currency.toUpperCase()}
+                onChange={handleCurrencyChange}
+                className="px-2 py-1 rounded-lg border border-ink/10 bg-cardstock text-sm font-medium text-ink focus:border-craft-mint outline-none cursor-pointer"
+                aria-label="Select currency"
+              >
               <option value="USD">USD ($)</option>
               <option value="SGD">SGD (S$)</option>
               <option value="EUR">EUR (€)</option>
               <option value="GBP">GBP (£)</option>
               <option value="JPY">JPY (¥)</option>
               <option value="KRW">KRW (₩)</option>
-            </select>
+              </select>
+              <span className="text-[10px] text-ink/40 mt-0.5">Converted at current rates</span>
+            </div>
 
             {/* Auth Loading */}
             {isAuthLoading ? (
@@ -757,14 +807,14 @@ function Navbar({ navbar, global, currentUser, isAuthLoading, totalItems, onCart
 
             {/* Cart Button */}
             {navbar.showCart !== false && (
-              <button 
+              <button
                 onClick={onCartClick}
                 className="relative p-2 hover:bg-black/5 rounded-full transition-colors"
                 aria-label={`Shopping cart with ${totalItems} items`}
               >
                 <ShoppingCart className="w-6 h-6" />
                 {totalItems > 0 && (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-pink text-white text-xs rounded-full flex items-center justify-center font-bold animate-bounce">
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-craft-mint text-ink text-xs rounded-full flex items-center justify-center font-bold animate-bounce border-[1.5px] border-ink">
                     {totalItems}
                   </span>
                 )}
@@ -772,7 +822,19 @@ function Navbar({ navbar, global, currentUser, isAuthLoading, totalItems, onCart
             )}
           </div>
 
-          {/* Mobile Menu Button */}
+          {/* Mobile — Left: Logo */}
+          <div className="flex md:hidden items-center">
+            {navbar.showLogo !== false && (
+              <button
+                onClick={onHomeClick}
+                className="hover:scale-105 transition-transform duration-300"
+              >
+                <PatchuuLogo height={36} />
+              </button>
+            )}
+          </div>
+
+          {/* Mobile — Right: Cart + Menu */}
           <div className="flex items-center gap-2 md:hidden">
             {navbar.showCart !== false && (
               <button 
@@ -781,7 +843,7 @@ function Navbar({ navbar, global, currentUser, isAuthLoading, totalItems, onCart
               >
                 <ShoppingCart className="w-6 h-6" />
                 {totalItems > 0 && (
-                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-pink text-white text-xs rounded-full flex items-center justify-center font-bold">
+                  <span className="absolute -top-1 -right-1 w-5 h-5 bg-craft-mint text-ink text-xs rounded-full flex items-center justify-center font-bold">
                     {totalItems}
                   </span>
                 )}
@@ -801,7 +863,7 @@ function Navbar({ navbar, global, currentUser, isAuthLoading, totalItems, onCart
       {isMenuOpen && (
         <div 
           className="md:hidden absolute top-full left-0 right-0 mt-2 mx-4 rounded-2xl shadow-xl overflow-hidden"
-          style={{ backgroundColor: navbar.bgColor || '#ffffff' }}
+          style={{ backgroundColor: navbar.bgColor || '#fdfbf7' }}
         >
           <div className="py-2">
             {/* Mobile Links */}
@@ -831,9 +893,9 @@ function Navbar({ navbar, global, currentUser, isAuthLoading, totalItems, onCart
             {/* Mobile Currency */}
             <div className="px-6 py-2 border-t border-gray-100">
               <select
-                value={currency}
-                onChange={e => onCurrencyChange(e.target.value as any, currencies[e.target.value] || '$')}
-                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm"
+                value={currency.toUpperCase()}
+                onChange={handleCurrencyChange}
+                className="w-full px-3 py-2 rounded-lg border border-ink/10 text-sm bg-cardstock text-ink"
               >
                 <option value="USD">USD ($)</option>
                 <option value="SGD">SGD (S$)</option>
@@ -886,11 +948,11 @@ function AppContent() {
   const [showAuth, setShowAuth] = useState(false);
   const [authView, setAuthView] = useState<AuthView>('login');
 
-  const [adminTab, setAdminTab] = useState<AdminTab>('products');
+  type AppAdminTab = 'products' | 'patches' | 'orders' | 'inventory' | 'pages' | 'global' | 'tests';
+  const [adminTab, setAdminTab] = useState<AppAdminTab>('products');
   const [showUserOrders, setShowUserOrders] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
-  const [notices] = useState<Notice[]>(initialNotices);
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [patches, setPatches] = useState<Patch[]>(initialPatches);
 
@@ -904,8 +966,8 @@ function AppContent() {
         visible: true,
         content: {
           slides: [
-            { id: 'hero-1', title: 'New Summer\nCollection', subtitle: 'Check out our new fruit-themed patches — strawberries, watermelons, and more!', image: '/products/tote-bag.png' },
-            { id: 'hero-2', title: 'Design Your\nOwn Style', subtitle: 'Pick your item, choose your patches, and make it uniquely yours.', image: '/products/pouch-beige.png' },
+            { id: 'hero-1', title: 'New Summer\nCollection', subtitle: 'Check out our new fruit-themed patches — strawberries, watermelons, and more!', image: '/tote-bag.png' },
+            { id: 'hero-2', title: 'Design Your\nOwn Style', subtitle: 'Pick your item, choose your patches, and make it uniquely yours.', image: '/pouch-beige.png' },
           ],
           ctaText: 'Start Designing',
         },
@@ -917,9 +979,9 @@ function AppContent() {
         content: {
           sectionTitle: 'How It Works',
           steps: [
-            { id: 'step-1', title: 'Pick Your Item', description: 'Select your tote bag, fan or any blank item you want.', image: '/products/tote-bag.png', emoji: '' },
+            { id: 'step-1', title: 'Pick Your Item', description: 'Select your tote bag, fan or any blank item you want.', image: '/tote-bag.png', emoji: '' },
             { id: 'step-2', title: 'Choose Patches', description: 'Choose your cute patches and add your picks.', image: '', emoji: '' },
-            { id: 'step-3', title: 'We Press It', description: 'We press a heat press to affix your custom artwork.', image: '', emoji: '🔥' },
+            { id: 'step-3', title: 'We Press It', description: 'We press a heat press to affix your custom artwork.', image: '/cardholder-yellow.png', emoji: '' },
           ],
         },
       },
@@ -930,28 +992,28 @@ function AppContent() {
         content: {
           sectionTitle: 'Featured Creations',
           items: [
-            { id: 'g1', image: '/products/tote-bag.png', label: 'Custom Tote Bag' },
-            { id: 'g2', image: '/products/pouch-beige.png', label: 'Designer Pouch' },
-            { id: 'g3', image: '/products/cardholder-yellow.png', label: 'Card Holder' },
-            { id: 'g4', image: '/products/keychain-strap-blue.png', label: 'Blue Keychain' },
-            { id: 'g5', image: '/products/keychain-strap-purple.png', label: 'Purple Keychain' },
+            { id: 'g1', image: '/tote-bag.png', label: 'Custom Tote Bag' },
+            { id: 'g2', image: '/pouch-beige.png', label: 'Designer Pouch' },
+            { id: 'g3', image: '/cardholder-yellow.png', label: 'Card Holder' },
+            { id: 'g4', image: '/keychain-strap-blue.png', label: 'Blue Keychain' },
+            { id: 'g5', image: '/keychain-strap-purple.png', label: 'Purple Keychain' },
           ],
         },
       },
     ],
     footer: {
-      brandName: 'Patch & Press',
+      brandName: 'Patchuu',
       tagline: 'Create your own unique accessories!',
-      copyright: '© 2025 Patch & Press. Made with 💕 in Seoul',
+      copyright: '© 2025 Patchuu. Made with 💕 in Seoul',
       instagramUrl: '#',
       facebookUrl: '#',
       twitterUrl: '#',
     },
     global: {
-      logoText: 'Patch & Press',
-      logoImage: '',
-      primaryColor: '#3a3530',
-      secondaryColor: '#6b8f71',
+      logoText: 'Patchuu',
+      logoImage: '/hero/patchuu-logo.png',
+      primaryColor: '#2d2d2d',
+      secondaryColor: '#81c784',
       headingFont: 'Outfit',
       bodyFont: 'Inter',
       currency: 'USD',
@@ -977,8 +1039,8 @@ function AppContent() {
       ],
       showLogo: true,
       showCart: true,
-      bgColor: '#ffffff',
-      textColor: '#3a3530',
+      bgColor: '#fdfbf7',
+      textColor: '#2d2d2d',
       isFloating: false,
       isTransparent: false,
       position: 'fixed',
@@ -998,9 +1060,18 @@ function AppContent() {
 
   useEffect(() => {
     let mounted = true;
+    let timeoutId: ReturnType<typeof setTimeout>;
 
     const loadCmsData = async () => {
       try {
+        // Set a timeout to force loading complete after 5 seconds
+        timeoutId = setTimeout(() => {
+          if (mounted) {
+            console.log('⏱️ CMS loading timeout - forcing complete');
+            setIsDataLoading(false);
+          }
+        }, 5000);
+
         // Check if we have static CMS files
         const hasStatic = await hasStaticCms();
         
@@ -1023,6 +1094,7 @@ function AppContent() {
             frontImage: p.front_image_url,
             backImage: p.back_image_url,
             basePrice: Number(p.base_price),
+            quantity: p.quantity ?? 0,
             width: p.width,
             height: p.height,
             placementZone: p.placement_zone || { x: 15, y: 25, width: 70, height: 60, type: 'rectangle' },
@@ -1039,6 +1111,7 @@ function AppContent() {
             category: p.category,
             image: p.image_url,
             price: Number(p.price),
+            quantity: p.quantity ?? 0,
             width: p.width,
             height: p.height,
             contentZone: p.content_zone,
@@ -1082,6 +1155,7 @@ function AppContent() {
       } catch (err) {
         console.error('Failed to load CMS data:', err);
       } finally {
+        clearTimeout(timeoutId);
         if (mounted) {
           setIsDataLoading(false);
         }
@@ -1092,6 +1166,7 @@ function AppContent() {
 
     return () => {
       mounted = false;
+      clearTimeout(timeoutId);
     };
   }, []);
 
@@ -1269,6 +1344,7 @@ function AppContent() {
           frontImage: p.front_image_url,
           backImage: p.back_image_url,
           basePrice: Number(p.base_price),
+          quantity: p.quantity ?? 0,
           width: p.width,
           height: p.height,
           placementZone: p.placement_zone || { x: 15, y: 25, width: 70, height: 60, type: 'rectangle' },
@@ -1285,6 +1361,7 @@ function AppContent() {
           category: p.category,
           image: p.image_url,
           price: Number(p.price),
+          quantity: p.quantity ?? 0,
           width: p.width,
           height: p.height,
           contentZone: p.content_zone,
@@ -1347,8 +1424,8 @@ function AppContent() {
   const startCustomizing = () => { setCurrentView('customize'); };
 
   return (
-    <div 
-      className="min-h-screen bg-cream font-body overflow-x-hidden"
+    <div
+      className="min-h-screen bg-paper font-body overflow-x-hidden"
       style={{
         ['--font-heading' as any]: siteContent.global.headingFont === '210-Claytoy' 
           ? "'210-Claytoy', 'Quicksand', sans-serif" 
@@ -1374,7 +1451,7 @@ function AppContent() {
         onAuthClick={() => setShowAuth(true)}
         onLogout={handleLogout}
         onHomeClick={() => setCurrentView('landing')}
-        onCurrencyChange={(currency, symbol) => setSiteContent({ ...siteContent, global: { ...siteContent.global, currency: currency as any, currencySymbol: symbol } })}
+        onCurrencyChange={() => {}}
         currency={siteContent.global.currency || 'USD'}
       />
 
@@ -1401,15 +1478,11 @@ function AppContent() {
         }}
       />
 
-      {/* Loading indicator for initial data fetch - non-blocking */}
+      {/* Full-screen loading overlay to prevent flash of default content */}
       {isDataLoading && (
-        <div 
-          className="fixed top-20 left-1/2 -translate-x-1/2 z-40 px-4 py-2 bg-white/90 rounded-full shadow-lg flex items-center gap-2 cursor-pointer hover:bg-white transition-colors"
-          onClick={() => console.log('Data still loading...')}
-          title="Click to see loading status"
-        >
-          <div className="w-4 h-4 border-2 border-pink/30 border-t-pink rounded-full animate-spin" />
-          <span className="text-sm text-text-dark/70">Loading data...</span>
+        <div className="fixed inset-0 z-[60] bg-paper flex flex-col items-center justify-center gap-4">
+          <PatchuuLogo height={80} className="animate-pulse" />
+          <div className="w-6 h-6 border-2 border-cardstock border-t-craft-mint rounded-full animate-spin" />
         </div>
       )}
 
@@ -1426,7 +1499,11 @@ function AppContent() {
       >
         {currentView === 'landing' && (
           <div style={{ backgroundColor: siteContent.navbar?.wrapperBgColor || 'transparent' }}>
-            <LandingPage notices={notices} startCustomizing={startCustomizing} siteContent={siteContent} />
+            <LandingPage 
+              startCustomizing={startCustomizing} 
+              siteContent={siteContent}
+              onNavigateToLegal={(page) => setCurrentView(page)}
+            />
           </div>
         )}
         {currentView === 'customize' && (
@@ -1446,13 +1523,13 @@ function AppContent() {
             }}
           />
         )}
-        {currentView === 'admin' && (
+        {currentView === 'admin' && currentUser?.role === 'admin' && (
           <div className="min-h-screen bg-gray-50">
             <AdminPanel
               showAdmin={true}
               setShowAdmin={() => setCurrentView('landing')}
-              adminTab={adminTab}
-              setAdminTab={setAdminTab}
+              adminTab={adminTab as import('./AdminPanel').AdminTab}
+              setAdminTab={setAdminTab as (tab: import('./AdminPanel').AdminTab) => void}
               products={products}
               setProducts={setProducts}
               patches={patches}
@@ -1461,8 +1538,52 @@ function AppContent() {
               setSiteContent={setSiteContent}
               onContentSaved={refreshCmsData}
               usingStaticCms={usingStaticCms}
+              currentUser={currentUser}
             />
           </div>
+        )}
+        {currentView === 'admin' && currentUser?.role !== 'admin' && (
+          <div className="min-h-screen bg-paper flex items-center justify-center px-4">
+            <div className="bg-cardstock rounded-2xl p-8 shadow-paper max-w-md w-full text-center">
+              <div className="w-16 h-16 bg-craft-rose/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-craft-rose" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </div>
+              <h2 className="text-xl font-bold text-ink mb-2">Access Denied</h2>
+              <p className="text-ink-muted mb-6">You don't have permission to access the admin panel.</p>
+              <button
+                onClick={() => setCurrentView('landing')}
+                className="px-6 py-2.5 bg-ink text-white rounded-xl font-semibold hover:bg-ink/90 transition-colors"
+              >
+                Go Back Home
+              </button>
+            </div>
+          </div>
+        )}
+        {currentView === 'privacy' && (
+          <PrivacyPolicyPage 
+            onBack={() => setCurrentView('landing')}
+            brandName={siteContent.global?.logoText || 'Patch & Press'}
+          />
+        )}
+        {currentView === 'terms' && (
+          <TermsOfServicePage 
+            onBack={() => setCurrentView('landing')}
+            brandName={siteContent.global?.logoText || 'Patch & Press'}
+          />
+        )}
+        {currentView === 'refund' && (
+          <RefundPolicyPage 
+            onBack={() => setCurrentView('landing')}
+            brandName={siteContent.global?.logoText || 'Patch & Press'}
+          />
+        )}
+        {currentView === 'shipping' && (
+          <ShippingPolicyPage 
+            onBack={() => setCurrentView('landing')}
+            brandName={siteContent.global?.logoText || 'Patch & Press'}
+          />
         )}
       </main>
     </div>
@@ -1471,9 +1592,11 @@ function AppContent() {
 
 function App() {
   return (
-    <CartProvider>
-      <AppContent />
-    </CartProvider>
+    <CurrencyProvider>
+      <CartProvider>
+        <AppContent />
+      </CartProvider>
+    </CurrencyProvider>
   );
 }
 

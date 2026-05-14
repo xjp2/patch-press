@@ -1,14 +1,25 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
     ZoomIn, ZoomOut, RotateCcw, RotateCw,
     Trash2, ShoppingCart,
     Sparkles, Maximize2, Grid3X3,
-    ChevronRight, ChevronLeft, Check, Flame, X, MousePointer2, Search,
-    Download, Package, Eye
+    ChevronRight, ChevronLeft, Check, Flame, X, Search,
+    Package, Layers
 } from 'lucide-react';
+import { playPop, playClick, playWhoosh, playDing, playSnap } from './lib/sounds';
+import { StepTransition, PatchBurst, FloatingDecorations, FreshPatchGlow } from './components/DesignEffects';
+import { ProductCard } from './components/ProductCard';
+import { MotionStep } from './components/MotionStep';
+import { PatchFlight } from './components/PatchFlight';
+import type { FlyingPatch } from './components/PatchFlight';
+import { HeatPressSequence } from './components/HeatPressSequence';
 import type { Product, Patch, SiteContent } from './AdminPanel';
 import { useCart } from './context/CartContext';
+import { useCurrency } from './context/CurrencyContext';
+import { getClipAndCenter, fixImagePath } from './lib/utils';
+import { CroppedThumbnail } from './components/CroppedThumbnail';
 
 // Helper for Point in Polygon (Ray Casting)
 const isPointInPolygon = (x: number, y: number, points: { x: number, y: number }[]) => {
@@ -27,7 +38,7 @@ const getClosestPointOnSegment = (p: { x: number, y: number }, a: { x: number, y
     const atob = { x: b.x - a.x, y: b.y - a.y };
     const atop = { x: p.x - a.x, y: p.y - a.y };
     const len = atob.x * atob.x + atob.y * atob.y;
-    let dot = atop.x * atob.x + atop.y * atob.y;
+    const dot = atop.x * atob.x + atop.y * atob.y;
     const t = Math.min(1, Math.max(0, dot / len));
     return { x: a.x + atob.x * t, y: a.y + atob.y * t };
 };
@@ -69,40 +80,25 @@ interface CustomizePageProps {
     siteContent: SiteContent;
 }
 
-// Helper: compute clipPath + centering transform from a zone
-const getClipAndCenter = (zone: any) => {
-    if (!zone) return { clipPath: 'none' as string, transform: 'none' as string };
-    let clipPath: string;
-    let cx: number, cy: number;
-    if (zone.type === 'polygon' && zone.points && zone.points.length > 0) {
-        clipPath = `polygon(${zone.points.map((p: { x: number, y: number }) => `${p.x}% ${p.y}%`).join(', ')})`;
-        // Compute bounding-box center of polygon
-        const xs = zone.points.map((p: { x: number, y: number }) => p.x);
-        const ys = zone.points.map((p: { x: number, y: number }) => p.y);
-        cx = (Math.min(...xs) + Math.max(...xs)) / 2;
-        cy = (Math.min(...ys) + Math.max(...ys)) / 2;
-    } else {
-        clipPath = `inset(${zone.y}% ${100 - (zone.x + zone.width)}% ${100 - (zone.y + zone.height)}% ${zone.x}%)`;
-        cx = zone.x + zone.width / 2;
-        cy = zone.y + zone.height / 2;
-    }
-    // Shift so the crop center sits at the element center
-    const tx = 50 - cx;
-    const ty = 50 - cy;
-    return { clipPath, transform: `translate(${tx}%, ${ty}%)` };
-};
+
 
 // Confetti colors for review step
-const confettiColors = ['#ec4899', '#f472b6', '#fbbf24', '#60a5fa', '#a78bfa'];
+const confettiColors = ['#81c784', '#ffd54f', '#f06292', '#64b5f6', '#ba68c8'];
+
+// Deterministic pseudo-random for confetti
+const confettiLeftValues = Array.from({ length: 20 }, (_, i) => {
+    const x = Math.sin(i * 9301 + 49297) % 1;
+    return (x < 0 ? x + 1 : x) * 100;
+});
 
 // Confetti particle component
-const ConfettiParticle = ({ delay, color }: { delay: number, color: string }) => (
+const ConfettiParticle = ({ delay, color, index }: { delay: number, color: string, index: number }) => (
     <div 
         className="absolute w-2 h-2 rounded-full"
         style={{
             backgroundColor: color,
             animation: `confetti-fall 1s ${delay}ms ease-out forwards`,
-            left: `${Math.random() * 100}%`,
+            left: `${confettiLeftValues[index % confettiLeftValues.length]}%`,
             top: '-10px'
         }}
     />
@@ -112,11 +108,13 @@ const categories = [{ id: 'all', name: 'All' }, { id: 'food', name: 'Food' }, { 
 
 export function CustomizePage({ products, patches, setCurrentView, siteContent }: CustomizePageProps) {
     const { addItem, syncCart } = useCart();
+    const { formatPrice, currency } = useCurrency();
     const [currentStep, setCurrentStep] = useState<DesignStep>('product');
     const [selectedProduct, setSelectedProduct] = useState<Product>(products[0]);
 
     // When a new product is selected, clear all placed patches
     const selectProduct = (product: Product) => {
+        playClick();
         if (product.id !== selectedProduct.id) {
             setFrontPatches([]);
             setBackPatches([]);
@@ -138,11 +136,14 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
     const [isHeatPressing, setIsHeatPressing] = useState(false);
     const [heatPressPhase, setHeatPressPhase] = useState(0);
     const [showSuccess, setShowSuccess] = useState(false);
-    const [showPreview, setShowPreview] = useState(false);
-    const [previewSide, setPreviewSide] = useState<'front' | 'back'>('front');
+
     const [zoom, setZoom] = useState(1);
     const [showOnboarding, setShowOnboarding] = useState(true);
-    const [isDownloading, setIsDownloading] = useState(false);
+    // Creative effects state
+    const [showStepTransition, setShowStepTransition] = useState(false);
+    const [patchBursts, setPatchBursts] = useState<Array<{id: string, x: number, y: number}>>([]);
+    const [freshPatchId, setFreshPatchId] = useState<string | null>(null);
+    const [flyingPatches, setFlyingPatches] = useState<FlyingPatch[]>([]);
 
     // Drag & Drop State
     const [selectedPatchId, setSelectedPatchId] = useState<string | null>(null);
@@ -180,7 +181,6 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
     const allPatchesPrice = frontPatchesPrice + backPatchesPrice;
     const totalPrice = selectedProduct.basePrice + allPatchesPrice;
 
-
     // --- Actions ---
 
     const handleZoomIn = () => setZoom(prev => Math.min(prev + 0.25, 3));
@@ -189,10 +189,26 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
 
 
 
-    const addPatch = (patch: Patch) => {
+    const addPatch = (patch: Patch, clickX?: number, clickY?: number) => {
+        playPop();
         const img = productImageRef.current;
         if (!img) return;
         const rect = img.getBoundingClientRect();
+        const canvasRect = canvasRef.current?.getBoundingClientRect();
+
+        // Trigger patch flight animation
+        if (clickX !== undefined && clickY !== undefined && canvasRect) {
+            const flightId = uuidv4();
+            setFlyingPatches(prev => [...prev, {
+                id: flightId,
+                image: patch.image,
+                startX: clickX,
+                startY: clickY,
+                endX: canvasRect.left + canvasRect.width / 2,
+                endY: canvasRect.top + canvasRect.height / 2,
+                size: 48,
+            }]);
+        }
 
         // Zone calculations relative to the rendered image
         const zone = selectedProduct.placementZone;
@@ -225,6 +241,18 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
         if (showBackSide) { setBackPatches(prev => [...prev, newPatch]); }
         else { setFrontPatches(prev => [...prev, newPatch]); }
         setSelectedPatchId(newPatch.uniqueId);
+        setFreshPatchId(newPatch.uniqueId);
+        setTimeout(() => setFreshPatchId(null), 900);
+
+        // Trigger particle burst at click position if available
+        if (clickX !== undefined && clickY !== undefined) {
+            const burstId = uuidv4();
+            setPatchBursts(prev => [...prev, { id: burstId, x: clickX, y: clickY }]);
+        }
+    };
+
+    const handleFlightComplete = (id: string) => {
+        setFlyingPatches(prev => prev.filter(f => f.id !== id));
     };
 
     const deleteSelectedPatch = () => {
@@ -272,13 +300,8 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
         };
     }, []);
 
-    const handlePreview = () => {
-        if (frontPatches.length === 0 && backPatches.length === 0) return;
-        setPreviewSide('front');
-        setShowPreview(true);
-    };
-
     const handleAddToCart = () => {
+        playDing();
         // Create cart item from current design with full patch placement data
         const cartItem = {
             id: uuidv4(),
@@ -313,6 +336,9 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                 contentZone: p.contentZone
             })),
             totalPrice: totalPrice,
+            placementZone: selectedProduct.placementZone,
+            width: selectedProduct.width,
+            height: selectedProduct.height,
             designImage: undefined // Could generate preview image here
         };
         addItem(cartItem);
@@ -320,88 +346,6 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
         setTimeout(() => syncCart(), 100);
         setShowSuccess(true);
         setTimeout(() => setShowSuccess(false), 2000);
-    };
-
-    // Download design as PNG
-    const downloadDesign = async () => {
-        if (!reviewRef.current) return;
-        setIsDownloading(true);
-        try {
-            // Use html2canvas-like approach with native canvas
-            const el = reviewRef.current;
-            const canvas = document.createElement('canvas');
-            const scale = 2;
-            canvas.width = el.offsetWidth * scale;
-            canvas.height = el.offsetHeight * scale;
-            const ctx = canvas.getContext('2d');
-            if (!ctx) return;
-            ctx.scale(scale, scale);
-            ctx.fillStyle = '#f5f5f5';
-            ctx.fillRect(0, 0, el.offsetWidth, el.offsetHeight);
-
-            // Render product images and patches for both sides
-            const sides = [
-                { label: 'Front', image: selectedProduct.frontImage, patches: frontPatches, xOffset: 20 },
-                { label: 'Back', image: selectedProduct.backImage, patches: backPatches, xOffset: el.offsetWidth / 2 + 10 },
-            ];
-            const imgSize = Math.min(el.offsetWidth / 2 - 40, 280);
-            const yStart = 50;
-
-            ctx.font = 'bold 18px Quicksand, sans-serif';
-            ctx.fillStyle = '#4A4A4A';
-            ctx.textAlign = 'center';
-            ctx.fillText(`${selectedProduct.name} — Custom Design`, el.offsetWidth / 2, 30);
-
-            for (const side of sides) {
-                ctx.font = 'bold 14px Quicksand, sans-serif';
-                ctx.fillStyle = '#999';
-                ctx.textAlign = 'center';
-                ctx.fillText(side.label, side.xOffset + imgSize / 2, yStart - 5);
-
-                const img = new Image();
-                img.crossOrigin = 'anonymous';
-                await new Promise<void>((resolve) => {
-                    img.onload = () => resolve();
-                    img.onerror = () => resolve();
-                    img.src = side.image;
-                });
-                ctx.drawImage(img, side.xOffset, yStart, imgSize, imgSize);
-
-                for (const patch of side.patches) {
-                    const pImg = new Image();
-                    pImg.crossOrigin = 'anonymous';
-                    await new Promise<void>((resolve) => {
-                        pImg.onload = () => resolve();
-                        pImg.onerror = () => resolve();
-                        pImg.src = patch.image;
-                    });
-                    const px = side.xOffset + (patch.x / 100) * imgSize;
-                    const py = yStart + (patch.y / 100) * imgSize;
-                    const pw = (patch.widthPercent / 100) * imgSize;
-                    const ph = (patch.heightPercent / 100) * imgSize;
-                    ctx.save();
-                    ctx.translate(px + pw / 2, py + ph / 2);
-                    ctx.rotate((patch.rotation * Math.PI) / 180);
-                    ctx.drawImage(pImg, -pw / 2, -ph / 2, pw, ph);
-                    ctx.restore();
-                }
-            }
-
-            // Total price
-            ctx.font = 'bold 16px Nunito, sans-serif';
-            ctx.fillStyle = '#FFB6C1';
-            ctx.textAlign = 'center';
-            ctx.fillText(`Total: $${totalPrice}`, el.offsetWidth / 2, yStart + imgSize + 30);
-
-            const link = document.createElement('a');
-            link.download = `${selectedProduct.name.replace(/\s+/g, '-')}-custom-design.png`;
-            link.href = canvas.toDataURL('image/png');
-            link.click();
-        } catch (err) {
-            console.error('Download failed:', err);
-        } finally {
-            setIsDownloading(false);
-        }
     };
 
     const startNewDesign = () => {
@@ -459,6 +403,7 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
     const startPan = (e: React.MouseEvent | React.TouchEvent) => {
         if ((e.target as HTMLElement).closest('.patch-item')) return;
         e.preventDefault();
+        setSelectedPatchId(null);
 
         setIsPanning(true);
 
@@ -467,6 +412,16 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
 
         setPanStart({ x: clientX - panOffset.x, y: clientY - panOffset.y });
     };
+
+    const handleGoToDesign = () => {
+        playWhoosh();
+        setShowStepTransition(true);
+    };
+
+    const handleTransitionComplete = useCallback(() => {
+        setShowStepTransition(false);
+        setCurrentStep('design');
+    }, []);
 
     // --- Global Resize/Move Listener ---
 
@@ -565,6 +520,7 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
         };
 
         const handleEnd = () => {
+            if (isDragging) playSnap();
             setIsDragging(false);
             setIsRotating(false);
             setIsPanning(false);
@@ -591,24 +547,24 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
         <div className="flex items-center justify-center gap-4 mb-8">
             {/* ... same implementation ... */}
             <div className={`flex items-center gap-2 ${currentStep === 'product' ? 'opacity-100' : 'opacity-50'}`}>
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${currentStep === 'product' ? 'bg-pink text-white' : 'bg-gray-200 text-gray-500'}`}>1</div>
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${currentStep === 'product' ? 'bg-craft-mint text-white' : 'bg-cardstock text-ink-muted'}`}>1</div>
                 <span className="font-semibold hidden sm:block">Pick Base</span>
             </div>
-            <div className="w-12 h-1 bg-gray-200 rounded"><div className={`h-full bg-pink rounded transition-all duration-500 ${currentStep === 'product' ? 'w-0' : currentStep === 'design' ? 'w-1/2' : 'w-full'}`} /></div>
+            <div className="w-12 h-1 bg-cardstock rounded"><div className={`h-full bg-craft-mint rounded transition-all duration-500 ${currentStep === 'product' ? 'w-0' : currentStep === 'design' ? 'w-1/2' : 'w-full'}`} /></div>
             <div className={`flex items-center gap-2 ${currentStep === 'design' ? 'opacity-100' : 'opacity-50'}`}>
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${currentStep === 'design' ? 'bg-pink text-white' : 'bg-gray-200 text-gray-500'}`}>2</div>
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${currentStep === 'design' ? 'bg-craft-mint text-white' : 'bg-cardstock text-ink-muted'}`}>2</div>
                 <span className="font-semibold hidden sm:block">Add Patches</span>
             </div>
-            <div className="w-12 h-1 bg-gray-200 rounded"><div className={`h-full bg-pink rounded transition-all duration-500 ${currentStep === 'review' ? 'w-full' : 'w-0'}`} /></div>
+            <div className="w-12 h-1 bg-cardstock rounded"><div className={`h-full bg-craft-mint rounded transition-all duration-500 ${currentStep === 'review' ? 'w-full' : 'w-0'}`} /></div>
             <div className={`flex items-center gap-2 ${currentStep === 'review' ? 'opacity-100' : 'opacity-50'}`}>
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${currentStep === 'review' ? 'bg-pink text-white' : 'bg-gray-200 text-gray-500'}`}>3</div>
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold ${currentStep === 'review' ? 'bg-craft-mint text-white' : 'bg-cardstock text-ink-muted'}`}>3</div>
                 <span className="font-semibold hidden sm:block">Done!</span>
             </div>
         </div>
     );
 
     return (
-        <div className="min-h-screen bg-cream pb-8 pt-20 px-4">
+        <div className="min-h-screen bg-paper pb-8 pt-20 px-4">
             <style>{`
                 @keyframes pop-in {
                     0% { transform: scale(0) rotate(-10deg); opacity: 0; }
@@ -631,88 +587,106 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                     from { transform: translateX(-30px); opacity: 0; }
                     to { transform: translateX(0); opacity: 1; }
                 }
+                @keyframes shimmer {
+                    100% { transform: translateX(100%); }
+                }
                 .animate-pop-in { animation: pop-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
                 .animate-fade-scale-up { animation: fade-scale-up 0.4s ease-out forwards; }
                 .animate-slide-in-right { animation: slide-in-right 0.4s ease-out forwards; }
                 .animate-slide-in-left { animation: slide-in-left 0.4s ease-out forwards; }
+                .animate-fly-in-elastic { animation: fly-in-elastic 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+                .animate-selected-ring-pulse { animation: selected-ring-pulse 0.6s ease-out forwards; }
+                .animate-sparkle-pop { animation: sparkle-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
             `}</style>
             <div className="max-w-7xl mx-auto">
                 <StepIndicator />
 
+                <AnimatePresence mode="wait">
                 {/* STEP 1: Product Selection */}
                 {currentStep === 'product' && (
-                    <div className="animate-fade-scale-up">
+                    <MotionStep key="product" stepKey="product" direction="right">
                         <div className="text-center mb-8">
-                            <h2 className="font-heading text-3xl sm:text-4xl font-bold text-text-dark mb-2">{siteContent.customizePage.step1Title}</h2>
-                            <p className="text-text-dark/60">{siteContent.customizePage.step1Subtitle}</p>
+                            <h2 className="font-heading text-3xl sm:text-4xl font-bold text-ink mb-2">{siteContent.customizePage.step1Title}</h2>
+                            <p className="text-ink/60">{siteContent.customizePage.step1Subtitle}</p>
                         </div>
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
                             {products.map((product, index) => (
-                                <div 
-                                    key={product.id} 
-                                    onClick={() => selectProduct(product)} 
-                                    className={`bg-white rounded-2xl p-4 cursor-pointer transition-all duration-300 animate-pop-in ${selectedProduct.id === product.id ? 'ring-4 ring-pink shadow-pink-lg scale-105' : 'hover:shadow-soft hover:scale-102'}`}
-                                    style={{ animationDelay: `${index * 80}ms`, opacity: 0 }}
-                                >
-                                    {(() => {
-                                        const s = getClipAndCenter(product.placementZone);
-                                        return <img src={product.frontImage} alt={product.name} className="w-full h-24 object-contain mb-3" style={{ clipPath: s.clipPath, transform: s.transform }} />;
-                                    })()}
-                                    <p className="text-sm font-semibold text-center text-text-dark">{product.name}</p>
-                                    <p className="text-sm text-center text-pink font-bold">${product.basePrice}</p>
-                                </div>
+                                <ProductCard
+                                    key={product.id}
+                                    product={product}
+                                    isSelected={selectedProduct.id === product.id}
+                                    onClick={() => selectProduct(product)}
+                                    index={index}
+                                />
                             ))}
                         </div>
                         <div className="text-center animate-slide-in-right" style={{ animationDelay: `${products.length * 80}ms`, opacity: 0 }}>
-                            <button onClick={() => setCurrentStep('design')} className="btn-primary text-lg px-12 hover:scale-105 active:scale-95 transition-transform">Continue to Design <ChevronRight className="w-5 h-5 inline ml-2" /></button>
+                            <button onClick={handleGoToDesign} className="btn-primary text-lg px-12 hover:scale-105 active:scale-95 transition-transform relative group">
+                                Continue to Design
+                                <ChevronRight className="w-5 h-5 inline ml-2 transition-transform group-hover:translate-x-1" />
+                                {/* Button shimmer effect */}
+                                <span className="absolute inset-0 rounded-full overflow-hidden pointer-events-none">
+                                    <span className="absolute inset-0 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+                                </span>
+                            </button>
                         </div>
-                    </div>
+                    </MotionStep>
                 )}
 
                 {/* STEP 2: Design */}
                 {currentStep === 'design' && (
-                    <div className="animate-fade-scale-up relative">
+                    <MotionStep key="design" stepKey="design" direction="right">
                         <div className="flex flex-col lg:flex-row gap-6">
                             {/* Left Panel: Patches */}
                             <div className="lg:w-1/4 order-2 lg:order-1 animate-slide-in-left">
-                                <div className="bg-white rounded-2xl p-4 shadow-soft">
-                                    <h3 className="font-heading text-lg font-bold text-text-dark mb-3 flex items-center gap-2"><Sparkles className="w-5 h-5 text-pink" /> Patch Collection <span className="text-sm font-normal text-text-dark/50">({filteredPatches.length})</span></h3>
+                                <div className="bg-cardstock rounded-2xl p-4 shadow-soft">
+                                    <h3 className="font-heading text-lg font-bold text-ink mb-3 flex items-center gap-2"><Sparkles className="w-5 h-5 text-craft-mint" /> Patch Collection <span className="text-sm font-normal text-ink/50">({filteredPatches.length})</span></h3>
                                     <div className="relative mb-3">
-                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-dark/40" />
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink/40" />
                                         <input
                                             type="text"
                                             placeholder="Search patches..."
                                             value={patchSearch}
                                             onChange={(e) => setPatchSearch(e.target.value)}
-                                            className="w-full pl-9 pr-8 py-2 rounded-xl bg-cream border border-transparent focus:border-pink focus:outline-none text-sm placeholder:text-text-dark/40 transition-colors"
+                                            className="w-full pl-9 pr-8 py-2 rounded-xl bg-cardstock border border-transparent focus:border-craft-mint focus:outline-none text-sm placeholder:text-ink/40 transition-all focus:shadow-[0_0_12px_rgba(129,199,132,0.25)]"
                                         />
                                         {patchSearch && (
                                             <button onClick={() => setPatchSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-text-dark/10 flex items-center justify-center hover:bg-text-dark/20 transition-colors">
-                                                <X className="w-3 h-3 text-text-dark/60" />
+                                                <X className="w-3 h-3 text-ink/60" />
                                             </button>
                                         )}
                                     </div>
                                     <div className="flex flex-wrap gap-2 mb-3">
                                         {categories.map(cat => (
-                                            <button key={cat.id} onClick={() => { setSelectedCategory(cat.id); }} className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${selectedCategory === cat.id ? 'bg-pink text-white' : 'bg-cream text-text-dark hover:bg-pink/20'}`}>{cat.name}</button>
+                                            <button key={cat.id} onClick={() => { setSelectedCategory(cat.id); }} className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${selectedCategory === cat.id ? 'bg-craft-mint text-white' : 'bg-cardstock text-ink hover:bg-craft-mint/20'}`}>{cat.name}</button>
                                         ))}
                                     </div>
                                     <div className="grid grid-cols-3 gap-2 max-h-[300px] sm:max-h-[400px] overflow-y-auto p-1">
                                         {filteredPatches.length > 0 ? filteredPatches.map((patch) => (
-                                            <button key={patch.id} onClick={() => addPatch(patch)} className="bg-cream rounded-xl p-2 hover:bg-pink/20 transition-all hover:scale-105 text-center active:scale-95">
+                                            <motion.button
+                                                key={patch.id}
+                                                onClick={(e) => {
+                                                    const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
+                                                    addPatch(patch, rect.left + rect.width / 2, rect.top + rect.height / 2);
+                                                }}
+                                                className="bg-cardstock rounded-xl p-2 hover:bg-craft-mint/20 text-center"
+                                                whileHover={{ scale: 1.08 }}
+                                                whileTap={{ scale: 0.88 }}
+                                                transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+                                            >
                                                 <img src={patch.image} alt={patch.name} className="w-full aspect-square object-contain mb-1" style={(() => {
                                                     const s = getClipAndCenter(patch.contentZone);
                                                     return { clipPath: s.clipPath, transform: s.transform };
                                                 })()} />
-                                                <p className="text-[10px] font-semibold text-text-dark truncate">{patch.name}</p>
-                                                <p className="text-[10px] text-pink">${patch.price}</p>
-                                            </button>
+                                                <p className="text-[10px] font-semibold text-ink truncate">{patch.name}</p>
+                                                <p className="text-[10px] text-craft-mint">{formatPrice(patch.price)}</p>
+                                            </motion.button>
                                         )) : (
-                                            <div className="col-span-3 py-8 text-center text-text-dark/40">
+                                            <div className="col-span-3 py-8 text-center text-ink/40">
                                                 <Search className="w-10 h-10 mx-auto mb-2 opacity-40" />
                                                 <p className="font-semibold text-sm">No patches found</p>
                                                 <p className="text-xs mt-1">Try a different search or category</p>
-                                                <button onClick={() => { setPatchSearch(''); setSelectedCategory('all'); }} className="mt-3 text-xs text-pink hover:underline">Clear filters</button>
+                                                <button onClick={() => { setPatchSearch(''); setSelectedCategory('all'); }} className="mt-3 text-xs text-craft-mint hover:underline">Clear filters</button>
                                             </div>
                                         )}
                                     </div>
@@ -723,29 +697,42 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                             <div className="lg:w-2/4 order-1 lg:order-2 animate-fade-scale-up" style={{ animationDelay: '100ms' }}>
                                 <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                                     <div className="flex items-center gap-2">
-                                        <button onClick={handleZoomOut} className="p-2 bg-white rounded-lg shadow-sm hover:bg-pink/20"><ZoomOut className="w-5 h-5" /></button>
+                                        <button onClick={handleZoomOut} className="p-2 bg-cardstock rounded-lg shadow-sm hover:bg-craft-mint/20"><ZoomOut className="w-5 h-5" /></button>
                                         <span className="text-sm font-semibold w-16 text-center">{Math.round(zoom * 100)}%</span>
-                                        <button onClick={handleZoomIn} className="p-2 bg-white rounded-lg shadow-sm hover:bg-pink/20"><ZoomIn className="w-5 h-5" /></button>
-                                        <button onClick={resetView} className="p-2 bg-white rounded-lg shadow-sm hover:bg-pink/20" title="Reset View"><Maximize2 className="w-5 h-5" /></button>
+                                        <button onClick={handleZoomIn} className="p-2 bg-cardstock rounded-lg shadow-sm hover:bg-craft-mint/20"><ZoomIn className="w-5 h-5" /></button>
+                                        <button onClick={resetView} className="p-2 bg-cardstock rounded-lg shadow-sm hover:bg-craft-mint/20" title="Reset View"><Maximize2 className="w-5 h-5" /></button>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <button onClick={() => setShowPlacementZone(!showPlacementZone)} className={`flex items-center gap-2 px-3 py-2 rounded-lg shadow-sm ${showPlacementZone ? 'bg-pink text-white' : 'bg-white hover:bg-pink/20'}`} title="Show Placement Zone"><Grid3X3 className="w-4 h-4" /></button>
-                                        <button onClick={() => setShowBackSide(!showBackSide)} className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg shadow-sm hover:bg-pink/20"><RotateCw className="w-4 h-4" /><span className="text-sm font-semibold">{showBackSide ? 'Back' : 'Front'}</span></button>
-                                        <button onClick={handlePreview} disabled={frontPatches.length === 0 && backPatches.length === 0} className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg shadow-sm hover:bg-pink/20 disabled:opacity-40 disabled:cursor-not-allowed" title="Preview Design"><Eye className="w-4 h-4" /><span className="text-sm font-semibold">Preview</span></button>
-                                        <button onClick={deleteSelectedPatch} disabled={!selectedPatchId} className="p-2 bg-red-100 rounded-lg shadow-sm hover:bg-red-200 disabled:opacity-50"><Trash2 className="w-5 h-5 text-red-500" /></button>
+                                        <button onClick={() => setShowPlacementZone(!showPlacementZone)} className={`flex items-center gap-2 px-3 py-2 rounded-lg shadow-sm ${showPlacementZone ? 'bg-craft-mint text-white' : 'bg-cardstock hover:bg-craft-mint/20'}`} title="Show Placement Zone"><Grid3X3 className="w-4 h-4" /></button>
+                                        <button onClick={() => setShowBackSide(!showBackSide)} className="flex items-center gap-2 px-3 py-2 bg-cardstock rounded-lg shadow-sm hover:bg-craft-mint/20"><RotateCw className="w-4 h-4" /><span className="text-sm font-semibold">{showBackSide ? 'Back' : 'Front'}</span></button>
+
+                                        <button onClick={deleteSelectedPatch} disabled={!selectedPatchId} className="p-2 bg-craft-pink/10 rounded-lg shadow-sm hover:bg-craft-pink/20 disabled:opacity-50"><Trash2 className="w-5 h-5 text-craft-pink" /></button>
                                     </div>
                                 </div>
 
-                                <div className="relative bg-gray-100 rounded-3xl overflow-hidden shadow-inner cursor-grab active:cursor-grabbing" style={{ height: '500px' }} onMouseDown={startPan} onTouchStart={startPan}>
+                                <div className="relative bg-paper-grid rounded-[1.25rem] overflow-hidden border-[2.5px] border-ink shadow-paper cursor-grab active:cursor-grabbing" style={{ height: '500px' }} onMouseDown={startPan} onTouchStart={startPan}>
                                     <div className="absolute inset-0 grid-pattern opacity-50" />
+                                    <FloatingDecorations />
                                     <div ref={canvasRef} className={`absolute inset-0 flex items-center justify-center transition-transform duration-100 ${isHeatPressing ? 'animate-heat-press' : ''}`} style={{ transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`, transformOrigin: 'center center' }}>
-                                        <div className="relative">
-                                            {(() => {
-                                                const s = getClipAndCenter(selectedProduct.placementZone);
-                                                return <img ref={productImageRef} src={showBackSide ? selectedProduct.backImage : selectedProduct.frontImage} alt={selectedProduct.name} className="max-w-full max-h-[450px] object-contain" draggable={false} style={{ clipPath: s.clipPath }} />;
-                                            })()}
+                                        {(() => {
+                                            const s = getClipAndCenter(selectedProduct.placementZone);
+                                            return (
+                                                <div className="relative" style={{ transform: s.transform }}>
+                                                    {/* Product Image */}
+                                                    <motion.img
+                                                        ref={productImageRef}
+                                                        src={showBackSide ? selectedProduct.backImage : selectedProduct.frontImage}
+                                                        alt={selectedProduct.name}
+                                                        className="max-w-full max-h-[450px] object-contain"
+                                                        draggable={false}
+                                                        style={{ clipPath: s.clipPath }}
+                                                        animate={freshPatchId ? {
+                                                            scale: [1, 1.015, 1, 1.008, 1],
+                                                        } : {}}
+                                                        transition={{ duration: 0.4, ease: 'easeInOut' }}
+                                                    />
 
-                                            {/* Placement Zone Overlay (Visual only, logic is in handleMove) */}
+                                                    {/* Placement Zone Overlay (Visual only, logic is in handleMove) */}
                                             {showPlacementZone && (
                                                 selectedProduct.placementZone.type === 'polygon' && selectedProduct.placementZone.points ? (
                                                     <div className="absolute inset-0 pointer-events-none">
@@ -764,14 +751,14 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                                             <path
                                                                 d={`M${selectedProduct.placementZone.points[0].x},${selectedProduct.placementZone.points[0].y} ${selectedProduct.placementZone.points.slice(1).map(p => `L${p.x},${p.y}`).join(' ')} Z`}
                                                                 fill="none"
-                                                                stroke="#ec4899"
+                                                                stroke="#81c784"
                                                                 strokeWidth="0.5"
                                                                 strokeDasharray="1 1"
                                                                 vectorEffect="non-scaling-stroke"
                                                             />
                                                         </svg>
                                                         <div
-                                                            className="absolute bg-pink text-white text-xs px-2 py-1 rounded"
+                                                            className="absolute bg-craft-mint text-white text-xs px-2 py-1 rounded"
                                                             style={{
                                                                 left: `${selectedProduct.placementZone.points.reduce((min, p) => Math.min(min, p.x), 100)}%`,
                                                                 top: `${Math.max(0, selectedProduct.placementZone.points.reduce((min, p) => Math.min(min, p.y), 100) - 5)}%`
@@ -782,7 +769,7 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                                     </div>
                                                 ) : (
                                                     <div
-                                                        className="absolute border-2 border-dashed border-pink pointer-events-none"
+                                                        className="absolute border-2 border-dashed border-brass pointer-events-none"
                                                         style={{
                                                             left: `${selectedProduct.placementZone.x}%`,
                                                             top: `${selectedProduct.placementZone.y}%`,
@@ -790,7 +777,7 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                                             height: `${selectedProduct.placementZone.height}%`
                                                         }}
                                                     >
-                                                        <div className="absolute -top-6 left-0 bg-pink text-white text-xs px-2 py-1 rounded">Placement Zone</div>
+                                                        <div className="absolute -top-6 left-0 bg-craft-mint text-white text-xs px-2 py-1 rounded">Placement Zone</div>
                                                     </div>
                                                 )
                                             )}
@@ -801,16 +788,29 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                                 const cx = cz.x + cz.width / 2;
                                                 const cy = cz.y + cz.height / 2;
 
+                                                const isFresh = patch.uniqueId === freshPatchId;
                                                 return (
-                                                    <div key={patch.uniqueId} className={`patch-item absolute ${selectedPatchId === patch.uniqueId ? 'z-50' : 'z-10'}`}
+                                                    <motion.div
+                                                        key={patch.uniqueId}
+                                                        className={`patch-item absolute ${selectedPatchId === patch.uniqueId ? 'z-50' : 'z-10'}`}
                                                         style={{
                                                             left: `${patch.x}%`,
                                                             top: `${patch.y}%`,
                                                             width: `${patch.widthPercent}%`,
                                                             height: `${patch.heightPercent}%`,
-                                                            transform: `rotate(${patch.rotation}deg)`,
-                                                            transformOrigin: `${cx}% ${cy}%`
-                                                        }}>
+                                                            transformOrigin: `${cx}% ${cy}%`,
+                                                            rotate: patch.rotation,
+                                                        }}
+                                                        initial={isFresh ? { scale: 0, rotate: patch.rotation - 15 } : false}
+                                                        animate={{
+                                                            scale: isFresh ? 1 : selectedPatchId === patch.uniqueId ? 1.05 : 1,
+                                                            rotate: patch.rotation,
+                                                        }}
+                                                        transition={{
+                                                            scale: { type: 'spring', stiffness: 400, damping: 20 },
+                                                            rotate: { duration: 0 },
+                                                        }}
+                                                    >
                                                         <img
                                                             src={patch.image}
                                                             alt={patch.name}
@@ -827,6 +827,7 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                                             onTouchStart={(e) => startDragPatch(e, patch.uniqueId)}
                                                             onClick={(e) => { e.stopPropagation(); setSelectedPatchId(patch.uniqueId); }}
                                                         />
+                                                        {isFresh && <FreshPatchGlow active={isFresh} />}
                                                         {selectedPatchId === patch.uniqueId && (
                                                             <>
                                                                 {/* Traced Zone Overlay - Semi-transparent fill with border */}
@@ -836,10 +837,10 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                                                             <>
                                                                                 {/* Filled background */}
                                                                                 <polygon points={patch.contentZone.points.map(p => `${p.x},${p.y}`).join(' ')}
-                                                                                    fill="rgba(236, 72, 153, 0.15)" stroke="none" />
+                                                                                    fill="rgba(129, 199, 132, 0.15)" stroke="none" />
                                                                                 {/* Dashed border */}
                                                                                 <polygon points={patch.contentZone.points.map(p => `${p.x},${p.y}`).join(' ')}
-                                                                                    stroke="#FF69B4" strokeWidth="2" fill="none" vectorEffect="non-scaling-stroke" strokeDasharray="4 2" />
+                                                                                    stroke="#81c784" strokeWidth="2" fill="none" vectorEffect="non-scaling-stroke" strokeDasharray="4 2" />
                                                                             </>
                                                                         ) : (
                                                                             <>
@@ -848,13 +849,13 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                                                                     y={patch.contentZone ? patch.contentZone.y : 0}
                                                                                     width={patch.contentZone ? patch.contentZone.width : 100}
                                                                                     height={patch.contentZone ? patch.contentZone.height : 100}
-                                                                                    fill="rgba(236, 72, 153, 0.15)" stroke="none" rx="1" />
+                                                                                    fill="rgba(129, 199, 132, 0.15)" stroke="none" rx="1" />
                                                                                 {/* Dashed border */}
                                                                                 <rect x={patch.contentZone ? patch.contentZone.x : 0}
                                                                                     y={patch.contentZone ? patch.contentZone.y : 0}
                                                                                     width={patch.contentZone ? patch.contentZone.width : 100}
                                                                                     height={patch.contentZone ? patch.contentZone.height : 100}
-                                                                                    stroke="#FF69B4" strokeWidth="2" fill="none" vectorEffect="non-scaling-stroke" strokeDasharray="4 2" rx="1" />
+                                                                                    stroke="#81c784" strokeWidth="2" fill="none" vectorEffect="non-scaling-stroke" strokeDasharray="4 2" rx="1" />
                                                                             </>
                                                                         )}
                                                                     </svg>
@@ -867,8 +868,8 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                                                     }}
                                                                     onMouseDown={(e) => startRotatePatch(e, patch.uniqueId)}
                                                                     onTouchStart={(e) => startRotatePatch(e, patch.uniqueId)}>
-                                                                    <div className="w-6 h-6 bg-pink rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform"><RotateCw className="w-3 h-3 text-white" /></div>
-                                                                    <div className="absolute top-6 left-1/2 -translate-x-1/2 w-0.5 h-4 bg-pink" />
+                                                                    <div className="w-6 h-6 bg-craft-mint rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform"><RotateCw className="w-3 h-3 text-white" /></div>
+                                                                    <div className="absolute top-6 left-1/2 -translate-x-1/2 w-0.5 h-4 bg-craft-mint" />
                                                                 </div>
                                                                 <button onClick={(e) => { e.stopPropagation(); deletePatch(patch.uniqueId); }}
                                                                     style={{
@@ -876,367 +877,291 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                                                         top: `${cz.y}%`,
                                                                         transform: 'translate(50%, -50%)'
                                                                     }}
-                                                                    className="absolute w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-red-600"><X className="w-4 h-4" /></button>
+                                                                    className="absolute w-6 h-6 bg-craft-pink text-white rounded-full flex items-center justify-center shadow-lg hover:bg-craft-pink-light"><X className="w-4 h-4" /></button>
                                                             </>
                                                         )}
 
-                                                    </div>
+                                                    </motion.div>
                                                 );
                                             })}
 
-                                            {isHeatPressing && (
-                                                <div className={`absolute inset-0 z-[100] pointer-events-none ${heatPressPhase === 2 ? 'hp-screen-shake' : ''}`}>
-                                                    {/* Dark overlay that intensifies */}
-                                                    <div className={`absolute inset-0 transition-all duration-700 ${heatPressPhase >= 2 ? 'bg-black/50' : heatPressPhase >= 1 ? 'bg-black/20' : 'bg-transparent'}`} />
+                                            <AnimatePresence>
+                                                {isHeatPressing && <HeatPressSequence phase={heatPressPhase} />}
+                                            </AnimatePresence>
 
-                                                    {/* Pulsing heat glow */}
-                                                    <div className={`absolute inset-0 transition-opacity duration-700 ${heatPressPhase >= 2 ? 'opacity-100 hp-glow-pulse' : 'opacity-0'}`}
-                                                        style={{ background: 'radial-gradient(ellipse at center, rgba(255,80,0,0.45) 0%, rgba(255,40,0,0.2) 35%, transparent 65%)' }} />
+                                            </div>
+                                        );
+                                    })()}
 
-                                                    {/* Metallic press plate — wider, thicker, with reflection stripe */}
-                                                    <div className={`absolute left-[5%] right-[5%] transition-all rounded-b-xl
-                                                        ${heatPressPhase >= 1 ? 'top-0' : '-top-[80px]'}
-                                                        ${heatPressPhase >= 3 ? 'h-[18px] opacity-60' : 'h-[28px]'}
-                                                        ${heatPressPhase >= 2 ? 'shadow-[0_6px_40px_rgba(255,80,0,0.8)]' : 'shadow-lg'}`}
-                                                        style={{
-                                                            transitionDuration: heatPressPhase >= 3 ? '800ms' : '600ms',
-                                                            background: heatPressPhase >= 2
-                                                                ? 'linear-gradient(to bottom, #555, #444, #FF6B00, #FF4500)'
-                                                                : 'linear-gradient(to bottom, #888, #777, #666, #555)'
-                                                        }}>
-                                                        {/* Reflection stripe */}
-                                                        <div className="absolute top-[3px] left-[10%] right-[10%] h-[2px] bg-white/30 rounded-full" />
-                                                    </div>
 
-                                                    {/* Side glow bars */}
-                                                    <div className={`absolute left-0 top-0 bottom-0 w-1.5 transition-opacity duration-500 ${heatPressPhase >= 2 ? 'opacity-90' : 'opacity-0'}`}
-                                                        style={{ background: 'linear-gradient(to bottom, transparent 10%, rgba(255,100,0,0.6) 30%, rgba(255,60,0,0.8) 50%, rgba(255,100,0,0.6) 70%, transparent 90%)' }} />
-                                                    <div className={`absolute right-0 top-0 bottom-0 w-1.5 transition-opacity duration-500 ${heatPressPhase >= 2 ? 'opacity-90' : 'opacity-0'}`}
-                                                        style={{ background: 'linear-gradient(to bottom, transparent 10%, rgba(255,100,0,0.6) 30%, rgba(255,60,0,0.8) 50%, rgba(255,100,0,0.6) 70%, transparent 90%)' }} />
-
-                                                    {/* Sparks — more, bigger, randomized trajectories */}
-                                                    {heatPressPhase >= 2 && heatPressPhase < 3 && [...Array(20)].map((_, i) => (
-                                                        <div key={i} className="heat-spark"
-                                                            style={{
-                                                                left: `${10 + Math.random() * 80}%`,
-                                                                top: `${5 + Math.random() * 40}%`,
-                                                                animationDelay: `${i * 0.08}s`,
-                                                                animationDuration: `${0.5 + Math.random() * 1}s`,
-                                                                ['--dx' as string]: `${-20 + Math.random() * 40}px`,
-                                                                ['--dy' as string]: `${-30 + Math.random() * 20}px`
-                                                            }} />
-                                                    ))}
-
-                                                    {/* Ember particles during press */}
-                                                    {heatPressPhase === 2 && [...Array(8)].map((_, i) => (
-                                                        <div key={`ember-${i}`} className="hp-ember"
-                                                            style={{
-                                                                left: `${20 + Math.random() * 60}%`,
-                                                                top: `${15 + Math.random() * 25}%`,
-                                                                animationDelay: `${i * 0.15}s`
-                                                            }} />
-                                                    ))}
-
-                                                    {/* Steam — larger, more particles during release */}
-                                                    {heatPressPhase >= 3 && heatPressPhase < 4 && [...Array(24)].map((_, i) => (
-                                                        <div key={i} className="heat-steam"
-                                                            style={{ left: `${5 + i * 3.8}%`, animationDelay: `${i * 0.04}s` }} />
-                                                    ))}
-
-                                                    {/* Vignette edges */}
-                                                    <div className={`absolute inset-0 transition-opacity duration-500 ${heatPressPhase >= 1 ? 'opacity-70' : 'opacity-0'}`}
-                                                        style={{ boxShadow: 'inset 0 0 100px rgba(0,0,0,0.5)' }} />
-
-                                                    {/* Progress bar — thicker with glow */}
-                                                    <div className="absolute bottom-0 left-0 right-0 h-2 bg-black/20 backdrop-blur-sm">
-                                                        <div className="h-full bg-gradient-to-r from-orange-500 via-yellow-400 to-orange-500 hp-progress-bar shadow-[0_0_12px_rgba(255,160,0,0.8)]" />
-                                                    </div>
-
-                                                    {/* Center status — with cycling text */}
-                                                    <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-400 ${heatPressPhase >= 1 ? 'opacity-100' : 'opacity-0'}`}>
-                                                        <div className="text-center">
-                                                            {heatPressPhase === 4 ? (
-                                                                <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-3 animate-bounce-in shadow-[0_0_30px_rgba(34,197,94,0.6)]">
-                                                                    <Check className="w-8 h-8 text-white" />
-                                                                </div>
-                                                            ) : (
-                                                                <Flame className={`w-12 h-12 mx-auto mb-3 drop-shadow-[0_0_20px_rgba(255,100,0,0.9)] ${heatPressPhase >= 2 ? 'text-orange-400 animate-pulse' : 'text-orange-300'}`} />
-                                                            )}
-                                                            <p className="text-white font-heading font-bold text-lg drop-shadow-lg tracking-wide">
-                                                                {heatPressPhase === 1 && 'Lowering press...'}
-                                                                {heatPressPhase === 2 && 'Applying heat...'}
-                                                                {heatPressPhase === 3 && 'Cooling down...'}
-                                                                {heatPressPhase === 4 && 'Done! ✓'}
-                                                            </p>
-                                                            {heatPressPhase >= 1 && heatPressPhase <= 3 && (
-                                                                <p className="text-white/60 text-xs mt-1">Do not remove product</p>
-                                                            )}
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Success flash on phase 4 */}
-                                                    {heatPressPhase === 4 && (
-                                                        <div className="absolute inset-0 bg-green-400/20 hp-success-flash" />
-                                                    )}
-                                                </div>
-                                            )}
-
-                                            {placedPatches.length === 0 && !isHeatPressing && (
-                                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                                                    <div className="text-center text-text-dark/30">
-                                                        <MousePointer2 className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-3 animate-bounce" />
-                                                        <p className="text-base sm:text-lg font-semibold">Tap patches to add them!</p>
-                                                        <p className="text-xs sm:text-sm">Drag to position, rotate using the handle</p>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
                                 </div>
+                            </div>
 
                                 <div className="flex justify-between items-center mt-4">
-                                    <button onClick={() => setCurrentStep('product')} className="flex items-center gap-2 px-4 py-2 text-text-dark/70 hover:text-text-dark"><ChevronLeft className="w-4 h-4" /> Back</button>
+                                    <button onClick={() => setCurrentStep('product')} className="flex items-center gap-2 px-4 py-2 text-ink/70 hover:text-ink"><ChevronLeft className="w-4 h-4" /> Back</button>
                                     <div className="flex gap-3">
-                                        <button onClick={clearAllPatches} className="flex items-center gap-2 px-4 py-2 text-red-500 hover:bg-red-50 rounded-full" disabled={placedPatches.length === 0}><RotateCcw className="w-4 h-4" /> Clear All</button>
+                                        <button onClick={clearAllPatches} className="flex items-center gap-2 px-4 py-2 text-craft-pink hover:bg-craft-pink/10 rounded-full" disabled={placedPatches.length === 0}><RotateCcw className="w-4 h-4" /> Clear All</button>
                                         <button onClick={handleHeatPress} className="btn-primary flex items-center gap-2" disabled={placedPatches.length === 0 || isHeatPressing}><Flame className="w-5 h-5" /> {isHeatPressing ? 'Pressing...' : 'Heat Press'}</button>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Right Panel: Instructions + Price */}
+                            {/* Right Panel: Instructions + Placed Patches + Price */}
                             <div className="lg:w-1/4 order-3 animate-slide-in-right">
-                                <div className="bg-white rounded-2xl p-4 shadow-soft">
-                                    <h3 className="font-heading text-lg font-bold text-text-dark mb-4">{siteContent.customizePage.step2PanelTitle}</h3>
+                                <div className="bg-cardstock rounded-2xl p-4 shadow-soft">
+                                    <h3 className="font-heading text-lg font-bold text-ink mb-4">{siteContent.customizePage.step2PanelTitle}</h3>
                                     <div className="space-y-3 text-sm">
                                         {siteContent.customizePage.howToDesignSteps.map((step, i) => (
-                                            <div key={i} className="flex items-start gap-3"><div className="w-6 h-6 bg-pink/20 rounded-full flex items-center justify-center flex-shrink-0"><span className="text-pink font-bold text-xs">{i + 1}</span></div><p className="text-text-dark/70">{step}</p></div>
+                                            <div key={i} className="flex items-start gap-3"><div className="w-6 h-6 bg-craft-mint/20 rounded-full flex items-center justify-center flex-shrink-0"><span className="text-craft-mint font-bold text-xs">{i + 1}</span></div><p className="text-ink/70">{step}</p></div>
                                         ))}
                                     </div>
                                 </div>
+
+                                {/* Placed Patches List */}
+                                {placedPatches.length > 0 && (
+                                    <div className="bg-cardstock rounded-2xl p-4 mt-4 shadow-soft">
+                                        <h3 className="font-heading text-sm font-bold text-ink mb-3 flex items-center gap-2">
+                                            <Layers className="w-4 h-4 text-craft-mint" /> Placed Patches ({placedPatches.length})
+                                        </h3>
+                                        <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                                            {placedPatches.map((patch) => (
+                                                <div
+                                                    key={patch.uniqueId}
+                                                    onClick={() => setSelectedPatchId(patch.uniqueId)}
+                                                    className={`flex items-center gap-2 p-2 rounded-xl cursor-pointer transition-colors ${
+                                                        selectedPatchId === patch.uniqueId ? 'bg-craft-mint/20 ring-1 ring-craft-mint' : 'hover:bg-paper'
+                                                    }`}
+                                                >
+                                                    <img src={patch.image} alt={patch.name} className="w-8 h-8 object-contain flex-shrink-0" />
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-xs font-semibold truncate">{patch.name}</p>
+                                                        <p className="text-[10px] text-craft-mint">{formatPrice(patch.price)}</p>
+                                                    </div>
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); deletePatch(patch.uniqueId); }}
+                                                        className="w-6 h-6 flex items-center justify-center rounded-full hover:bg-craft-pink/20 text-craft-pink flex-shrink-0"
+                                                    >
+                                                        <X className="w-3 h-3" />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Design Summary & Total Cost — Combined Both Sides */}
-                                <div className="bg-gradient-to-br from-pink/15 via-pink/10 to-cream rounded-2xl p-4 mt-4 shadow-soft border border-pink/20">
-                                    <h3 className="font-heading font-bold text-text-dark mb-3 flex items-center gap-2">
-                                        <ShoppingCart className="w-4 h-4 text-pink" /> Design Total
+                                <div className="bg-gradient-to-br from-craft-mint/15 via-craft-mint/10 to-cardstock rounded-2xl p-4 mt-4 shadow-soft border border-craft-mint/20">
+                                    <h3 className="font-heading font-bold text-ink mb-3 flex items-center gap-2">
+                                        <ShoppingCart className="w-4 h-4 text-craft-mint" /> Design Total
                                     </h3>
                                     <div className="space-y-2 text-sm">
-                                        <div className="flex justify-between items-center"><span className="text-text-dark/70">{selectedProduct.name}</span><span className="font-semibold">${selectedProduct.basePrice}</span></div>
+                                        <div className="flex justify-between items-center"><span className="text-ink/70">{selectedProduct.name}</span><span className="font-semibold">{formatPrice(selectedProduct.basePrice)}</span></div>
                                         {frontPatches.length > 0 && (
-                                            <div className="flex justify-between items-center"><span className="text-text-dark/70">Front ({frontPatches.length} patch{frontPatches.length !== 1 ? 'es' : ''})</span><span className="font-semibold">${frontPatchesPrice}</span></div>
+                                            <div className="flex justify-between items-center"><span className="text-ink/70">Front ({frontPatches.length} patch{frontPatches.length !== 1 ? 'es' : ''})</span><span className="font-semibold">{formatPrice(frontPatchesPrice)}</span></div>
                                         )}
                                         {backPatches.length > 0 && (
-                                            <div className="flex justify-between items-center"><span className="text-text-dark/70">Back ({backPatches.length} patch{backPatches.length !== 1 ? 'es' : ''})</span><span className="font-semibold">${backPatchesPrice}</span></div>
+                                            <div className="flex justify-between items-center"><span className="text-ink/70">Back ({backPatches.length} patch{backPatches.length !== 1 ? 'es' : ''})</span><span className="font-semibold">{formatPrice(backPatchesPrice)}</span></div>
                                         )}
                                         {frontPatches.length === 0 && backPatches.length === 0 && (
-                                            <div className="flex justify-between items-center text-text-dark/40 italic"><span>No patches yet</span><span>$0</span></div>
+                                            <div className="flex justify-between items-center text-ink/40 italic"><span>No patches yet</span><span>{formatPrice(0)}</span></div>
                                         )}
-                                        <div className="border-t border-pink/30 pt-2 mt-1">
-                                            <div className="flex justify-between font-bold text-xl"><span>Total</span><span className="text-pink">${totalPrice}</span></div>
+                                        <div className="border-t border-craft-mint/30 pt-2 mt-1">
+                                            <div className="flex justify-between font-bold text-xl"><span>Total</span><motion.span
+                                                key={totalPrice + currency}
+                                                initial={{ scale: 1.1 }}
+                                                animate={{ scale: 1 }}
+                                                transition={{ type: 'spring', stiffness: 400, damping: 17 }}
+                                                className="text-craft-mint"
+                                            >{formatPrice(totalPrice)}</motion.span></div>
+                                            <p className="text-[10px] text-ink/40 text-right mt-0.5">Converted using current exchange rates</p>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
+                    </MotionStep>
                 )}
 
                 {/* STEP 3: Review */}
                 {currentStep === 'review' && (
-                    <div className="animate-fade-scale-up max-w-3xl mx-auto relative">
+                    <MotionStep key="review" stepKey="review" direction="up">
                         {/* Confetti */}
                         <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
                             {confettiColors.map((color, i) => (
-                                <ConfettiParticle key={i} delay={i * 100} color={color} />
+                                <ConfettiParticle key={i} delay={i * 100} color={color} index={i} />
                             ))}
                         </div>
-                        
-                        <div className="bg-white rounded-3xl p-5 sm:p-8 shadow-soft">
-                            {/* Header */}
-                            <div className="text-center mb-6">
-                                <div className="w-20 h-20 bg-green/20 rounded-full flex items-center justify-center mx-auto mb-4 animate-pop-in">
-                                    <Check className="w-10 h-10 text-green-600" />
-                                </div>
-                                <h2 className="font-heading text-2xl sm:text-3xl font-bold text-text-dark mb-1 animate-slide-in-right">{siteContent.customizePage.step3Title}</h2>
-                                <p className="text-text-dark/60 text-sm animate-slide-in-left">{siteContent.customizePage.step3Subtitle}</p>
+
+                        <div className="bg-cardstock rounded-3xl p-4 sm:p-6 shadow-soft">
+                            {/* Compact header */}
+                            <div className="text-center mb-3">
+                                <h2 className="font-heading text-xl sm:text-2xl font-bold text-ink flex items-center justify-center gap-2">
+                                    <Check className="w-6 h-6 text-craft-mint" />
+                                    {siteContent.customizePage.step3Title}
+                                </h2>
+                                <p className="text-ink/60 text-xs">{siteContent.customizePage.step3Subtitle}</p>
                             </div>
 
-                            {/* Side-by-side preview - Show full product like design canvas */}
-                            <div ref={reviewRef} className="grid grid-cols-2 gap-4 mb-6">
-                                {/* Front View */}
-                                <div className="relative bg-gray-50 rounded-2xl p-3 sm:p-5">
-                                    <h4 className="font-heading text-sm sm:text-base font-bold text-center mb-2 text-text-dark/50">Front</h4>
-                                    <div className="relative mx-auto" style={{ maxWidth: 240 }}>
-                                        {/* Clipped product image - same as design canvas */}
+                            {/* Horizontal layout: preview left, summary right */}
+                            <div className="flex flex-col lg:flex-row gap-6 mb-4">
+                                {/* Previews */}
+                                <div ref={reviewRef} className="flex-1 grid grid-cols-2 gap-4 items-start">
+                                    {/* Front View */}
+                                    <div className="relative bg-white/60 rounded-xl p-3 shadow-sm">
+                                        <h4 className="text-xs font-bold text-center text-ink/40 mb-2">Front</h4>
                                         {(() => {
                                             const s = getClipAndCenter(selectedProduct.placementZone);
-                                            return <img src={selectedProduct.frontImage} alt={`${selectedProduct.name} Front`} className="w-full object-contain" style={{ clipPath: s.clipPath, transform: s.transform }} />;
-                                        })()}
-                                        {/* Patches positioned on full image */}
-                                        {frontPatches.map((patch) => {
-                                            const cz = patch.contentZone || { x: 0, y: 0, width: 100, height: 100 };
-                                            const cx = cz.x + cz.width / 2;
-                                            const cy = cz.y + cz.height / 2;
                                             return (
-                                                <img key={patch.uniqueId} src={patch.image} alt={patch.name} className="absolute object-contain" style={{
-                                                    left: `${patch.x}%`, top: `${patch.y}%`, width: `${patch.widthPercent}%`, height: `${patch.heightPercent}%`,
-                                                    transform: `rotate(${patch.rotation}deg)`,
-                                                    transformOrigin: `${cx}% ${cy}%`,
-                                                    clipPath: patch.contentZone
-                                                        ? (patch.contentZone.type === 'polygon' && patch.contentZone.points
-                                                            ? `polygon(${patch.contentZone.points.map(p => `${p.x}% ${p.y}%`).join(', ')})`
-                                                            : `inset(${patch.contentZone.y}% ${100 - (patch.contentZone.x + patch.contentZone.width)}% ${100 - (patch.contentZone.y + patch.contentZone.height)}% ${patch.contentZone.x}%)`)
-                                                        : 'none'
-                                                }} />
-                                            )
-                                        })}
+                                                <div className="relative mx-auto" style={{ maxWidth: 260, transform: s.transform }}>
+                                                    <img src={fixImagePath(selectedProduct.frontImage)} alt={`${selectedProduct.name} Front`} className="w-full object-contain" style={{ clipPath: s.clipPath }} />
+                                                    {frontPatches.map((patch) => {
+                                                        const cz = patch.contentZone || { x: 0, y: 0, width: 100, height: 100 };
+                                                        const cx = cz.x + cz.width / 2;
+                                                        const cy = cz.y + cz.height / 2;
+                                                        return (
+                                                            <img key={patch.uniqueId} src={fixImagePath(patch.image)} alt={patch.name} className="absolute object-contain" style={{
+                                                                left: `${patch.x}%`, top: `${patch.y}%`, width: `${patch.widthPercent}%`, height: `${patch.heightPercent}%`,
+                                                                transform: `rotate(${patch.rotation}deg)`,
+                                                                transformOrigin: `${cx}% ${cy}%`,
+                                                                clipPath: patch.contentZone
+                                                                    ? (patch.contentZone.type === 'polygon' && patch.contentZone.points
+                                                                        ? `polygon(${patch.contentZone.points.map(p => `${p.x}% ${p.y}%`).join(', ')})`
+                                                                        : `inset(${patch.contentZone.y}% ${100 - (patch.contentZone.x + patch.contentZone.width)}% ${100 - (patch.contentZone.y + patch.contentZone.height)}% ${patch.contentZone.x}%)`)
+                                                                    : 'none'
+                                                            }} />
+                                                        )
+                                                    })}
+                                                </div>
+                                            );
+                                        })()}
+                                        <p className="text-center text-[10px] text-ink/40 mt-2">{frontPatches.length} patch{frontPatches.length !== 1 ? 'es' : ''}</p>
                                     </div>
-                                    <p className="text-center text-xs text-text-dark/40 mt-2">{frontPatches.length} patch{frontPatches.length !== 1 ? 'es' : ''}</p>
-                                </div>
 
-                                {/* Back View */}
-                                <div className="relative bg-gray-50 rounded-2xl p-3 sm:p-5">
-                                    <h4 className="font-heading text-sm sm:text-base font-bold text-center mb-2 text-text-dark/50">Back</h4>
-                                    <div className="relative mx-auto" style={{ maxWidth: 240 }}>
-                                        {/* Clipped product image - same as design canvas */}
+                                    {/* Back View */}
+                                    <div className="relative bg-white/60 rounded-xl p-3 shadow-sm">
+                                        <h4 className="text-xs font-bold text-center text-ink/40 mb-2">Back</h4>
                                         {(() => {
                                             const s = getClipAndCenter(selectedProduct.placementZone);
-                                            return <img src={selectedProduct.backImage} alt={`${selectedProduct.name} Back`} className="w-full object-contain" style={{ clipPath: s.clipPath, transform: s.transform }} />;
-                                        })()}
-                                        {/* Patches positioned on full image */}
-                                        {backPatches.map((patch) => {
-                                            const cz = patch.contentZone || { x: 0, y: 0, width: 100, height: 100 };
-                                            const cx = cz.x + cz.width / 2;
-                                            const cy = cz.y + cz.height / 2;
                                             return (
-                                                <img key={patch.uniqueId} src={patch.image} alt={patch.name} className="absolute object-contain" style={{
-                                                    left: `${patch.x}%`, top: `${patch.y}%`, width: `${patch.widthPercent}%`, height: `${patch.heightPercent}%`,
-                                                    transform: `rotate(${patch.rotation}deg)`,
-                                                    transformOrigin: `${cx}% ${cy}%`,
-                                                    clipPath: patch.contentZone
-                                                        ? (patch.contentZone.type === 'polygon' && patch.contentZone.points
-                                                            ? `polygon(${patch.contentZone.points.map(p => `${p.x}% ${p.y}%`).join(', ')})`
-                                                            : `inset(${patch.contentZone.y}% ${100 - (patch.contentZone.x + patch.contentZone.width)}% ${100 - (patch.contentZone.y + patch.contentZone.height)}% ${patch.contentZone.x}%)`)
-                                                        : 'none'
-                                                }} />
-                                            )
-                                        })}
-                                    </div>
-                                    <p className="text-center text-xs text-text-dark/40 mt-2">{backPatches.length} patch{backPatches.length !== 1 ? 'es' : ''}</p>
-                                </div>
-                            </div>
-
-                            {/* Itemized Cost Breakdown */}
-                            <div className="bg-gradient-to-br from-cream via-pink/5 to-cream rounded-2xl p-4 mb-6 border border-pink/15">
-                                <h4 className="font-heading font-bold text-text-dark mb-3 flex items-center gap-2"><Package className="w-4 h-4 text-pink" /> Order Summary</h4>
-                                <div className="space-y-2 text-sm">
-                                    <div className="flex justify-between"><span className="text-text-dark/70">{selectedProduct.name} (base)</span><span className="font-semibold">${selectedProduct.basePrice}</span></div>
-                                    {frontPatches.length > 0 && (
-                                        <div>
-                                            <div className="flex justify-between"><span className="text-text-dark/70">Front patches × {frontPatches.length}</span><span className="font-semibold">${frontPatchesPrice}</span></div>
-                                            <div className="pl-4 mt-1 space-y-0.5">
-                                                {frontPatches.map(p => <div key={p.uniqueId} className="flex justify-between text-xs text-text-dark/50"><span>{p.name}</span><span>${p.price}</span></div>)}
-                                            </div>
-                                        </div>
-                                    )}
-                                    {backPatches.length > 0 && (
-                                        <div>
-                                            <div className="flex justify-between"><span className="text-text-dark/70">Back patches × {backPatches.length}</span><span className="font-semibold">${backPatchesPrice}</span></div>
-                                            <div className="pl-4 mt-1 space-y-0.5">
-                                                {backPatches.map(p => <div key={p.uniqueId} className="flex justify-between text-xs text-text-dark/50"><span>{p.name}</span><span>${p.price}</span></div>)}
-                                            </div>
-                                        </div>
-                                    )}
-                                    <div className="border-t border-pink/30 pt-2 mt-2">
-                                        <div className="flex justify-between font-bold text-xl"><span>Grand Total</span><span className="text-pink">${totalPrice}</span></div>
+                                                <div className="relative mx-auto" style={{ maxWidth: 260, transform: s.transform }}>
+                                                    <img src={fixImagePath(selectedProduct.backImage)} alt={`${selectedProduct.name} Back`} className="w-full object-contain" style={{ clipPath: s.clipPath }} />
+                                                    {backPatches.map((patch) => {
+                                                        const cz = patch.contentZone || { x: 0, y: 0, width: 100, height: 100 };
+                                                        const cx = cz.x + cz.width / 2;
+                                                        const cy = cz.y + cz.height / 2;
+                                                        return (
+                                                            <img key={patch.uniqueId} src={fixImagePath(patch.image)} alt={patch.name} className="absolute object-contain" style={{
+                                                                left: `${patch.x}%`, top: `${patch.y}%`, width: `${patch.widthPercent}%`, height: `${patch.heightPercent}%`,
+                                                                transform: `rotate(${patch.rotation}deg)`,
+                                                                transformOrigin: `${cx}% ${cy}%`,
+                                                                clipPath: patch.contentZone
+                                                                    ? (patch.contentZone.type === 'polygon' && patch.contentZone.points
+                                                                        ? `polygon(${patch.contentZone.points.map(p => `${p.x}% ${p.y}%`).join(', ')})`
+                                                                        : `inset(${patch.contentZone.y}% ${100 - (patch.contentZone.x + patch.contentZone.width)}% ${100 - (patch.contentZone.y + patch.contentZone.height)}% ${patch.contentZone.x}%)`)
+                                                                    : 'none'
+                                                            }} />
+                                                        )
+                                                    })}
+                                                </div>
+                                            );
+                                        })()}
+                                        <p className="text-center text-[10px] text-ink/40 mt-2">{backPatches.length} patch{backPatches.length !== 1 ? 'es' : ''}</p>
                                     </div>
                                 </div>
-                            </div>
 
-                            {/* Action Buttons */}
-                            <div className="flex flex-col sm:flex-row gap-3 justify-center animate-slide-in-right" style={{ animationDelay: '200ms' }}>
-                                <button onClick={() => setCurrentStep('design')} className="btn-secondary flex items-center justify-center gap-2 hover:scale-105 transition-transform"><RotateCcw className="w-4 h-4" /> Edit Design</button>
-                                <button onClick={downloadDesign} disabled={isDownloading} className="btn-secondary flex items-center justify-center gap-2 hover:scale-105 transition-transform"><Download className="w-4 h-4" /> {isDownloading ? 'Saving...' : 'Save Image'}</button>
-                                <button onClick={handleAddToCart} className="btn-primary flex items-center justify-center gap-2 hover:scale-105 active:scale-95 transition-transform animate-pulse"><ShoppingCart className="w-5 h-5" /> Add to Cart</button>
-                            </div>
-                            <button onClick={startNewDesign} className="mt-5 text-pink hover:underline text-sm block mx-auto hover:scale-105 transition-transform">Start a New Design</button>
-                        </div>
-                    </div>
-                )}
+                                {/* Summary + Buttons */}
+                                <div className="lg:w-72 flex flex-col gap-3">
+                                    {/* Itemized Summary */}
+                                    <div className="bg-gradient-to-br from-cardstock via-craft-mint/5 to-cardstock rounded-xl p-3 border border-craft-mint/15">
+                                        <h4 className="font-heading font-bold text-ink text-sm mb-2 flex items-center gap-1"><Package className="w-3 h-3 text-craft-mint" /> Your Design</h4>
 
-                {/* ── Preview Modal ── */}
-                {showPreview && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowPreview(false)}>
-                        <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full mx-4 animate-bounce-in overflow-hidden" onClick={e => e.stopPropagation()}>
-                            {/* Header */}
-                            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-                                <h3 className="font-heading text-lg font-bold text-text-dark">Design Preview</h3>
-                                <button onClick={() => setShowPreview(false)} className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors">
-                                    <X className="w-4 h-4 text-gray-500" />
-                                </button>
-                            </div>
-
-                            {/* Front / Back Toggle */}
-                            <div className="flex justify-center gap-2 pt-4 pb-2">
-                                <button
-                                    onClick={() => setPreviewSide('front')}
-                                    className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all ${previewSide === 'front' ? 'bg-pink text-white shadow-md' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
-                                >Front</button>
-                                <button
-                                    onClick={() => setPreviewSide('back')}
-                                    className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all ${previewSide === 'back' ? 'bg-pink text-white shadow-md' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
-                                >Back</button>
-                            </div>
-
-                            {/* Preview Canvas */}
-                            <div className="px-6 py-4">
-                                <div className="relative mx-auto bg-gradient-to-br from-gray-50 to-gray-100 rounded-2xl p-4" style={{ maxWidth: 320 }}>
-                                    {(() => {
-                                        const s = getClipAndCenter(selectedProduct.placementZone);
-                                        const imgSrc = previewSide === 'front' ? selectedProduct.frontImage : selectedProduct.backImage;
-                                        const patchList = previewSide === 'front' ? frontPatches : backPatches;
-                                        return (
-                                            <div className="relative">
-                                                <img src={imgSrc} alt={`${selectedProduct.name} ${previewSide}`} className="w-full object-contain" style={{ clipPath: s.clipPath, transform: s.transform }} />
-                                                {patchList.map((patch) => {
-                                                    const cz = patch.contentZone || { x: 0, y: 0, width: 100, height: 100 };
-                                                    const cx = cz.x + cz.width / 2;
-                                                    const cy = cz.y + cz.height / 2;
-                                                    return (
-                                                        <img key={patch.uniqueId} src={patch.image} alt={patch.name} className="absolute object-contain" style={{
-                                                            left: `${patch.x}%`, top: `${patch.y}%`, width: `${patch.widthPercent}%`, height: `${patch.heightPercent}%`,
-                                                            transform: `rotate(${patch.rotation}deg)`,
-                                                            transformOrigin: `${cx}% ${cy}%`,
-                                                            clipPath: patch.contentZone
-                                                                ? (patch.contentZone.type === 'polygon' && patch.contentZone.points
-                                                                    ? `polygon(${patch.contentZone.points.map(p => `${p.x}% ${p.y}%`).join(', ')})`
-                                                                    : `inset(${patch.contentZone.y}% ${100 - (patch.contentZone.x + patch.contentZone.width)}% ${100 - (patch.contentZone.y + patch.contentZone.height)}% ${patch.contentZone.x}%)`)
-                                                                : 'none'
-                                                        }} />
-                                                    )
-                                                })}
+                                        {/* Base product */}
+                                        <div className="flex items-center gap-2 mb-2 pb-2 border-b border-ink/10">
+                                            <div className="w-10 h-10 rounded bg-white/50 overflow-hidden flex-shrink-0">
+                                                <CroppedThumbnail
+                                                    src={fixImagePath(selectedProduct.frontImage)}
+                                                    zone={selectedProduct.placementZone}
+                                                    className="w-full h-full"
+                                                    imgClassName="object-contain"
+                                                    alt={selectedProduct.name}
+                                                />
                                             </div>
-                                        );
-                                    })()}
-                                </div>
-                                <p className="text-center text-xs text-gray-400 mt-2">
-                                    {previewSide === 'front' ? frontPatches.length : backPatches.length} patch{(previewSide === 'front' ? frontPatches.length : backPatches.length) !== 1 ? 'es' : ''} placed
-                                </p>
-                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-xs font-semibold text-ink truncate">{selectedProduct.name}</p>
+                                                <p className="text-[10px] text-ink/50">Base item</p>
+                                            </div>
+                                            <span className="text-xs font-semibold">{formatPrice(selectedProduct.basePrice)}</span>
+                                        </div>
 
-                            {/* Footer */}
-                            <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
-                                <span className="text-sm text-gray-500">Total: <span className="font-bold text-text-dark">${totalPrice}</span></span>
-                                <button onClick={() => setShowPreview(false)} className="btn-primary text-sm px-5 py-2">
-                                    Back to Editing
-                                </button>
+                                        {/* Front patches */}
+                                        {frontPatches.length > 0 && (
+                                            <div className="mb-2 pb-2 border-b border-ink/10">
+                                                <p className="text-[10px] font-bold text-ink/40 uppercase tracking-wider mb-1">Front Patches</p>
+                                                {frontPatches.map(p => (
+                                                    <div key={p.uniqueId} className="flex items-center gap-2 py-0.5">
+                                                        <img src={fixImagePath(p.image)} alt={p.name} className="w-6 h-6 object-contain" />
+                                                        <span className="flex-1 text-xs text-ink/70 truncate">{p.name}</span>
+                                                        <span className="text-xs font-medium">{formatPrice(p.price)}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {/* Back patches */}
+                                        {backPatches.length > 0 && (
+                                            <div className="mb-2 pb-2 border-b border-ink/10">
+                                                <p className="text-[10px] font-bold text-ink/40 uppercase tracking-wider mb-1">Back Patches</p>
+                                                {backPatches.map(p => (
+                                                    <div key={p.uniqueId} className="flex items-center gap-2 py-0.5">
+                                                        <img src={fixImagePath(p.image)} alt={p.name} className="w-6 h-6 object-contain" />
+                                                        <span className="flex-1 text-xs text-ink/70 truncate">{p.name}</span>
+                                                        <span className="text-xs font-medium">{formatPrice(p.price)}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+
+                                        {/* Total */}
+                                        <div className="flex justify-between items-center pt-1">
+                                            <span className="text-sm font-bold">Total</span>
+                                            <span className="text-lg font-bold text-craft-mint">{formatPrice(totalPrice)}</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Buttons */}
+                                    <button onClick={handleAddToCart} className="btn-primary w-full flex items-center justify-center gap-2 hover:scale-105 active:scale-95 transition-transform animate-pulse text-sm py-2.5"><ShoppingCart className="w-4 h-4" /> Add to Cart</button>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => setCurrentStep('design')} className="flex-1 btn-secondary flex items-center justify-center gap-1 hover:scale-105 transition-transform text-xs py-2"><RotateCcw className="w-3 h-3" /> Edit Design</button>
+                                    </div>
+                                    <button onClick={startNewDesign} className="text-craft-mint hover:underline text-xs block mx-auto hover:scale-105 transition-transform">Start New Design</button>
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    </MotionStep>
                 )}
+                </AnimatePresence>
+
+
+                {/* Step Transition Overlay */}
+                <StepTransition
+                    show={showStepTransition}
+                    productImage={selectedProduct.frontImage}
+                    productName={selectedProduct.name}
+                    placementZone={selectedProduct.placementZone}
+                    onComplete={handleTransitionComplete}
+                />
+
+                {/* Patch Burst Particles */}
+                <PatchBurst bursts={patchBursts} onBurstEnd={(id) => setPatchBursts(prev => prev.filter(b => b.id !== id))} />
+
+                {/* Patch Flight Animation */}
+                <PatchFlight flights={flyingPatches} onComplete={handleFlightComplete} />
+
                 {showSuccess && (
                     <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/30 backdrop-blur-sm">
-                        <div className="bg-white rounded-3xl p-8 text-center animate-bounce-in shadow-2xl">
-                            <div className="w-20 h-20 bg-green rounded-full flex items-center justify-center mx-auto mb-4"><Check className="w-10 h-10 text-white" /></div>
-                            <h3 className="font-heading text-2xl font-bold text-text-dark">Added to Cart!</h3>
+                        <div className="bg-cardstock rounded-3xl p-8 text-center animate-bounce-in shadow-2xl">
+                            <div className="w-20 h-20 bg-craft-mint rounded-full flex items-center justify-center mx-auto mb-4"><Check className="w-10 h-10 text-white" /></div>
+                            <h3 className="font-heading text-2xl font-bold text-ink">Added to Cart!</h3>
                         </div>
                     </div>
                 )}

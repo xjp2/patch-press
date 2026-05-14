@@ -18,6 +18,7 @@ export interface Product {
   front_image_url: string;
   back_image_url: string;
   base_price: number;
+  quantity: number;
   width: number;
   height: number;
   placement_zone: {
@@ -38,6 +39,7 @@ export interface Patch {
   category: string;
   image_url: string;
   price: number;
+  quantity: number;
   width: number;
   height: number;
   content_zone?: any;

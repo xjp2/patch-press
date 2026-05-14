@@ -25,6 +25,16 @@ export interface CartItem {
   totalPrice: number;
   quantity: number;
   designImage?: string;
+  placementZone?: {
+    type: 'rectangle' | 'polygon';
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+    points?: { x: number; y: number }[];
+  };
+  width?: number;
+  height?: number;
 }
 
 interface CartContextType {
@@ -185,11 +195,20 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             total_price: item.totalPrice,
             quantity: item.quantity,
             design_image: item.designImage,
+            placement_zone: item.placementZone,
             updated_at: new Date().toISOString()
           }));
           
           console.log('🛒 Cart: Upserting items:', dbItems.length);
-          const { error } = await db.cart.upsert(dbItems);
+          let { error } = await db.cart.upsert(dbItems);
+          
+          // If placement_zone column doesn't exist, retry without it
+          if (error && error.message?.includes('placement_zone')) {
+            console.log('🛒 Cart: placement_zone column missing, retrying without it');
+            const dbItemsWithoutZone = dbItems.map(({ placement_zone, ...rest }) => rest);
+            const result = await db.cart.upsert(dbItemsWithoutZone);
+            error = result.error;
+          }
           
           if (error) {
             console.error('🛒 Cart: Failed to sync to cloud:', error);
@@ -238,19 +257,32 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       console.log('🛒 Cart: Loaded from DB:', data?.length || 0, 'items');
       
       if (data && data.length > 0) {
-        const frontendItems = data.map((row: any) => ({
-          id: row.id,
-          productId: row.product_id,
-          productName: row.product_name,
-          productImage: row.product_image,
-          basePrice: Number(row.base_price),
-          frontPatches: row.front_patches || [],
-          backPatches: row.back_patches || [],
-          totalPrice: Number(row.total_price),
-          quantity: row.quantity,
-          designImage: row.design_image,
-          name: row.product_name
-        }));
+        // Restore placementZone from localStorage backup (DB may not have the column)
+        let localBackup: CartItem[] = [];
+        try {
+          const raw = localStorage.getItem(USER_CART_KEY);
+          if (raw) localBackup = JSON.parse(raw);
+        } catch { /* ignore */ }
+
+        const frontendItems = data.map((row: any) => {
+          const localItem = localBackup.find((i) => i.id === row.id);
+          return {
+            id: row.id,
+            productId: row.product_id,
+            productName: row.product_name,
+            productImage: row.product_image,
+            basePrice: Number(row.base_price),
+            frontPatches: row.front_patches || [],
+            backPatches: row.back_patches || [],
+            totalPrice: Number(row.total_price),
+            quantity: row.quantity,
+            designImage: row.design_image,
+            name: row.product_name,
+            placementZone: localItem?.placementZone,
+            width: localItem?.width,
+            height: localItem?.height,
+          };
+        });
         setItems(frontendItems);
         lastSyncedItems.current = JSON.stringify(frontendItems);
       } else {
@@ -298,7 +330,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         totalPrice: Number(row.total_price),
         quantity: row.quantity,
         designImage: row.design_image,
-        name: row.product_name
+        name: row.product_name,
+        placementZone: row.placement_zone,
       }));
 
       console.log('🛒 Cart: Cloud items:', cloudItems.length);
@@ -344,10 +377,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         total_price: item.totalPrice,
         quantity: item.quantity,
         design_image: item.designImage,
+        placement_zone: item.placementZone,
         updated_at: new Date().toISOString()
       }));
       
-      const { error: upsertError } = await db.cart.upsert(dbItems);
+      let { error: upsertError } = await db.cart.upsert(dbItems);
+      if (upsertError && upsertError.message?.includes('placement_zone')) {
+        const dbItemsWithoutZone = dbItems.map(({ placement_zone, ...rest }) => rest);
+        const result = await db.cart.upsert(dbItemsWithoutZone);
+        upsertError = result.error;
+      }
       if (upsertError) throw upsertError;
 
       // Clear guest cart after successful merge

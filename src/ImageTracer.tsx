@@ -525,7 +525,7 @@ export function ImageTracer({
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[200] p-4">
-      <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl">
+      <div className="bg-cardstock rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b">
           <div className="flex items-center gap-4">
@@ -537,7 +537,7 @@ export function ImageTracer({
           
           <div className="flex items-center gap-2">
             {/* Tool Tabs - Context7 Best Practice: focus-visible for accessibility */}
-            <div className="flex items-center bg-gray-100 rounded-xl p-1 mr-4 gap-1" role="tablist" aria-label="Tracing tools">
+            <div className="flex items-center bg-paper-ruled rounded-xl p-1 mr-4 gap-1" role="tablist" aria-label="Tracing tools">
               <button
                 role="tab"
                 aria-selected={activeTool === 'rectangle'}
@@ -545,10 +545,10 @@ export function ImageTracer({
                   setActiveTool('rectangle');
                   setPolygonPoints([]);
                 }}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink focus-visible:ring-offset-2 ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-craft-mint focus-visible:ring-offset-ink ${
                   activeTool === 'rectangle' 
-                    ? 'bg-white text-pink shadow-sm' 
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-cardstock text-craft-mint shadow-sm' 
+                    : 'text-ink/60 hover:text-gray-900'
                 }`}
               >
                 <Square className="w-4 h-4" aria-hidden="true" />
@@ -561,10 +561,10 @@ export function ImageTracer({
                   setActiveTool('polygon');
                   setPolygonPoints([]);
                 }}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink focus-visible:ring-offset-2 ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-craft-mint focus-visible:ring-offset-ink ${
                   activeTool === 'polygon' 
-                    ? 'bg-white text-pink shadow-sm' 
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-cardstock text-craft-mint shadow-sm' 
+                    : 'text-ink/60 hover:text-gray-900'
                 }`}
               >
                 <Pentagon className="w-4 h-4" aria-hidden="true" />
@@ -575,10 +575,10 @@ export function ImageTracer({
                 aria-selected={activeTool === 'auto'}
                 onClick={autoTrace}
                 disabled={isProcessing || !imageLoaded}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink focus-visible:ring-offset-2 ${
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-craft-mint focus-visible:ring-offset-ink ${
                   activeTool === 'auto' || isProcessing
-                    ? 'bg-white text-pink shadow-sm' 
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-cardstock text-craft-mint shadow-sm' 
+                    : 'text-ink/60 hover:text-gray-900'
                 } ${(!imageLoaded) ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 {isProcessing ? (
@@ -590,8 +590,8 @@ export function ImageTracer({
               </button>
             </div>
             
-            <button onClick={onCancel} className="p-2 hover:bg-gray-100 rounded-full">
-              <X className="w-5 h-5 text-gray-500" />
+            <button onClick={onCancel} className="p-2 hover:bg-paper-ruled rounded-full">
+              <X className="w-5 h-5 text-ink-muted" />
             </button>
           </div>
         </div>
@@ -622,7 +622,7 @@ export function ImageTracer({
 
         {/* Image Area */}
         <div 
-          className="flex-1 overflow-auto bg-gray-50 relative flex items-center justify-center p-8"
+          className="flex-1 overflow-auto bg-paper-ruled relative flex items-center justify-center p-8"
           ref={containerRef}
         >
           <div className="relative inline-block">
@@ -690,8 +690,8 @@ export function ImageTracer({
                   
                   <polygon 
                     points={buildPointsString(polygonPoints)}
-                    fill="rgba(236, 72, 153, 0.2)"
-                    stroke="rgb(236, 72, 153)"
+                    fill="rgba(240, 98, 146, 0.2)"
+                    stroke="rgb(240, 98, 146)"
                     strokeWidth="0.5"
                   />
                   
@@ -705,7 +705,7 @@ export function ImageTracer({
                         y1={prev.y}
                         x2={p.x} 
                         y2={p.y}
-                        stroke="rgb(236, 72, 153)"
+                        stroke="rgb(240, 98, 146)"
                         strokeWidth="0.5"
                       />
                     );
@@ -717,7 +717,7 @@ export function ImageTracer({
                       y1={polygonPoints[polygonPoints.length - 1].y}
                       x2={polygonPoints[0].x}
                       y2={polygonPoints[0].y}
-                      stroke="rgb(236, 72, 153)"
+                      stroke="rgb(240, 98, 146)"
                       strokeWidth="0.3"
                       strokeDasharray="2,2"
                     />
@@ -751,8 +751,8 @@ export function ImageTracer({
                   
                   <polygon 
                     points={buildPointsString(zone.points)}
-                    fill="rgba(236, 72, 153, 0.2)"
-                    stroke="rgb(236, 72, 153)"
+                    fill="rgba(240, 98, 146, 0.2)"
+                    stroke="rgb(240, 98, 146)"
                     strokeWidth="0.5"
                   />
                 </svg>
@@ -761,7 +761,7 @@ export function ImageTracer({
               {/* Rectangle zone controls */}
               {activeTool === 'rectangle' && zone.type === 'rectangle' && zone.width > 0 && (
                 <div
-                  className="absolute border-2 border-white shadow-[0_0_0_2px_rgba(236,72,153,0.8)] cursor-move"
+                  className="absolute border-2 border-ink/20 shadow-[0_0_0_2px_rgba(240,98,146,0.8)] cursor-move"
                   style={{
                     left: `${zone.x}%`,
                     top: `${zone.y}%`,
@@ -770,17 +770,17 @@ export function ImageTracer({
                   }}
                   onMouseDown={(e) => handleMouseDown(e)}
                 >
-                  <div className="absolute -top-6 left-0 bg-pink text-white text-xs px-2 py-0.5 rounded font-medium">
+                  <div className="absolute -top-6 left-0 bg-craft-mint text-white text-xs px-2 py-0.5 rounded font-medium">
                     {Math.round(zone.width)}% x {Math.round(zone.height)}%
                   </div>
                   
-                  <div className="absolute -top-1.5 -left-1.5 w-4 h-4 bg-white border-2 border-pink rounded-full cursor-nw-resize shadow-md"
+                  <div className="absolute -top-1.5 -left-1.5 w-4 h-4 bg-cardstock border-2 border-pink rounded-full cursor-nw-resize shadow-md"
                     onMouseDown={(e) => { e.stopPropagation(); handleMouseDown(e, 'nw'); }} />
-                  <div className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-white border-2 border-pink rounded-full cursor-ne-resize shadow-md"
+                  <div className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-cardstock border-2 border-pink rounded-full cursor-ne-resize shadow-md"
                     onMouseDown={(e) => { e.stopPropagation(); handleMouseDown(e, 'ne'); }} />
-                  <div className="absolute -bottom-1.5 -left-1.5 w-4 h-4 bg-white border-2 border-pink rounded-full cursor-sw-resize shadow-md"
+                  <div className="absolute -bottom-1.5 -left-1.5 w-4 h-4 bg-cardstock border-2 border-pink rounded-full cursor-sw-resize shadow-md"
                     onMouseDown={(e) => { e.stopPropagation(); handleMouseDown(e, 'sw'); }} />
-                  <div className="absolute -bottom-1.5 -right-1.5 w-4 h-4 bg-white border-2 border-pink rounded-full cursor-se-resize shadow-md"
+                  <div className="absolute -bottom-1.5 -right-1.5 w-4 h-4 bg-cardstock border-2 border-pink rounded-full cursor-se-resize shadow-md"
                     onMouseDown={(e) => { e.stopPropagation(); handleMouseDown(e, 'se'); }} />
                 </div>
               )}
@@ -789,7 +789,7 @@ export function ImageTracer({
               {activeTool === 'polygon' && polygonPoints.map((point, i) => (
                 <div
                   key={i}
-                  className="absolute w-4 h-4 bg-pink border-2 border-white rounded-full shadow-md -translate-x-1/2 -translate-y-1/2 hover:scale-125 transition-transform z-10 group"
+                  className="absolute w-4 h-4 bg-craft-mint border-2 border-ink/20 rounded-full shadow-md -translate-x-1/2 -translate-y-1/2 hover:scale-125 transition-transform z-10 group"
                   style={{ 
                     left: `${point.x}%`, 
                     top: `${point.y}%`,
@@ -806,13 +806,13 @@ export function ImageTracer({
                   title="Drag to move, double-click to delete"
                 >
                   {i === 0 && polygonPoints.length >= 3 && (
-                    <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] text-pink font-medium whitespace-nowrap bg-white px-1 rounded shadow">
+                    <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] text-craft-mint font-medium whitespace-nowrap bg-cardstock px-1 rounded shadow">
                       Click to close
                     </div>
                   )}
                   {/* Delete indicator on hover */}
                   <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <div className="w-1.5 h-1.5 bg-white rounded-full" />
+                    <div className="w-1.5 h-1.5 bg-cardstock rounded-full" />
                   </div>
                   <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[8px] text-white font-bold group-hover:opacity-0 transition-opacity">
                     {i + 1}
@@ -824,8 +824,8 @@ export function ImageTracer({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between p-5 border-t bg-white rounded-b-2xl">
-          <p className="text-sm text-gray-500">
+        <div className="flex items-center justify-between p-5 border-t bg-cardstock rounded-b-2xl">
+          <p className="text-sm text-ink-muted">
             {activeTool === 'polygon' 
               ? 'Click to add • Drag to move • Double-click to delete • Click first point to close' 
               : 'Drag box to move, drag corners to resize. Click outside to draw new.'}
@@ -836,20 +836,20 @@ export function ImageTracer({
             {activeTool === 'polygon' && polygonPoints.length >= 3 && (
               <button
                 onClick={closePolygon}
-                className="px-4 py-2 bg-pink text-white rounded-xl text-sm font-medium hover:bg-pink/90 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink focus-visible:ring-offset-2"
+                className="px-4 py-2 bg-craft-mint text-white rounded-xl text-sm font-medium hover:bg-craft-mint/90 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-craft-mint focus-visible:ring-offset-ink"
               >
                 Close Polygon
               </button>
             )}
             <button
               onClick={handleClear}
-              className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-xl text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2 transition-colors"
+              className="px-4 py-2 text-ink/60 hover:bg-paper-ruled rounded-xl text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-ink transition-colors"
             >
               Clear
             </button>
             <button
               onClick={onCancel}
-              className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-xl text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-2 transition-colors"
+              className="px-4 py-2 text-ink/60 hover:bg-paper-ruled rounded-xl text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 focus-visible:ring-offset-ink transition-colors"
             >
               Cancel
             </button>
@@ -857,7 +857,7 @@ export function ImageTracer({
             <button
               onClick={handleSave}
               disabled={activeTool === 'rectangle' ? (zone.width === 0 || zone.height === 0) : polygonPoints.length < 3}
-              className="flex items-center gap-2 px-6 py-2.5 bg-[#4a7c59] hover:bg-[#3d6b4a] text-white rounded-full font-medium shadow-lg disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a7c59] focus-visible:ring-offset-2 transition-all"
+              className="flex items-center gap-2 px-6 py-2.5 bg-[#5f6f5c] hover:bg-[#4a5748] text-white rounded-full font-medium shadow-lg disabled:opacity-50 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#5f6f5c] focus-visible:ring-offset-ink transition-all"
             >
               <Check className="w-4 h-4" aria-hidden="true" />
               Save Zone

@@ -1,13 +1,16 @@
-import { useState, useRef } from 'react';
-import { X, Ruler, Printer } from 'lucide-react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { X, Ruler, Printer, ArrowLeft, ArrowUp, Crosshair } from 'lucide-react';
+import { getClipAndCenter, fixImagePath } from '../lib/utils';
+import type { PlacementZone } from '../lib/utils';
 
 interface PlacedPatch {
   id: string;
   name: string;
   image: string;
   price: number;
-  x: number; // Percentage (0-100)
-  y: number; // Percentage (0-100)
+  x: number;
+  y: number;
   rotation: number;
   widthPercent: number;
   heightPercent: number;
@@ -28,323 +31,391 @@ interface CraftingViewProps {
   patches: PlacedPatch[];
   side: 'front' | 'back';
   onClose: () => void;
-  productWidthCm?: number; // Actual product width in cm
-  productHeightCm?: number; // Actual product height in cm
+  productWidthCm?: number;
+  productHeightCm?: number;
+  placementZone?: PlacementZone;
 }
 
-export function CraftingView({ 
-  productName, 
-  productImage, 
+export function CraftingView({
+  productName,
+  productImage,
   productBackImage,
-  patches, 
+  patches,
   side,
   onClose,
-  productWidthCm = 40, // Default 40cm
-  productHeightCm = 45 // Default 45cm
+  productWidthCm = 40,
+  productHeightCm = 45,
+  placementZone,
 }: CraftingViewProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+  const [imgNaturalSize, setImgNaturalSize] = useState({ width: 0, height: 0 });
   const [showGrid, setShowGrid] = useState(true);
-  const [showMeasurements, setShowMeasurements] = useState(true);
   const [selectedPatch, setSelectedPatch] = useState<PlacedPatch | null>(null);
-  // const [imageLoaded, setImageLoaded] = useState(false);
-  // const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
   const displayImage = side === 'front' ? productImage : (productBackImage || productImage);
 
-  // useEffect(() => {
-  //   if (containerRef.current) {
-  //     const rect = containerRef.current.getBoundingClientRect();
-  //     setContainerSize({ width: rect.width, height: rect.height });
-  //   }
-  // }, [imageLoaded]);
+  const measure = useCallback(() => {
+    const img = imgRef.current;
+    if (!img || img.naturalWidth === 0) return;
 
-  // Convert percentage to cm
+    // Leave room for sidebar (280px) + gaps + padding
+    const maxW = Math.min(window.innerWidth - 360, 520);
+    const maxH = window.innerHeight * 0.55;
+
+    const aspect = img.naturalWidth / img.naturalHeight;
+    let w = maxW;
+    let h = w / aspect;
+    if (h > maxH) {
+      h = maxH;
+      w = h * aspect;
+    }
+
+    setContainerSize({ width: Math.round(w), height: Math.round(h) });
+    setImgNaturalSize({ width: img.naturalWidth, height: img.naturalHeight });
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [measure]);
+
   const percentToCm = (percent: number, dimension: 'width' | 'height') => {
     const size = dimension === 'width' ? productWidthCm : productHeightCm;
-    return ((percent / 100) * size).toFixed(1);
+    return ((percent / 100) * size);
   };
 
-  // Calculate patch position in cm from top-left
-  const getPatchPositionCm = (patch: PlacedPatch) => {
-    const patchWidthCm = (patch.widthPercent / 100) * productWidthCm;
-    const patchHeightCm = (patch.heightPercent / 100) * productHeightCm;
-    
-    // Position is center point, convert to top-left for crafting
-    const leftCm = ((patch.x / 100) * productWidthCm) - (patchWidthCm / 2);
-    const topCm = ((patch.y / 100) * productHeightCm) - (patchHeightCm / 2);
-    
+  const getPatchMeasurements = (patch: PlacedPatch) => {
+    const patchWidthCm = percentToCm(patch.widthPercent, 'width');
+    const patchHeightCm = percentToCm(patch.heightPercent, 'height');
+    const centerXCm = percentToCm(patch.x, 'width');
+    const centerYCm = percentToCm(patch.y, 'height');
+    const fromLeftCm = centerXCm - patchWidthCm / 2;
+    const fromTopCm = centerYCm - patchHeightCm / 2;
+
     return {
-      left: leftCm.toFixed(1),
-      top: topCm.toFixed(1),
-      width: patchWidthCm.toFixed(1),
-      height: patchHeightCm.toFixed(1),
-      centerX: ((patch.x / 100) * productWidthCm).toFixed(1),
-      centerY: ((patch.y / 100) * productHeightCm).toFixed(1)
+      fromLeftCm: Math.max(0, fromLeftCm).toFixed(1),
+      fromTopCm: Math.max(0, fromTopCm).toFixed(1),
+      centerXCm: centerXCm.toFixed(1),
+      centerYCm: centerYCm.toFixed(1),
+      widthCm: patchWidthCm.toFixed(1),
+      heightCm: patchHeightCm.toFixed(1),
+      rotation: patch.rotation,
     };
   };
+
+  const crop = getClipAndCenter(placementZone);
 
   const handlePrint = () => {
     window.print();
   };
 
-  return (
-    <div className="fixed inset-0 z-[100] bg-gray-900 flex flex-col print:bg-white print:static">
-      {/* Header */}
-      <div className="bg-white border-b px-4 py-3 flex items-center justify-between print:hidden">
-        <div>
-          <h2 className="text-lg font-bold">Crafting View - {productName} ({side})</h2>
-          <p className="text-sm text-gray-500">
-            {patches.length} patches to place • Product: {productWidthCm}cm × {productHeightCm}cm
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowGrid(!showGrid)}
-            className={`px-3 py-2 rounded-lg text-sm font-medium ${
-              showGrid ? 'bg-pink text-white' : 'bg-gray-100'
-            }`}
-          >
-            Grid
-          </button>
-          <button
-            onClick={() => setShowMeasurements(!showMeasurements)}
-            className={`px-3 py-2 rounded-lg text-sm font-medium ${
-              showMeasurements ? 'bg-pink text-white' : 'bg-gray-100'
-            }`}
-          >
-            <Ruler className="w-4 h-4 inline mr-1" />
-            Measurements
-          </button>
-          <button
-            onClick={handlePrint}
-            className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium"
-          >
-            <Printer className="w-4 h-4 inline mr-1" />
-            Print
-          </button>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-      </div>
+  const gridStepCm = 5;
+  // Grid must match the actual image aspect ratio, not the logical product dimensions.
+  // The image width corresponds to productWidthCm; height scales proportionally.
+  const effectiveHeightCm = imgNaturalSize.width > 0
+    ? productWidthCm * (imgNaturalSize.height / imgNaturalSize.width)
+    : productHeightCm;
+  const vGridCount = Math.floor(productWidthCm / gridStepCm);
+  const hGridCount = Math.floor(effectiveHeightCm / gridStepCm);
 
-      {/* Print Header */}
-      <div className="hidden print:block p-4 border-b">
-        <h1 className="text-2xl font-bold">Crafting Sheet</h1>
-        <p className="text-gray-600">{productName} - {side.toUpperCase()}</p>
-        <p className="text-gray-600">Product Dimensions: {productWidthCm}cm × {productHeightCm}cm</p>
-        <p className="text-gray-600">Date: {new Date().toLocaleDateString()}</p>
-      </div>
+  return createPortal(
+    <div className="fixed inset-0 z-[300] flex items-center justify-center print:static">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/60 print:hidden"
+        onClick={onClose}
+      />
 
-      {/* Main Content */}
-      <div className="flex-1 overflow-auto p-4 print:p-0">
-        <div className="flex flex-col lg:flex-row gap-4 h-full">
-          {/* Product View */}
-          <div className="flex-1 bg-gray-800 rounded-xl p-4 print:bg-white print:p-0">
-            <div 
-              ref={containerRef}
-              className="relative mx-auto max-w-2xl"
+      {/* Modal */}
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] mx-4 flex flex-col print:max-w-none print:shadow-none print:rounded-none print:h-auto print:max-h-none">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-3 border-b print:hidden shrink-0">
+          <div className="min-w-0">
+            <h2 className="text-base font-bold truncate">{productName} — {side.charAt(0).toUpperCase() + side.slice(1)}</h2>
+            <p className="text-xs text-gray-500">
+              {patches.length} patch{patches.length !== 1 ? 'es' : ''} • {productWidthCm}cm × {productHeightCm}cm
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5 flex-shrink-0 ml-4">
+            <button
+              onClick={() => setShowGrid(!showGrid)}
+              className={`px-2.5 py-1.5 rounded-md text-xs font-medium ${
+                showGrid ? 'bg-pink text-white' : 'bg-gray-100 hover:bg-gray-200'
+              }`}
             >
-              <div className="relative flex items-center justify-center">
-                {/* Product Image */}
+              Grid
+            </button>
+            <button
+              onClick={handlePrint}
+              className="px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-md text-xs font-medium flex items-center gap-1"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              Print
+            </button>
+            <button
+              onClick={onClose}
+              className="p-1.5 hover:bg-gray-100 rounded-md"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Print Header */}
+        <div className="hidden print:block p-4 border-b">
+          <h1 className="text-2xl font-bold">Crafting Sheet</h1>
+          <p className="text-gray-600">{productName} — {side.toUpperCase()}</p>
+          <p className="text-gray-600">Product: {productWidthCm}cm × {productHeightCm}cm</p>
+          <p className="text-gray-600">Date: {new Date().toLocaleDateString()}</p>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-auto p-4 print:p-0">
+          <div className="flex flex-col lg:flex-row gap-4">
+            {/* Product View */}
+            <div className="flex-1 min-w-0 flex items-center justify-center bg-gray-50 rounded-xl p-3 print:bg-white print:p-0 border border-gray-100">
+              <div
+                className="relative"
+                style={{
+                  width: containerSize.width || 'auto',
+                  height: containerSize.height || 'auto',
+                  transform: crop.transform,
+                }}
+              >
                 <img
-                  src={displayImage}
+                  ref={imgRef}
+                  src={fixImagePath(displayImage)}
                   alt={productName}
-                  className="max-w-full max-h-[70vh] object-contain"
-                  // onLoad={() => setImageLoaded(true)}
+                  className="w-full h-full object-contain"
+                  style={{ clipPath: crop.clipPath }}
+                  onLoad={measure}
+                  draggable={false}
                 />
 
-              {/* Grid Overlay */}
-              {showGrid && (
-                <div className="absolute inset-0 pointer-events-none">
-                  {/* 10cm grid */}
-                  {Array.from({ length: Math.ceil(productWidthCm / 10) + 1 }).map((_, i) => (
-                    <div
-                      key={`v-${i}`}
-                      className="absolute top-0 bottom-0 border-l border-dashed border-pink/50"
-                      style={{ left: `${(i * 10 / productWidthCm) * 100}%` }}
-                    >
-                      <span className="absolute -top-4 -left-3 text-xs text-pink bg-white/80 px-1 rounded">
-                        {i * 10}cm
-                      </span>
-                    </div>
-                  ))}
-                  {Array.from({ length: Math.ceil(productHeightCm / 10) + 1 }).map((_, i) => (
-                    <div
-                      key={`h-${i}`}
-                      className="absolute left-0 right-0 border-t border-dashed border-pink/50"
-                      style={{ top: `${(i * 10 / productHeightCm) * 100}%` }}
-                    >
-                      <span className="absolute -left-8 -top-2 text-xs text-pink bg-white/80 px-1 rounded">
-                        {i * 10}cm
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
+                {/* Grid Overlay */}
+                {showGrid && containerSize.width > 0 && (
+                  <div className="absolute inset-0 pointer-events-none">
+                    {/* Vertical grid lines + cm labels */}
+                    {Array.from({ length: vGridCount + 1 }).map((_, i) => {
+                      const cm = i * gridStepCm;
+                      const isMajor = cm % 10 === 0;
+                      return (
+                        <div
+                          key={`v-${i}`}
+                          className="absolute top-0 bottom-0"
+                          style={{ left: `${(cm / productWidthCm) * 100}%` }}
+                        >
+                          <div className={`h-full border-l ${isMajor ? 'border-pink/50' : 'border-pink/20'}`} />
+                          <span className={`absolute top-0.5 left-0.5 text-[9px] leading-none ${isMajor ? 'text-pink font-semibold' : 'text-pink/60'}`}>
+                            {cm}cm
+                          </span>
+                        </div>
+                      );
+                    })}
+                    {/* Horizontal grid lines + cm labels */}
+                    {Array.from({ length: hGridCount + 1 }).map((_, i) => {
+                      const cm = i * gridStepCm;
+                      const isMajor = cm % 10 === 0;
+                      return (
+                        <div
+                          key={`h-${i}`}
+                          className="absolute left-0 right-0"
+                          style={{ top: `${(cm / effectiveHeightCm) * 100}%` }}
+                        >
+                          <div className={`w-full border-t ${isMajor ? 'border-pink/50' : 'border-pink/20'}`} />
+                          <span className={`absolute top-0.5 left-0.5 text-[9px] leading-none ${isMajor ? 'text-pink font-semibold' : 'text-pink/60'}`}>
+                            {cm}cm
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
 
-              {/* Patches Overlay - Same positioning as CustomizePage */}
-              {patches.map((patch, index) => {
-                const pos = getPatchPositionCm(patch);
-                // Calculate content zone center for transform origin (same as CustomizePage)
-                const cz = patch.contentZone || { x: 0, y: 0, width: 100, height: 100 };
-                const cx = cz.x + cz.width / 2;
-                const cy = cz.y + cz.height / 2;
-                
-                return (
-                  <div
-                    key={patch.id}
-                    className="absolute cursor-pointer group"
-                    style={{
-                      left: `${patch.x}%`,
-                      top: `${patch.y}%`,
-                      width: `${patch.widthPercent}%`,
-                      height: `${patch.heightPercent}%`,
-                      transform: `rotate(${patch.rotation}deg)`,
-                      transformOrigin: `${cx}% ${cy}%`,
-                    }}
-                    onClick={() => setSelectedPatch(patch)}
-                  >
-                    <img
-                      src={patch.image}
-                      alt={patch.name}
-                      className={`w-full h-full object-contain drop-shadow-lg ${
-                        selectedPatch?.id === patch.id ? 'ring-4 ring-pink' : ''
-                      }`}
-                      style={{
-                        clipPath: patch.contentZone
-                          ? (patch.contentZone.type === 'polygon' && patch.contentZone.points
-                            ? `polygon(${patch.contentZone.points.map((p: {x: number, y: number}) => `${p.x}% ${p.y}%`).join(', ')})`
-                            : `inset(${patch.contentZone.y}% ${100 - (patch.contentZone.x + patch.contentZone.width)}% ${100 - (patch.contentZone.y + patch.contentZone.height)}% ${patch.contentZone.x}%)`)
-                          : 'none'
-                      }}
-                    />
-                    
-                    {/* Patch Number Badge - positioned at content zone center */}
-                    <div 
-                      className="absolute w-6 h-6 bg-pink text-white rounded-full flex items-center justify-center text-xs font-bold shadow-lg"
-                      style={{
-                        left: `${cx}%`,
-                        top: `${cy}%`,
-                        transform: 'translate(-50%, -50%)'
-                      }}
-                    >
-                      {index + 1}
-                    </div>
-
-                    {/* Quick Measurements on Hover */}
-                    {showMeasurements && (
-                      <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 bg-black/80 text-white text-xs px-2 py-1 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
-                        {pos.centerX}cm, {pos.centerY}cm
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-              </div> {/* Close flex container */}
-            </div>
-          </div>
-
-          {/* Patch List & Measurements */}
-          <div className="w-full lg:w-80 bg-white rounded-xl p-4 print:w-full print:mt-4">
-            <h3 className="font-bold mb-4 flex items-center gap-2">
-              <Ruler className="w-4 h-4" />
-              Placement Guide
-            </h3>
-
-            {selectedPatch ? (
-              <div className="space-y-4">
-                <div className="flex items-center gap-3 p-3 bg-pink/10 rounded-lg">
-                  <img 
-                    src={selectedPatch.image} 
-                    alt={selectedPatch.name}
-                    className="w-12 h-12 object-contain"
-                  />
-                  <div>
-                    <p className="font-semibold">{selectedPatch.name}</p>
-                    <p className="text-sm text-gray-500">Patch #{patches.findIndex(p => p.id === selectedPatch.id) + 1}</p>
-                  </div>
-                </div>
-
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between py-2 border-b">
-                    <span className="text-gray-600">Center X</span>
-                    <span className="font-mono font-semibold">{percentToCm(selectedPatch.x, 'width')}cm</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b">
-                    <span className="text-gray-600">Center Y</span>
-                    <span className="font-mono font-semibold">{percentToCm(selectedPatch.y, 'height')}cm</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b">
-                    <span className="text-gray-600">Width</span>
-                    <span className="font-mono font-semibold">{percentToCm(selectedPatch.widthPercent, 'width')}cm</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b">
-                    <span className="text-gray-600">Height</span>
-                    <span className="font-mono font-semibold">{percentToCm(selectedPatch.heightPercent, 'height')}cm</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b">
-                    <span className="text-gray-600">Rotation</span>
-                    <span className="font-mono font-semibold">{selectedPatch.rotation}°</span>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => setSelectedPatch(null)}
-                  className="w-full py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm"
-                >
-                  Back to List
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-3">
+                {/* Patches Overlay */}
                 {patches.map((patch, index) => {
-                  const pos = getPatchPositionCm(patch);
+                  const ms = getPatchMeasurements(patch);
+                  const cz = patch.contentZone || { x: 0, y: 0, width: 100, height: 100 };
+                  const cx = cz.x + cz.width / 2;
+                  const cy = cz.y + cz.height / 2;
+
                   return (
                     <div
                       key={patch.id}
-                      className="p-3 border rounded-lg hover:border-pink cursor-pointer transition-colors"
+                      className="absolute cursor-pointer group"
+                      style={{
+                        left: `${patch.x}%`,
+                        top: `${patch.y}%`,
+                        width: `${patch.widthPercent}%`,
+                        height: `${patch.heightPercent}%`,
+                        transform: `rotate(${patch.rotation}deg)`,
+                        transformOrigin: `${cx}% ${cy}%`,
+                      }}
                       onClick={() => setSelectedPatch(patch)}
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-pink text-white rounded-full flex items-center justify-center text-sm font-bold">
-                          {index + 1}
-                        </div>
-                        <img 
-                          src={patch.image} 
-                          alt={patch.name}
-                          className="w-10 h-10 object-contain"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm truncate">{patch.name}</p>
-                          <p className="text-xs text-gray-500">
-                            {pos.centerX}cm, {pos.centerY}cm
-                          </p>
-                        </div>
+                      <img
+                        src={patch.image}
+                        alt={patch.name}
+                        className={`w-full h-full object-contain drop-shadow-lg ${
+                          selectedPatch?.id === patch.id ? 'ring-2 ring-pink' : ''
+                        }`}
+                        style={{
+                          clipPath: patch.contentZone
+                            ? (patch.contentZone.type === 'polygon' && patch.contentZone.points
+                              ? `polygon(${patch.contentZone.points.map((p: {x: number, y: number}) => `${p.x}% ${p.y}%`).join(', ')})`
+                              : `inset(${patch.contentZone.y}% ${100 - (patch.contentZone.x + patch.contentZone.width)}% ${100 - (patch.contentZone.y + patch.contentZone.height)}% ${patch.contentZone.x}%)`)
+                            : 'none',
+                        }}
+                        draggable={false}
+                      />
+
+                      {/* Number badge */}
+                      <div
+                        className="absolute w-5 h-5 bg-pink text-white rounded-full flex items-center justify-center text-[10px] font-bold shadow pointer-events-none"
+                        style={{
+                          left: `${cx}%`,
+                          top: `${cy}%`,
+                          transform: 'translate(-50%, -50%)',
+                        }}
+                      >
+                        {index + 1}
+                      </div>
+
+                      {/* Hover tooltip */}
+                      <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 bg-black/80 text-white text-[10px] px-2 py-0.5 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                        ↓{ms.fromTopCm}cm →{ms.fromLeftCm}cm
                       </div>
                     </div>
                   );
                 })}
               </div>
-            )}
+            </div>
 
-            {/* Print Instructions */}
-            <div className="mt-6 p-4 bg-gray-50 rounded-lg print:bg-white print:border">
-              <h4 className="font-semibold mb-2">Crafting Instructions</h4>
-              <ol className="text-sm text-gray-600 space-y-1 list-decimal list-inside">
-                <li>Print this sheet at 100% scale</li>
-                <li>Verify measurements with ruler</li>
-                <li>Mark center points on product</li>
-                <li>Place patches at marked positions</li>
-                <li>Apply heat press according to patch specs</li>
-              </ol>
+            {/* Sidebar */}
+            <div className="w-full lg:w-[260px] flex-shrink-0 print:w-full print:mt-4">
+              <div className="bg-gray-50 rounded-xl border border-gray-100 p-3 space-y-3">
+                {selectedPatch ? (
+                  <>
+                    {/* Selected patch header */}
+                    <div className="flex items-center gap-2.5 pb-2 border-b border-gray-200">
+                      <img
+                        src={selectedPatch.image}
+                        alt={selectedPatch.name}
+                        className="w-10 h-10 object-contain"
+                      />
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm truncate">{selectedPatch.name}</p>
+                        <p className="text-xs text-gray-500">
+                          Patch #{patches.findIndex(p => p.id === selectedPatch.id) + 1}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Measurements table */}
+                    {(() => {
+                      const m = getPatchMeasurements(selectedPatch);
+                      return (
+                        <div className="space-y-0 text-sm">
+                          <MeasurementRow icon={<ArrowLeft className="w-3 h-3" />} label="From Left" value={`${m.fromLeftCm}cm`} highlight />
+                          <MeasurementRow icon={<ArrowUp className="w-3 h-3" />} label="From Top" value={`${m.fromTopCm}cm`} highlight />
+                          <MeasurementRow icon={<Crosshair className="w-3 h-3" />} label="Center X" value={`${m.centerXCm}cm`} />
+                          <MeasurementRow icon={<Crosshair className="w-3 h-3" />} label="Center Y" value={`${m.centerYCm}cm`} />
+                          <MeasurementRow label="Width" value={`${m.widthCm}cm`} />
+                          <MeasurementRow label="Height" value={`${m.heightCm}cm`} />
+                          <MeasurementRow label="Rotation" value={`${m.rotation}°`} />
+                        </div>
+                      );
+                    })()}
+
+                    <button
+                      onClick={() => setSelectedPatch(null)}
+                      className="w-full py-1.5 bg-white hover:bg-gray-100 border border-gray-200 rounded-lg text-xs font-medium transition-colors"
+                    >
+                      Back to List
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <h3 className="font-bold text-xs uppercase tracking-wide text-gray-500 flex items-center gap-1.5">
+                      <Ruler className="w-3.5 h-3.5" />
+                      Placement Guide
+                    </h3>
+                    <div className="space-y-2">
+                      {patches.map((patch: PlacedPatch, index: number) => {
+                        const m = getPatchMeasurements(patch);
+                        return (
+                          <button
+                            key={patch.id}
+                            className={`w-full text-left p-2 rounded-lg border transition-colors ${
+                              (selectedPatch as PlacedPatch | null)?.id === patch.id
+                                ? 'border-pink bg-pink/5'
+                                : 'bg-white border-gray-200 hover:border-pink'
+                            }`}
+                            onClick={() => setSelectedPatch(patch)}
+                          >
+                            <div className="flex items-center gap-2">
+                              <div className="w-6 h-6 bg-pink text-white rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+                                {index + 1}
+                              </div>
+                              <img
+                                src={patch.image}
+                                alt={patch.name}
+                                className="w-8 h-8 object-contain flex-shrink-0"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <p className="font-medium text-xs truncate">{patch.name}</p>
+                                <p className="text-[10px] text-gray-500">
+                                  ↓{m.fromTopCm}cm →{m.fromLeftCm}cm
+                                </p>
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+
+                {/* Print Instructions */}
+                <div className="pt-2 border-t border-gray-200">
+                  <h4 className="font-semibold text-xs mb-1.5">Crafting Instructions</h4>
+                  <ol className="text-[11px] text-gray-600 space-y-0.5 list-decimal list-inside leading-relaxed">
+                    <li>Print at 100% scale</li>
+                    <li>Verify product is {productWidthCm}cm × {productHeightCm}cm</li>
+                    <li>Mark positions from left/top edges</li>
+                    <li>Apply patches with rotation</li>
+                    <li>Heat press per specs</li>
+                  </ol>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
+    </div>,
+    document.body
+  );
+}
+
+function MeasurementRow({
+  icon,
+  label,
+  value,
+  highlight,
+}: {
+  icon?: React.ReactNode;
+  label: string;
+  value: string;
+  highlight?: boolean;
+}) {
+  return (
+    <div className={`flex justify-between items-center py-1.5 ${highlight ? 'bg-pink/5 -mx-1 px-1 rounded' : ''}`}>
+      <span className="text-gray-600 text-xs flex items-center gap-1">
+        {icon}
+        {label}
+      </span>
+      <span className="font-mono font-semibold text-xs">{value}</span>
     </div>
   );
 }

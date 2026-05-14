@@ -12,6 +12,7 @@ import {
 } from '@stripe/react-stripe-js';
 import { Loader2, AlertCircle, CheckCircle, ShieldCheck } from 'lucide-react';
 import supabase from '../lib/supabase';
+import { useCurrency } from '../context/CurrencyContext';
 
 // Initialize Stripe
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '');
@@ -21,7 +22,6 @@ const pendingRequests = new Set<string>();
 
 interface CheckoutFormProps {
   amount: number;
-  currency: string;
   customerEmail?: string;
   userId?: string;
   cartItems: any[];
@@ -31,7 +31,8 @@ interface CheckoutFormProps {
 }
 
 // Checkout Form with PaymentElement and AddressElement
-function CheckoutForm({ amount, currency, customerEmail, userId, cartItems, paymentIntentId, onSuccess, onError }: CheckoutFormProps) {
+function CheckoutForm({ amount, customerEmail, userId, cartItems, paymentIntentId, onSuccess, onError }: CheckoutFormProps) {
+  const { currency, formatPrice, convertPrice } = useCurrency();
   const stripe = useStripe();
   const elements = useElements();
   const [isProcessing, setIsProcessing] = useState(false);
@@ -128,19 +129,24 @@ function CheckoutForm({ amount, currency, customerEmail, userId, cartItems, paym
             }
             
             // Format order items with FULL patch placement data
+            // Convert all prices from base currency to target currency
             const orderItems = cartItems.map(item => ({
               name: item.productName,
               qty: item.quantity,
-              price: item.totalPrice,
+              price: convertPrice(item.totalPrice),
+              basePrice: convertPrice(item.basePrice),
               patches: [...(item.frontPatches || []), ...(item.backPatches || [])].map((p: any) => p.name),
               productImage: item.productImage,
               productBackImage: item.productBackImage,
+              placementZone: item.placementZone,
+              productWidth: item.width,
+              productHeight: item.height,
               // Full patch data for production mode
               frontPatches: (item.frontPatches || []).map((p: any) => ({
                 id: p.id,
                 name: p.name,
                 image: p.image,
-                price: p.price,
+                price: convertPrice(p.price),
                 x: p.x,
                 y: p.y,
                 rotation: p.rotation,
@@ -152,7 +158,7 @@ function CheckoutForm({ amount, currency, customerEmail, userId, cartItems, paym
                 id: p.id,
                 name: p.name,
                 image: p.image,
-                price: p.price,
+                price: convertPrice(p.price),
                 x: p.x,
                 y: p.y,
                 rotation: p.rotation,
@@ -172,7 +178,7 @@ function CheckoutForm({ amount, currency, customerEmail, userId, cartItems, paym
               customer_email: customerEmail || 'guest@example.com',
               customer_name: customerName,
               items: orderItems,
-              total_amount: amount / 100,
+              total_amount: convertPrice(amount),
               currency: currency,
               shipping_address: shippingAddress,
               shipping_country: shippingAddress?.country || '',
@@ -203,6 +209,27 @@ function CheckoutForm({ amount, currency, customerEmail, userId, cartItems, paym
               }
             } else {
               console.log('Order created:', order.id, 'Order #:', order.order_number);
+              
+              // Deduct inventory after successful order creation
+              try {
+                const inventoryItems = cartItems.map(item => ({
+                  productId: item.productId,
+                  patchIds: [...(item.frontPatches || []), ...(item.backPatches || [])].map((p: any) => p.id),
+                  quantity: item.quantity,
+                }));
+                
+                const { success: inventorySuccess, errors: inventoryErrors } = await db.inventory.deductFromOrder(inventoryItems, order.id);
+                if (!inventorySuccess) {
+                  console.warn('Inventory deduction had errors:', inventoryErrors);
+                  // Continue anyway - order is already created
+                } else {
+                  console.log('Inventory deducted and logged successfully');
+                }
+              } catch (inventoryErr) {
+                console.error('Error deducting inventory:', inventoryErr);
+                // Continue anyway - order is already created
+              }
+              
               onSuccess({ orderId: order.id, orderNumber: order.order_number });
             }
           } catch (err) {
@@ -319,10 +346,11 @@ function CheckoutForm({ amount, currency, customerEmail, userId, cartItems, paym
         ) : (
           <>
             <CheckCircle className="w-5 h-5" />
-            Pay ${(amount / 100).toFixed(2)} {currency.toUpperCase()}
+            Pay {formatPrice(amount)}
           </>
         )}
       </button>
+      <p className="text-[10px] text-gray-400 text-center mt-2">Converted using current exchange rates</p>
 
       {/* Security Badge */}
       <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
@@ -335,15 +363,22 @@ function CheckoutForm({ amount, currency, customerEmail, userId, cartItems, paym
   );
 }
 
-// Generate deterministic idempotency key from cart contents
-// This ensures the SAME cart always generates the SAME key (Stripe deduplication)
-function generateIdempotencyKey(cartItems: any[]): string {
+// Generate idempotency key from ALL parameters that affect the PaymentIntent.
+// Stripe rejects if the same key is ever used with different parameters,
+// so we must hash EVERYTHING: cart, amount, currency, user_id, email.
+function generateIdempotencyKey(
+  cartItems: any[],
+  stripeAmount: number,
+  currency: string,
+  userId: string = '',
+  customerEmail: string = ''
+): string {
   const cartHash = cartItems
     .map(item => `${item.productId}-${item.quantity}-${item.totalPrice}`)
     .sort()
     .join('|');
-  // Use hash only - no timestamp! Same cart = same key
-  return `cart-${cartHash.substring(0, 100)}`;
+  const raw = `${stripeAmount}|${currency}|${userId || 'guest'}|${customerEmail || ''}|${cartHash}`;
+  return `pp-${hashString(raw)}`;
 }
 
 // Simple hash function for strings
@@ -360,7 +395,6 @@ function hashString(str: string): string {
 // Main Checkout Component
 interface StripeCheckoutProps {
   amount: number;
-  currency?: string;
   userId?: string;
   customerEmail?: string;
   cartItems?: any[];
@@ -370,13 +404,13 @@ interface StripeCheckoutProps {
 
 export function StripeCheckout({ 
   amount, 
-  currency = 'sgd', 
   userId,
   customerEmail,
   cartItems = [],
   onSuccess, 
   onError 
 }: StripeCheckoutProps) {
+  const { currency, toStripeAmount } = useCurrency();
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -431,8 +465,15 @@ export function StripeCheckout({
           }
         }
         
-        // Generate deterministic idempotency key (same cart = same key)
-        const idempotencyKey = generateIdempotencyKey(cartItems);
+        // Generate idempotency key that changes if ANY parameter changes
+        const stripeAmount = toStripeAmount(amount);
+        const idempotencyKey = generateIdempotencyKey(
+          cartItems,
+          stripeAmount,
+          currency,
+          actualUserId,
+          session.user.email || ''
+        );
         
         // Prevent concurrent requests for same user+cart (React Strict Mode double-mount)
         requestKey = `${actualUserId}:${cartHash}`;
@@ -473,7 +514,7 @@ export function StripeCheckout({
               'Authorization': `Bearer ${session.access_token}`,
             },
             body: JSON.stringify({
-              amount,
+              amount: toStripeAmount(amount),
               currency,
               user_id: actualUserId,  // Use actual user ID from session
               customer_email: session.user.email,
@@ -601,7 +642,6 @@ export function StripeCheckout({
     >
       <CheckoutForm
         amount={amount}
-        currency={currency}
         customerEmail={customerEmail}
         userId={userId}
         cartItems={cartItems}
