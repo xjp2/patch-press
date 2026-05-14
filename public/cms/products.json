@@ -17,7 +17,7 @@
     "crop_zone": null,
     "sort_order": 0,
     "created_at": "2026-02-25T17:11:11.153257+00:00",
-    "updated_at": "2026-05-13T22:36:12.374+00:00",
+    "updated_at": "2026-05-13T23:08:20.982+00:00",
     "link_url": null,
     "inventory": 100,
     "quantity": 4
@@ -40,7 +40,7 @@
     "crop_zone": null,
     "sort_order": 1,
     "created_at": "2026-02-25T17:11:11.42555+00:00",
-    "updated_at": "2026-05-13T22:36:12.374+00:00",
+    "updated_at": "2026-05-13T23:08:20.982+00:00",
     "link_url": null,
     "inventory": 100,
     "quantity": 20
@@ -63,7 +63,7 @@
     "crop_zone": null,
     "sort_order": 2,
     "created_at": "2026-02-25T17:11:11.589144+00:00",
-    "updated_at": "2026-05-13T22:36:12.374+00:00",
+    "updated_at": "2026-05-13T23:08:20.982+00:00",
     "link_url": null,
     "inventory": 100,
     "quantity": 11
@@ -86,7 +86,7 @@
     "crop_zone": null,
     "sort_order": 3,
     "created_at": "2026-02-25T17:11:11.741088+00:00",
-    "updated_at": "2026-05-13T22:36:12.374+00:00",
+    "updated_at": "2026-05-13T23:08:20.982+00:00",
     "link_url": null,
     "inventory": 100,
     "quantity": 9
@@ -109,7 +109,7 @@
     "crop_zone": null,
     "sort_order": 4,
     "created_at": "2026-02-25T17:11:11.892184+00:00",
-    "updated_at": "2026-05-13T22:36:12.374+00:00",
+    "updated_at": "2026-05-13T23:08:20.982+00:00",
     "link_url": null,
     "inventory": 100,
     "quantity": 10
@@ -132,7 +132,7 @@
     "crop_zone": null,
     "sort_order": 5,
     "created_at": "2026-02-25T17:11:12.049073+00:00",
-    "updated_at": "2026-05-13T22:36:12.374+00:00",
+    "updated_at": "2026-05-13T23:08:20.982+00:00",
     "link_url": null,
     "inventory": 100,
     "quantity": 9
@@ -155,7 +155,7 @@
     "crop_zone": null,
     "sort_order": 6,
     "created_at": "2026-03-18T18:33:09.962994+00:00",
-    "updated_at": "2026-05-13T22:36:12.374+00:00",
+    "updated_at": "2026-05-13T23:08:20.982+00:00",
     "link_url": null,
     "inventory": 100,
     "quantity": 7
@@ -178,7 +178,7 @@
     "crop_zone": null,
     "sort_order": 7,
     "created_at": "2026-03-18T18:34:25.077541+00:00",
-    "updated_at": "2026-05-13T22:36:12.374+00:00",
+    "updated_at": "2026-05-13T23:08:20.982+00:00",
     "link_url": null,
     "inventory": 100,
     "quantity": 10
@@ -201,7 +201,30 @@
     "crop_zone": null,
     "sort_order": 8,
     "created_at": "2026-03-18T18:34:25.077541+00:00",
-    "updated_at": "2026-05-13T22:36:12.374+00:00",
+    "updated_at": "2026-05-13T23:08:20.982+00:00",
+    "link_url": null,
+    "inventory": 100,
+    "quantity": 10
+  },
+  {
+    "id": "80942416-6937-462c-bde4-96fab07781f8",
+    "name": "sss",
+    "front_image_url": "https://fyadtnkbayeafjmdvymx.supabase.co/storage/v1/object/public/assets/products/9682febd-1ad7-4530-b01d-16b5e3b3b4f9-lushgreenbg.png",
+    "back_image_url": "https://fyadtnkbayeafjmdvymx.supabase.co/storage/v1/object/public/assets/products/9682febd-1ad7-4530-b01d-16b5e3b3b4f9-lushgreenbg.png",
+    "base_price": 1,
+    "width": 400,
+    "height": 500,
+    "placement_zone": {
+      "x": 15,
+      "y": 25,
+      "type": "rectangle",
+      "width": 70,
+      "height": 60
+    },
+    "crop_zone": null,
+    "sort_order": 9,
+    "created_at": "2026-05-13T23:08:21.779915+00:00",
+    "updated_at": "2026-05-13T23:08:20.982+00:00",
     "link_url": null,
     "inventory": 100,
     "quantity": 10
