@@ -5,10 +5,29 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-/** Fix legacy image paths that wrongly include /products/ or /patches/ prefixes */
+/** Image map loaded from /cms/image-map.json — maps Supabase URLs to local CDN paths */
+let imageMap: Record<string, string> | null = null;
+
+export async function loadImageMap(): Promise<void> {
+  try {
+    const response = await fetch('/cms/image-map.json');
+    if (response.ok) {
+      imageMap = await response.json();
+    }
+  } catch {
+    // Image map not available — fall back to original URLs
+    imageMap = null;
+  }
+}
+
+/** Convert Supabase URLs to local CDN paths via image map */
 export function fixImagePath(path?: string): string {
   if (!path) return '';
-  return path.replace(/^\/products\//, '/').replace(/^\/patches\//, '/');
+  // If this URL is in the image map, use the local CDN path
+  if (imageMap && imageMap[path]) {
+    return imageMap[path];
+  }
+  return path;
 }
 
 /**

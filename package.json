@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npm run export-cms && tsc -b && vite build",
+    "build": "npm run export-cms && npm run sync-images && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "export-cms": "tsx scripts/export-cms.ts",
+    "export-cms": "tsx scripts/export-cms.ts && npm run sync-images",
+    "sync-images": "tsx scripts/sync-images.ts",
     "build:prod": "npm run export-cms && npm run build",
     "bulk-upload": "tsx scripts/bulk-upload-products.ts",
     "export-and-deploy": "tsx scripts/trigger-vercel-deploy.ts"

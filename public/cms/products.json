@@ -140,7 +140,7 @@
   {
     "id": "5a15315b-7f3c-49f3-b815-e5342e876e0f",
     "name": "hhii",
-    "front_image_url": "https://fyadtnkbayeafjmdvymx.supabase.co/storage/v1/object/public/assets/products/4d801604-f091-4bad-b05c-e4d7a5af61aa-Screenshot_2025_10_31_151434.png",
+    "front_image_url": "/products/4d801604-f091-4bad-b05c-e4d7a5af61aa-Screenshot_2025_10_31_151434.png",
     "back_image_url": "https://fyadtnkbayeafjmdvymx.supabase.co/storage/v1/object/public/assets/products/6f79122f-77e7-4ed1-8ce5-18aad91cb583-Screenshot_2025_09_28_160051.png",
     "base_price": 1000,
     "width": 400,
@@ -163,7 +163,7 @@
   {
     "id": "6165ba2e-6934-4682-bd97-bb7306b32b17",
     "name": "a",
-    "front_image_url": "https://fyadtnkbayeafjmdvymx.supabase.co/storage/v1/object/public/assets/products/673c3f3a-b200-4b88-9aac-8ff23a062770-Screenshot_2025_11_29_144201.png",
+    "front_image_url": "/products/673c3f3a-b200-4b88-9aac-8ff23a062770-Screenshot_2025_11_29_144201.png",
     "back_image_url": "https://fyadtnkbayeafjmdvymx.supabase.co/storage/v1/object/public/assets/products/cbfb2b25-63d9-4cf1-90b2-f250bd808fa5-Screenshot_2025_11_22_154826.png",
     "base_price": 10,
     "width": 400,
@@ -186,7 +186,7 @@
   {
     "id": "ba41e61d-5367-4caf-b2e7-72b2b64dfccd",
     "name": "b",
-    "front_image_url": "https://fyadtnkbayeafjmdvymx.supabase.co/storage/v1/object/public/assets/products/0a03308d-2041-4f57-971c-f3085386faed-Screenshot_2026_01_15_193644.png",
+    "front_image_url": "/products/0a03308d-2041-4f57-971c-f3085386faed-Screenshot_2026_01_15_193644.png",
     "back_image_url": "https://fyadtnkbayeafjmdvymx.supabase.co/storage/v1/object/public/assets/products/f05487f2-a9ee-48e5-99ae-9e3d367d6092-Screenshot_2025_11_29_150247.png",
     "base_price": 111,
     "width": 400,
@@ -209,7 +209,7 @@
   {
     "id": "80942416-6937-462c-bde4-96fab07781f8",
     "name": "sss",
-    "front_image_url": "https://fyadtnkbayeafjmdvymx.supabase.co/storage/v1/object/public/assets/products/9682febd-1ad7-4530-b01d-16b5e3b3b4f9-lushgreenbg.png",
+    "front_image_url": "/products/9682febd-1ad7-4530-b01d-16b5e3b3b4f9-lushgreenbg.png",
     "back_image_url": "https://fyadtnkbayeafjmdvymx.supabase.co/storage/v1/object/public/assets/products/9682febd-1ad7-4530-b01d-16b5e3b3b4f9-lushgreenbg.png",
     "base_price": 1,
     "width": 400,
