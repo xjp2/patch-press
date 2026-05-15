@@ -13,16 +13,13 @@ export function fixImagePath(path?: string): string {
 
 /**
  * Resize a Supabase Storage image via the image transformation API.
- * Non-Supabase URLs are returned unchanged.
+ * NOTE: Image transformations require enabling the feature in Supabase project settings.
+ * Currently returns the original URL while lazy loading handles performance.
  */
-export function getResizedImageUrl(url: string | undefined, width: number, height?: number): string {
-  if (!url) return '';
-  // Only transform Supabase storage public URLs
-  const match = url.match(/^(https?:\/\/[^/]+\.supabase\.co)\/storage\/v1\/object\/public\/(.+)$/);
-  if (!match) return url;
-  const [, base, path] = match;
-  const h = height || width;
-  return `${base}/storage/v1/render/image/public/${path}?width=${width}&height=${h}&quality=80&resize=contain`;
+export function getResizedImageUrl(url: string | undefined, _width: number, _height?: number): string {
+  // Image transformations are not enabled on this Supabase project (returns 403).
+  // Return the original URL; performance is handled by loading="lazy" + decoding="async".
+  return url || '';
 }
 
 export interface PlacementZone {
