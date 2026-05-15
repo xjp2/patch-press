@@ -3,6 +3,7 @@ import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import { Check, Sparkles } from 'lucide-react';
 import type { Product } from '../AdminPanel';
 import { useCurrency } from '../context/CurrencyContext';
+import { getResizedImageUrl } from '../lib/utils';
 
 interface ProductCardProps {
   product: Product;
@@ -101,10 +102,12 @@ export function ProductCard({ product, isSelected, onClick, index }: ProductCard
           transition={{ type: 'spring', stiffness: 300, damping: 20 }}
         >
           <img
-            src={product.frontImage}
+            src={getResizedImageUrl(product.frontImage, 400)}
             alt={product.name}
             className="w-full h-full"
             style={{ clipPath, objectFit: 'cover' }}
+            loading="lazy"
+            decoding="async"
           />
         </motion.div>
       );
@@ -118,9 +121,11 @@ export function ProductCard({ product, isSelected, onClick, index }: ProductCard
           transition={{ type: 'spring', stiffness: 300, damping: 20 }}
         >
           <img
-            src={product.frontImage}
+            src={getResizedImageUrl(product.frontImage, 400)}
             alt={product.name}
             className="max-w-full max-h-full w-auto h-auto object-contain"
+            loading="lazy"
+            decoding="async"
           />
         </motion.div>
       );

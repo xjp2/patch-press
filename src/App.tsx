@@ -14,7 +14,7 @@ import { CurrencyProvider, useCurrency } from './context/CurrencyContext';
 import supabase, { auth } from './lib/supabase';
 import { preloadCmsData, clearCmsCache, hasStaticCms } from './lib/cms';
 import type { Product as DbProduct, Patch as DbPatch } from './lib/cms';
-import { fixImagePath } from './lib/utils';
+import { fixImagePath, getResizedImageUrl } from './lib/utils';
 import { CroppedThumbnail } from './components/CroppedThumbnail';
 import { StripeCheckout } from './components/StripeCheckout';
 import { OrderConfirmation } from './components/OrderConfirmation';
@@ -152,7 +152,7 @@ function CartItemCard({ item, updateQuantity, removeItem }: {
                 {frontPatches.map((patch) => (
                   <div key={patch.id} className="flex items-center justify-between bg-cardstock rounded-lg px-2 py-1.5">
                     <div className="flex items-center gap-2">
-                      <img src={patch.image} alt={patch.name} className="w-6 h-6 object-contain" />
+                      <img src={getResizedImageUrl(patch.image, 48)} alt={patch.name} className="w-6 h-6 object-contain" loading="lazy" decoding="async" />
                       <span className="text-xs">{patch.name}</span>
                     </div>
                     <span className="text-xs font-medium">{formatPrice(patch.price || 0)}</span>
@@ -170,7 +170,7 @@ function CartItemCard({ item, updateQuantity, removeItem }: {
                 {backPatches.map((patch) => (
                   <div key={patch.id} className="flex items-center justify-between bg-cardstock rounded-lg px-2 py-1.5">
                     <div className="flex items-center gap-2">
-                      <img src={patch.image} alt={patch.name} className="w-6 h-6 object-contain" />
+                      <img src={getResizedImageUrl(patch.image, 48)} alt={patch.name} className="w-6 h-6 object-contain" loading="lazy" decoding="async" />
                       <span className="text-xs">{patch.name}</span>
                     </div>
                     <span className="text-xs font-medium">{formatPrice(patch.price || 0)}</span>
@@ -188,7 +188,7 @@ function CartItemCard({ item, updateQuantity, removeItem }: {
                 {legacyPatches.map((patch: any) => (
                   <div key={patch.id} className="flex items-center justify-between bg-white rounded-lg px-2 py-1.5">
                     <div className="flex items-center gap-2">
-                      <img src={patch.image} alt={patch.name} className="w-6 h-6 object-contain" />
+                      <img src={getResizedImageUrl(patch.image, 48)} alt={patch.name} className="w-6 h-6 object-contain" loading="lazy" decoding="async" />
                       <span className="text-xs">{patch.name}</span>
                     </div>
                     <span className="text-xs font-medium">{formatPrice(patch.price || 0)}</span>

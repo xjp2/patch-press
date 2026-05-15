@@ -12,6 +12,7 @@ import { AdminOrderManagement } from './components/AdminOrderManagement';
 import { TestRunner } from './components/TestRunner';
 import { InventoryLogsViewer } from './components/InventoryLogsViewer';
 import { clearCmsCache } from './lib/cms';
+import { getResizedImageUrl } from './lib/utils';
 
 export interface Notice {
     id: string;
@@ -1101,7 +1102,7 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                                 <span className="text-sm">Upload Front</span>
                                                 <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, setNewProductFrontImage, 'products')} className="hidden" />
                                             </label>
-                                            {newProductFrontImage && <img src={newProductFrontImage} alt="Front Preview" className="mt-2 w-24 h-24 object-contain rounded-lg" />}
+                                            {newProductFrontImage && <img src={getResizedImageUrl(newProductFrontImage, 192)} alt="Front Preview" className="mt-2 w-24 h-24 object-contain rounded-lg" loading="lazy" decoding="async" />}
                                         </div>
                                         <div className="flex flex-col gap-2">
                                             <label className="text-sm font-semibold text-foreground">Back Image</label>
@@ -1110,7 +1111,7 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                                 <span className="text-sm">Upload Back</span>
                                                 <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, setNewProductBackImage, 'products')} className="hidden" />
                                             </label>
-                                            {newProductBackImage && <img src={newProductBackImage} alt="Back Preview" className="mt-2 w-24 h-24 object-contain rounded-lg" />}
+                                            {newProductBackImage && <img src={getResizedImageUrl(newProductBackImage, 192)} alt="Back Preview" className="mt-2 w-24 h-24 object-contain rounded-lg" loading="lazy" decoding="async" />}
                                         </div>
                                     </div>
                                 </div>
@@ -1173,7 +1174,7 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                                         }
                                                     }} className="p-1 bg-cardstock rounded shadow text-craft-pink hover:text-red-700 hover:scale-110" title="Delete Product"><Trash2 className="w-4 h-4" /></button>
                                                 </div>
-                                                <img src={product.frontImage} alt={product.name} className="w-full h-20 object-contain mb-2" />
+                                                <img src={getResizedImageUrl(product.frontImage, 320)} alt={product.name} className="w-full h-20 object-contain mb-2" loading="lazy" decoding="async" />
                                                 <p className="text-sm font-semibold truncate">{product.name}</p>
                                                 <p className="text-sm text-craft-mint">{formatPrice(product.basePrice)}</p>
                                                 <p className={`text-xs ${(product.quantity ?? 0) <= 5 ? 'text-craft-pink font-bold' : 'text-craft-mint'}`}>Stock: {product.quantity ?? 0}</p>
@@ -1220,7 +1221,7 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                         </label>
                                         {newPatchImage && (
                                             <div className="mt-2">
-                                                <img src={newPatchImage} alt="Patch Preview" className="w-24 h-24 object-contain" />
+                                                <img src={getResizedImageUrl(newPatchImage, 192)} alt="Patch Preview" className="w-24 h-24 object-contain" loading="lazy" decoding="async" />
                                                 <p className="text-xs text-ink-muted mt-1">Size: {newPatchWidth} × {newPatchHeight} px (auto-detected)</p>
                                             </div>
                                         )}
@@ -1275,7 +1276,7 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                                         <X className="w-3 h-3" />
                                                     </button>
                                                 </div>
-                                                <img src={patch.image} alt={patch.name} className="w-full aspect-square object-contain mb-1" />
+                                                <img src={getResizedImageUrl(patch.image, 192)} alt={patch.name} className="w-full aspect-square object-contain mb-1" loading="lazy" decoding="async" />
                                                 <p className="text-[10px] font-semibold truncate">{patch.name}</p>
                                                 <p className="text-[10px] text-ink/40">{patch.width}×{patch.height}px</p>
                                                 <p className={`text-[10px] ${(patch.quantity ?? 0) <= 10 ? 'text-craft-pink font-bold' : 'text-craft-mint'}`}>Stock: {patch.quantity ?? 0}</p>
@@ -1417,7 +1418,7 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                                                                                             <Camera className="w-4 h-4 text-craft-mint" /><span>Image</span>
                                                                                                             <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, (url) => updateHeroSlide(section.id, i, { image: url }))} />
                                                                                                         </label>
-                                                                                                        {slide.image && <img src={slide.image} alt="" className="w-10 h-10 rounded-lg object-cover border" />}
+                                                                                                        {slide.image && <img src={getResizedImageUrl(slide.image, 80)} alt="" className="w-10 h-10 rounded-lg object-cover border" loading="lazy" decoding="async" />}
                                                                                                     </div>
                                                                                                 </div>
                                                                                             </SortableItem>
@@ -1471,7 +1472,7 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                                                                                             <Camera className="w-4 h-4 text-ink/40" /><span>Image</span>
                                                                                                             <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, (url) => updateStep(section.id, i, { image: url }))} />
                                                                                                         </label>
-                                                                                                        {step.image && <img src={step.image} alt="" className="w-10 h-10 rounded-lg object-cover border" />}
+                                                                                                        {step.image && <img src={getResizedImageUrl(step.image, 80)} alt="" className="w-10 h-10 rounded-lg object-cover border" loading="lazy" decoding="async" />}
                                                                                                     </div>
                                                                                                 </div>
                                                                                             </SortableItem>
@@ -1514,7 +1515,7 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                                                                             <SortableItem key={item.id} id={item.id}>
                                                                                                 <div className="flex items-center gap-3 bg-cardstock rounded-xl p-3 group">
                                                                                                     {item.image ? (
-                                                                                                        <img src={item.image} alt="" className="w-14 h-14 rounded-lg object-cover border flex-shrink-0" />
+                                                                                                        <img src={getResizedImageUrl(item.image, 112)} alt="" className="w-14 h-14 rounded-lg object-cover border flex-shrink-0" loading="lazy" decoding="async" />
                                                                                                     ) : (
                                                                                                         <div className="w-14 h-14 rounded-lg bg-paper-ruled flex items-center justify-center flex-shrink-0"><Camera className="w-5 h-5 text-ink/40" /></div>
                                                                                                     )}
@@ -1580,7 +1581,7 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                                                                                 <Camera className="w-5 h-5 text-craft-mint" /><span className="text-sm">Upload Single Image</span>
                                                                                                 <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, (url) => updateSectionContent(section.id, { ...c, image: url }))} />
                                                                                             </label>
-                                                                                            {c.image && <img src={c.image} alt="" className="w-14 h-14 object-cover rounded-lg border" />}
+                                                                                            {c.image && <img src={getResizedImageUrl(c.image, 112)} alt="" className="w-14 h-14 object-cover rounded-lg border" loading="lazy" decoding="async" />}
                                                                                         </div>
                                                                                         <input type="text" value={c.linkUrl || ''} onChange={e => updateSectionContent(section.id, { ...c, linkUrl: e.target.value })} placeholder="Redirect Link (e.g. /customize)" className="w-full px-4 py-2 rounded-xl border border-ink/10 focus:border-craft-mint outline-none text-sm" />
                                                                                     </div>
@@ -1589,7 +1590,7 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                                                                         {(c.galleryItems || []).map((item, idx) => (
                                                                                             <div key={idx} className="flex items-center gap-2 p-2 bg-paper-ruled rounded-lg border border-ink/10">
                                                                                                 {item.image ? (
-                                                                                                    <img src={item.image} className="w-10 h-10 object-cover rounded border" />
+                                                                                                    <img src={getResizedImageUrl(item.image, 80)} className="w-10 h-10 object-cover rounded border" loading="lazy" decoding="async" />
                                                                                                 ) : (
                                                                                                     <div className="w-10 h-10 bg-paper-ruled rounded flex items-center justify-center">
                                                                                                         <ImageIcon className="w-4 h-4 text-ink/40" />
@@ -1819,7 +1820,7 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                                                                                 <Camera className="w-4 h-4" /> Proof Attachment
                                                                                                 <input type="file" accept="image/*" className="hidden" onChange={(e) => handleImageUpload(e, (url) => updateTestimonial(section.id, item.id, { proofImage: url }))} />
                                                                                             </label>
-                                                                                            {item.proofImage && <img src={item.proofImage} className="w-6 h-6 object-cover rounded border" />}
+                                                                                            {item.proofImage && <img src={getResizedImageUrl(item.proofImage, 48)} className="w-6 h-6 object-cover rounded border" loading="lazy" decoding="async" />}
                                                                                         </div>
                                                                                     </div>
                                                                                 ))}

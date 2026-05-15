@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { CheckCircle, Package, Truck, Clock, MapPin, X } from 'lucide-react';
 import { useCurrency } from '../context/CurrencyContext';
-import { fixImagePath, type PlacementZone } from '../lib/utils';
+import { fixImagePath, getResizedImageUrl, type PlacementZone } from '../lib/utils';
 import { CroppedThumbnail } from './CroppedThumbnail';
 
 interface PatchDetail {
@@ -207,9 +207,11 @@ export function OrderConfirmation({
                           >
                             <div className="flex items-center gap-1.5">
                               <img
-                                src={fixImagePath(patch.image)}
+                                src={getResizedImageUrl(fixImagePath(patch.image), 32)}
                                 alt={patch.name}
                                 className="w-4 h-4 object-contain"
+                                loading="lazy"
+                                decoding="async"
                               />
                               <span className="text-gray-500">
                                 {patch.name}

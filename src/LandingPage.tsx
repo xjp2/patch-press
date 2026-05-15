@@ -6,6 +6,7 @@ import { PatchuuHeroSection } from './components/PatchuuHeroSection';
 import { PaperCard } from './components/PaperCard';
 
 import { PatchuuLogo } from './components/PatchuuLogo';
+import { getResizedImageUrl } from './lib/utils';
 import type { SiteContent, HeroContent, HowItWorksContent, GalleryContent, TextBlockContent, ImageBannerContent, TestimonialsContent, CtaContent, DividerContent, TransitionContent, PageSection } from './AdminPanel';
 
 interface LandingPageProps {
@@ -84,16 +85,16 @@ function HowItWorksSection({ section }: { section: PageSection }) {
                                         <div className="absolute top-0 right-0 w-8 h-8 bg-craft-mint text-white rounded-full flex items-center justify-center text-sm font-bold z-10 group-hover:scale-110 transition-transform border-[2px] border-ink">{i + 1}</div>
                                         <div className="relative z-10 w-full h-full flex items-center justify-center">
                                             {step.image ? (
-                                                <img src={fixImagePath(step.image)} alt={step.title} className="w-20 h-20 object-contain group-hover:scale-110 group-hover:rotate-3 transition-all duration-300" />
+                                                <img src={getResizedImageUrl(fixImagePath(step.image), 160)} alt={step.title} className="w-20 h-20 object-contain group-hover:scale-110 group-hover:rotate-3 transition-all duration-300" loading="lazy" decoding="async" />
                                             ) : step.emoji === '🔥' ? (
-                                                <img src="/pouch-beige.png" alt="Heat Press" className="w-20 h-20 object-contain group-hover:scale-110 group-hover:rotate-3 transition-all duration-300" />
+                                                <img src="/pouch-beige.png" alt="Heat Press" className="w-20 h-20 object-contain group-hover:scale-110 group-hover:rotate-3 transition-all duration-300" loading="lazy" decoding="async" />
                                             ) : step.emoji ? (
                                                 <span className="text-5xl group-hover:scale-110 transition-transform">{step.emoji}</span>
                                             ) : (
                                                 <div className="flex gap-2 items-center">
-                                                    <img src="/patch-strawberry.png" alt="" className="w-10 h-10 object-contain group-hover:scale-110 transition-transform duration-300" />
-                                                    <img src="/patch-watermelon.png" alt="" className="w-10 h-10 object-contain group-hover:scale-110 transition-transform duration-300 delay-75" />
-                                                    <img src="/patch-cherry.png" alt="" className="w-10 h-10 object-contain group-hover:scale-110 transition-transform duration-300 delay-150" />
+                                                    <img src="/patch-strawberry.png" alt="" className="w-10 h-10 object-contain group-hover:scale-110 transition-transform duration-300" loading="lazy" decoding="async" />
+                                                    <img src="/patch-watermelon.png" alt="" className="w-10 h-10 object-contain group-hover:scale-110 transition-transform duration-300 delay-75" loading="lazy" decoding="async" />
+                                                    <img src="/patch-cherry.png" alt="" className="w-10 h-10 object-contain group-hover:scale-110 transition-transform duration-300 delay-150" loading="lazy" decoding="async" />
                                                 </div>
                                             )}
                                         </div>
@@ -153,7 +154,7 @@ function GallerySection({ section, startCustomizing }: { section: PageSection; s
                                 rotation={i % 2 === 0 ? -1 : 1}
                                 className="w-52 h-52 overflow-hidden p-0 group-hover:shadow-paper-hover transition-all duration-300 group-hover:-translate-y-2 group-hover:scale-105"
                             >
-                                <img src={fixImagePath(item.image)} alt={item.label} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                                <img src={getResizedImageUrl(fixImagePath(item.image), 416)} alt={item.label} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" loading="lazy" decoding="async" />
                             </PaperCard>
                             <p className="text-center text-sm font-medium text-ink opacity-70 mt-3 group-hover:opacity-100 transition-opacity">{item.label}</p>
                         </div>
@@ -257,10 +258,12 @@ function ImageBannerSection({ section, startCustomizing }: { section: PageSectio
                             {(c.galleryItems || []).map((item, idx) => (
                                 <img
                                     key={idx}
-                                    src={fixImagePath(item.image)}
+                                    src={getResizedImageUrl(fixImagePath(item.image), 800)}
                                     alt={`Banner ${idx}`}
                                     className={`flex-shrink-0 snap-center min-w-[300px] ${c.imageFit === 'contain' ? 'h-auto max-h-[400px] object-contain' : c.imageFit === 'none' ? 'h-auto object-none' : `h-[${c.maxHeight || 400}px] object-cover`} ${c.isClickable !== false ? 'cursor-pointer' : ''} hover:scale-[1.02] transition-all duration-500 scroll-reveal-scale scroll-delay-${Math.min(idx + 1, 4)} ${isRevealed ? 'scroll-revealed' : ''}`}
                                     style={{ borderRadius: `${imageBorderRadius}px` }}
+                                    loading="lazy"
+                                    decoding="async"
                                     onClick={() => handleRedirect(item.linkUrl)}
                                 />
                             ))}
@@ -269,13 +272,15 @@ function ImageBannerSection({ section, startCustomizing }: { section: PageSectio
                         c.image && (
                             <div className="relative">
                                 <img
-                                    src={fixImagePath(c.image)}
+                                    src={getResizedImageUrl(fixImagePath(c.image), 1200)}
                                     alt={c.alt}
                                     className={`w-full max-w-full h-auto ${c.imageFit === 'contain' ? 'object-contain' : c.imageFit === 'none' ? 'object-none' : 'object-cover'} ${c.isClickable !== false ? 'cursor-pointer' : ''} hover:scale-[1.01] transition-all duration-700 scroll-reveal-scale ${isRevealed ? 'scroll-revealed' : ''}`}
                                     style={{ 
                                         borderRadius: `${imageBorderRadius}px`,
                                         maxHeight: c.maxHeight && c.maxHeight > 0 ? `${c.maxHeight}px` : undefined,
                                     }}
+                                    loading="lazy"
+                                    decoding="async"
                                     onClick={() => handleRedirect(c.linkUrl)}
                                 />
                                 {c.showButton && c.buttonText && (
@@ -370,13 +375,13 @@ function TestimonialsSection({ section }: { section: PageSection }) {
 
                                 {item.proofImage && (
                                     <div className="mb-4 rounded-xl overflow-hidden border-[2px] border-ink/10 shadow-sm">
-                                        <img src={item.proofImage} alt="Proof" className="w-full h-32 object-cover hover:scale-105 transition-transform duration-500" />
+                                        <img src={getResizedImageUrl(item.proofImage, 600)} alt="Proof" className="w-full h-32 object-cover hover:scale-105 transition-transform duration-500" loading="lazy" decoding="async" />
                                     </div>
                                 )}
 
                                 <div className="flex items-center gap-3">
                                     {item.avatar ? (
-                                        <img src={item.avatar} alt={item.author} className="w-10 h-10 rounded-full object-cover ring-2 ring-ink/10" />
+                                        <img src={getResizedImageUrl(item.avatar, 80)} alt={item.author} className="w-10 h-10 rounded-full object-cover ring-2 ring-ink/10" loading="lazy" decoding="async" />
                                     ) : (
                                         <div className="w-10 h-10 rounded-full bg-craft-mint flex items-center justify-center text-white font-bold text-sm border-[2px] border-ink">{item.author?.[0] || '?'}</div>
                                     )}

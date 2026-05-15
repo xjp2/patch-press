@@ -11,6 +11,20 @@ export function fixImagePath(path?: string): string {
   return path.replace(/^\/products\//, '/').replace(/^\/patches\//, '/');
 }
 
+/**
+ * Resize a Supabase Storage image via the image transformation API.
+ * Non-Supabase URLs are returned unchanged.
+ */
+export function getResizedImageUrl(url: string | undefined, width: number, height?: number): string {
+  if (!url) return '';
+  // Only transform Supabase storage public URLs
+  const match = url.match(/^(https?:\/\/[^/]+\.supabase\.co)\/storage\/v1\/object\/public\/(.+)$/);
+  if (!match) return url;
+  const [, base, path] = match;
+  const h = height || width;
+  return `${base}/storage/v1/render/image/public/${path}?width=${width}&height=${h}&quality=80&resize=contain`;
+}
+
 export interface PlacementZone {
   type: 'rectangle' | 'polygon';
   x?: number;

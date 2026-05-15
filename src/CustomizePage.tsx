@@ -18,7 +18,7 @@ import { HeatPressSequence } from './components/HeatPressSequence';
 import type { Product, Patch, SiteContent } from './AdminPanel';
 import { useCart } from './context/CartContext';
 import { useCurrency } from './context/CurrencyContext';
-import { getClipAndCenter, fixImagePath } from './lib/utils';
+import { getClipAndCenter, fixImagePath, getResizedImageUrl } from './lib/utils';
 import { CroppedThumbnail } from './components/CroppedThumbnail';
 
 // Helper for Point in Polygon (Ray Casting)
@@ -674,7 +674,7 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                                 whileTap={{ scale: 0.88 }}
                                                 transition={{ type: 'spring', stiffness: 400, damping: 17 }}
                                             >
-                                                <img src={patch.image} alt={patch.name} className="w-full aspect-square object-contain mb-1" style={(() => {
+                                                <img src={getResizedImageUrl(patch.image, 200)} alt={patch.name} className="w-full aspect-square object-contain mb-1" loading="lazy" decoding="async" style={(() => {
                                                     const s = getClipAndCenter(patch.contentZone);
                                                     return { clipPath: s.clipPath, transform: s.transform };
                                                 })()} />
@@ -932,7 +932,7 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                                         selectedPatchId === patch.uniqueId ? 'bg-craft-mint/20 ring-1 ring-craft-mint' : 'hover:bg-paper'
                                                     }`}
                                                 >
-                                                    <img src={patch.image} alt={patch.name} className="w-8 h-8 object-contain flex-shrink-0" />
+                                                    <img src={getResizedImageUrl(patch.image, 64)} alt={patch.name} className="w-8 h-8 object-contain flex-shrink-0" loading="lazy" decoding="async" />
                                                     <div className="flex-1 min-w-0">
                                                         <p className="text-xs font-semibold truncate">{patch.name}</p>
                                                         <p className="text-[10px] text-craft-mint">{formatPrice(patch.price)}</p>
@@ -1099,7 +1099,7 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                                 <p className="text-[10px] font-bold text-ink/40 uppercase tracking-wider mb-1">Front Patches</p>
                                                 {frontPatches.map(p => (
                                                     <div key={p.uniqueId} className="flex items-center gap-2 py-0.5">
-                                                        <img src={fixImagePath(p.image)} alt={p.name} className="w-6 h-6 object-contain" />
+                                                        <img src={getResizedImageUrl(fixImagePath(p.image), 48)} alt={p.name} className="w-6 h-6 object-contain" loading="lazy" decoding="async" />
                                                         <span className="flex-1 text-xs text-ink/70 truncate">{p.name}</span>
                                                         <span className="text-xs font-medium">{formatPrice(p.price)}</span>
                                                     </div>
@@ -1113,7 +1113,7 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                                 <p className="text-[10px] font-bold text-ink/40 uppercase tracking-wider mb-1">Back Patches</p>
                                                 {backPatches.map(p => (
                                                     <div key={p.uniqueId} className="flex items-center gap-2 py-0.5">
-                                                        <img src={fixImagePath(p.image)} alt={p.name} className="w-6 h-6 object-contain" />
+                                                        <img src={getResizedImageUrl(fixImagePath(p.image), 48)} alt={p.name} className="w-6 h-6 object-contain" loading="lazy" decoding="async" />
                                                         <span className="flex-1 text-xs text-ink/70 truncate">{p.name}</span>
                                                         <span className="text-xs font-medium">{formatPrice(p.price)}</span>
                                                     </div>
