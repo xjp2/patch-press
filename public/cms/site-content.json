@@ -23,24 +23,6 @@
       "visible": true
     },
     {
-      "id": "540c18b2-c02d-4251-8a58-bc44a84473f5",
-      "type": "hero",
-      "content": {
-        "slides": [
-          {
-            "id": "34891859-1939-4b70-99a8-784f3f8840f1",
-            "image": "https://fyadtnkbayeafjmdvymx.supabase.co/storage/v1/object/public/assets/uploads/16d495c6-b23d-44dd-a4ed-2b2055d2277f-lushgreenbg.png",
-            "title": "New Slide",
-            "subtitle": "Your subtitle here",
-            "ctaAction": "customize",
-            "isFullWidth": true
-          }
-        ],
-        "ctaText": "Get Started"
-      },
-      "visible": true
-    },
-    {
       "id": "sec-how",
       "type": "howItWorks",
       "content": {
@@ -68,6 +50,37 @@
           }
         ],
         "sectionTitle": "How It Works"
+      },
+      "visible": true
+    },
+    {
+      "id": "5ac3b5b7-efe0-4755-b861-c24f02b83f07",
+      "type": "transition",
+      "content": {
+        "shape": "triangle",
+        "height": 80,
+        "fillColor": "#81c784",
+        "flipVertical": false,
+        "flipHorizontal": false
+      },
+      "visible": true
+    },
+    {
+      "id": "540c18b2-c02d-4251-8a58-bc44a84473f5",
+      "type": "hero",
+      "content": {
+        "slides": [
+          {
+            "id": "34891859-1939-4b70-99a8-784f3f8840f1",
+            "image": "https://fyadtnkbayeafjmdvymx.supabase.co/storage/v1/object/public/assets/uploads/16d495c6-b23d-44dd-a4ed-2b2055d2277f-lushgreenbg.png",
+            "title": "New Slide",
+            "subtitle": "Your subtitle here",
+            "ctaAction": "customize",
+            "isFullWidth": true
+          }
+        ],
+        "ctaText": "Get Started",
+        "isFullWidth": true
       },
       "visible": true
     },
@@ -180,7 +193,7 @@
       "Remove patches by clicking the × button"
     ]
   },
-  "updated_at": "2026-05-13T15:14:55.586+00:00",
+  "updated_at": "2026-08-02T14:11:24.412+00:00",
   "navbar": {
     "bgColor": "#ffffff",
     "position": "static"
