@@ -146,9 +146,14 @@ async function loadFromStorage<T>(path: string, bustCache = false): Promise<T | 
     // Always cache-bust Storage requests to avoid stale CDN data after admin updates
     const url = `${publicUrl}?t=${bustCache ? cacheBuster : Date.now()}`;
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
     const response = await fetch(url, {
       cache: 'no-cache',
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
@@ -186,9 +191,14 @@ async function loadStaticFile<T>(filename: string, bustCache = false): Promise<T
     // Always cache-bust static JSON so stale build artifacts are never served
     const url = `/cms/${filename}?t=${bustCache ? cacheBuster : Date.now()}`;
 
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
     const response = await fetch(url, {
       cache: 'no-cache',
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);

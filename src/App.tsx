@@ -1356,7 +1356,12 @@ function AppContent() {
       
       // Reload all data with forceRefresh=true to bypass static files
       // This ensures localhost and Vercel see the same content
-      const { siteContent: sc, products: prods, patches: patcs } = await preloadCmsData(true);
+      const { siteContent: sc, products: prods, patches: patcs } = await Promise.race([
+        preloadCmsData(true),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('CMS refresh timeout')), 10000)
+        ),
+      ]);
 
       // Update products
       if (prods && prods.length > 0) {

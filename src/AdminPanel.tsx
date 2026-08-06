@@ -340,6 +340,21 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
     const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+    // Refresh data after save with a safety timeout so the UI never hangs
+    const refreshWithTimeout = async () => {
+        if (!onContentSaved) return;
+        try {
+            await Promise.race([
+                onContentSaved(),
+                new Promise<never>((_, reject) =>
+                    setTimeout(() => reject(new Error('Refresh timeout')), 10000)
+                ),
+            ]);
+        } catch (err) {
+            console.warn('Refresh after save timed out or failed:', err);
+        }
+    };
+
     // Ref to track latest siteContent for manual saves (avoids stale closure issues)
     const siteContentRef = useRef(siteContent);
     useEffect(() => {
@@ -367,7 +382,7 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
             if (exportError) console.warn('Auto-export failed:', exportError);
             else console.log('✅ Products exported to CDN');
 
-            if (onContentSaved) await onContentSaved();
+            if (onContentSaved) await refreshWithTimeout();
 
             if (showFeedback) {
                 setSaveSuccess('products');
@@ -401,7 +416,7 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
             if (exportError) console.warn('Auto-export failed:', exportError);
             else console.log('✅ Patches exported to CDN');
 
-            if (onContentSaved) await onContentSaved();
+            if (onContentSaved) await refreshWithTimeout();
 
             if (showFeedback) {
                 setSaveSuccess('patches');
@@ -437,7 +452,7 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
             // Only refresh data for manual saves with feedback
             // This prevents a save from overwriting user's ongoing edits
             if (showFeedback && onContentSaved) {
-                await onContentSaved();
+                await refreshWithTimeout();
             }
             
             if (showFeedback) {
