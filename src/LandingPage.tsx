@@ -144,7 +144,7 @@ function GallerySection({ section, startCustomizing }: { section: PageSection; s
                     color: c.titleColor || styling.textColor || 'var(--color-primary)',
                     textAlign: c.titleAlignment || 'center'
                 }}>{c.sectionTitle}</h2>
-                <div className="flex gap-6 overflow-x-auto pb-12 snap-x hide-scrollbar justify-center">
+                <div className="flex gap-6 overflow-x-auto pt-8 pb-12 snap-x hide-scrollbar justify-center">
                     {c.items.map((item, i) => (
                         <div key={item.id} className={`flex-shrink-0 snap-center group cursor-pointer scroll-reveal-scale scroll-delay-${Math.min(i + 1, 6)} ${isRevealed ? 'scroll-revealed' : ''}`} onClick={() => handleItemClick(item.linkUrl)}>
                             <PaperCard

@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { useAnalytics } from '../hooks/useAnalytics';
+import { useCurrency } from './CurrencyContext';
 
 export interface PlacedPatchData {
   id: string;
@@ -65,6 +67,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
   const lastSyncedItems = useRef<string>('');
   const syncInProgress = useRef(false);
+  const { trackAddToCart } = useAnalytics();
+  const { currency } = useCurrency();
 
   // Initialize cart on mount
   useEffect(() => {
@@ -111,15 +115,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   // Sync with Auth state changes
   useEffect(() => {
     let mounted = true;
+    const authSubscriptionRef = { current: { subscription: { unsubscribe: () => {} } } as any };
 
     const setupAuthListener = async () => {
       const { auth } = await import('../lib/supabase');
       
-      auth.onAuthStateChange(async (event, session) => {
+      authSubscriptionRef.current = auth.onAuthStateChange(async (event, session) => {
         if (!mounted) return;
 
         const user = session?.user || null;
-        const prevUser = currentUser;
+        const prevUser = currentUserRef.current;
         
         console.log('🛒 Cart: Auth state changed:', event, 'User:', user?.id || 'none');
         setCurrentUser(user);
@@ -146,7 +151,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       mounted = false;
+      authSubscriptionRef.current?.subscription?.unsubscribe();
     };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  
+  // Keep a ref in sync with currentUser so the auth listener callback doesn't need currentUser as a dependency
+  const currentUserRef = useRef(currentUser);
+  useEffect(() => {
+    currentUserRef.current = currentUser;
   }, [currentUser]);
 
   // Persist cart to appropriate storage
@@ -422,7 +434,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       console.log('🛒 Cart: Added new item');
       return [...prev, { ...newItem, quantity: 1 }];
     });
-  }, []);
+
+    // Track new add-to-cart event for analytics
+    trackAddToCart({
+      id: newItem.productId,
+      name: newItem.productName,
+      price: newItem.totalPrice,
+      quantity: 1,
+      currency,
+    });
+  }, [currency, trackAddToCart]);
 
   const removeItem = useCallback((id: string) => {
     console.log('🛒 Cart: Removing item:', id);

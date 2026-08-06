@@ -5,11 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npm run export-cms && npm run sync-images && tsc -b && vite build",
+    "build": "npm run export-cms && npm run optimize-images && npm run build-sitemap && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "export-cms": "tsx scripts/export-cms.ts && npm run sync-images",
-    "sync-images": "tsx scripts/sync-images.ts",
+    "export-cms": "tsx scripts/export-cms.ts",
+    "optimize-images": "tsx scripts/optimize-images.ts",
+    "build-sitemap": "tsx scripts/build-sitemap.ts",
     "build:prod": "npm run export-cms && npm run build",
     "bulk-upload": "tsx scripts/bulk-upload-products.ts",
     "export-and-deploy": "tsx scripts/trigger-vercel-deploy.ts"
@@ -72,7 +73,6 @@
     "zod": "^4.3.5"
   },
   "devDependencies": {
-    "@daohoangson/chrome-devtools-mcp": "^0.8.1-alpha.2",
     "@eslint/js": "^9.39.1",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.5",
@@ -86,7 +86,7 @@
     "kimi-plugin-inspect-react": "^1.0.3",
     "postcss": "^8.5.6",
     "puppeteer": "^24.37.5",
-    "sharp": "^0.33.0",
+    "sharp": "^0.35.3",
     "tailwindcss": "^3.4.19",
     "tailwindcss-animate": "^1.0.7",
     "tsx": "^4.21.0",

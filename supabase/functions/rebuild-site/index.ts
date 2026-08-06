@@ -8,12 +8,26 @@ interface RebuildRequest {
   provider?: 'vercel' | 'netlify' | 'custom';
 }
 
+function getCorsHeaders(req: Request): HeadersInit {
+  const origin = req.headers.get('origin') || '';
+  const allowedOrigins = [
+    'https://patchuu.shop',
+    'https://www.patchuu.shop',
+    'http://localhost:5175',
+    'http://localhost:3000',
+  ];
+  const isAllowed = allowedOrigins.includes(origin) || origin.endsWith('.vercel.app');
+  return {
+    'Access-Control-Allow-Origin': isAllowed ? origin : 'https://patchuu.shop',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Vary': 'Origin',
+  };
+}
+
 serve(async (req) => {
   // CORS headers
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  }
+  const corsHeaders = getCorsHeaders(req)
 
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })

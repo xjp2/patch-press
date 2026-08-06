@@ -6,7 +6,9 @@
  * 2. Local static JSON files (build-time exported)
  * 3. Supabase Database (development fallback)
  * 
- * This ensures zero DB hits for customer traffic in production.
+ * When forceRefresh=true (admin updates), the Supabase Database is queried first
+ * to get the latest content immediately. Public customer traffic uses the default
+ * path so it does not hit Supabase on every page load.
  */
 
 import { supabase } from './supabase';
@@ -84,8 +86,14 @@ export interface CmsMetadata {
   version: string;
 }
 
-// Cache for loaded data
-const cache = new Map<string, any>();
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+}
+
+// In-memory cache with TTL so users always see recent data without hammering the DB
+const cache = new Map<string, CacheEntry<unknown>>();
+const DEFAULT_CACHE_TTL = 60 * 1000; // 1 minute
 
 // Timestamp for cache-busting after admin updates
 let cacheBuster = Date.now();
@@ -98,16 +106,30 @@ export function refreshCacheBuster(): void {
   console.log('🔄 Cache buster updated:', cacheBuster);
 }
 
+function getCached<T>(key: string, ttl = DEFAULT_CACHE_TTL): T | undefined {
+  const entry = cache.get(key);
+  if (!entry) return undefined;
+  if (Date.now() - entry.timestamp > ttl) {
+    cache.delete(key);
+    return undefined;
+  }
+  return entry.data as T;
+}
+
+function setCached<T>(key: string, data: T): void {
+  cache.set(key, { data, timestamp: Date.now() });
+}
+
 /**
  * Load from Supabase Storage (CDN-cached, priority 1)
  * Uses cache-busting to get fresh data after admin updates
  */
 async function loadFromStorage<T>(path: string, bustCache = false): Promise<T | null> {
   const cacheKey = `storage:${path}:${bustCache ? cacheBuster : 'static'}`;
-  
-  // Check in-memory cache (only if not busting)
-  if (!bustCache && cache.has(cacheKey)) {
-    return cache.get(cacheKey);
+
+  if (!bustCache) {
+    const cached = getCached<T>(cacheKey);
+    if (cached !== undefined) return cached;
   }
 
   try {
@@ -115,26 +137,26 @@ async function loadFromStorage<T>(path: string, bustCache = false): Promise<T | 
       .storage
       .from('assets')
       .getPublicUrl(`cms/${path}`);
-    
-    // Add cache-busting parameter if requested
-    const url = bustCache ? `${publicUrl}?t=${cacheBuster}` : publicUrl;
-    
+
+    // Always cache-bust Storage requests to avoid stale CDN data after admin updates
+    const url = `${publicUrl}?t=${bustCache ? cacheBuster : Date.now()}`;
+
     const response = await fetch(url, {
-      cache: bustCache ? 'no-cache' : 'default',
+      cache: 'no-cache',
     });
-    
+
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
-    
-    const data = await response.json();
-    
+
+    const data = (await response.json()) as T;
+
     // Validate data is not empty
     if (Array.isArray(data) && data.length === 0) {
       throw new Error('Empty array returned');
     }
-    
-    cache.set(cacheKey, data);
+
+    setCached(cacheKey, data);
     console.log(`☁️ Loaded ${path} from Storage (${Array.isArray(data) ? data.length : 1} items)`);
     return data;
   } catch (err) {
@@ -149,27 +171,25 @@ async function loadFromStorage<T>(path: string, bustCache = false): Promise<T | 
  */
 async function loadStaticFile<T>(filename: string, bustCache = false): Promise<T | null> {
   const cacheKey = bustCache ? `${filename}:fresh` : filename;
-  
-  // Check cache first (unless busting)
-  if (!bustCache && cache.has(cacheKey)) {
-    return cache.get(cacheKey);
+
+  if (!bustCache) {
+    const cached = getCached<T>(cacheKey);
+    if (cached !== undefined) return cached;
   }
 
   try {
-    // Add cache-busting query param to bypass CDN/browser cache after updates
-    const url = bustCache 
-      ? `/cms/${filename}?t=${cacheBuster}` 
-      : `/cms/${filename}`;
-    
+    // Always cache-bust static JSON so stale build artifacts are never served
+    const url = `/cms/${filename}?t=${bustCache ? cacheBuster : Date.now()}`;
+
     const response = await fetch(url, {
-      cache: bustCache ? 'no-cache' : 'default',
+      cache: 'no-cache',
     });
-    
+
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`);
     }
-    const data = await response.json();
-    cache.set(cacheKey, data);
+    const data = (await response.json()) as T;
+    setCached(cacheKey, data);
     console.log(`📄 Loaded ${filename} from static files${bustCache ? ' (fresh)' : ''}`);
     return data;
   } catch (err) {
@@ -198,128 +218,129 @@ export async function getCmsMetadata(bustCache = false): Promise<CmsMetadata | n
 }
 
 /**
- * Load site content - Supabase first (for fresh data), fallback to static files
+ * Load site content - Supabase DB (source of truth) -> Storage -> static JSON fallback
  * @param forceRefresh - Set to true after admin updates to bypass all caches
  */
 export async function loadSiteContent(forceRefresh = false): Promise<SiteContent | null> {
-  // Priority 1: Supabase (always fresh, especially after admin updates)
-  // This ensures localhost and Vercel both see the same content
-  if (forceRefresh) {
-    console.log('🌐 Force refresh: Loading site content from Supabase...');
-    const { data, error } = await supabase
-      .from('site_content')
-      .select('*')
-      .eq('id', 'current')
-      .single();
+  const cacheKey = 'db:site_content';
 
-    if (!error && data) {
-      console.log('✅ Loaded fresh site content from Supabase:', {
-        landing_page_sections: data.landing_page?.length,
-        navbar_fields: data.navbar ? Object.keys(data.navbar) : 'none',
-        global_logo: data.global_settings?.logoText,
-        first_section_styling: data.landing_page?.[0]?.styling,
-      });
-      return data;
-    }
-    console.warn('Supabase load failed, falling back to static files');
+  if (!forceRefresh) {
+    const cached = getCached<SiteContent>(cacheKey);
+    if (cached !== undefined) return cached;
   }
 
-  // Priority 2: Static files (for fast loading in production)
+  // Priority 1: Supabase Database (source of truth)
+  const dbData = await loadSiteContentFromDb();
+  if (dbData) {
+    console.log('✅ Loaded site content from database');
+    setCached(cacheKey, dbData);
+    return dbData;
+  }
+
+  // Priority 2: In-memory stale cache (better than nothing)
+  const stale = getCached<SiteContent>(cacheKey, Infinity);
+  if (stale !== undefined) {
+    console.warn('⚠️ Using stale cached site content');
+    return stale;
+  }
+
+  // Priority 3: Supabase Storage fallback
+  console.warn('Site content DB load failed, falling back to Storage');
+  const storageData = await loadFromStorage<SiteContent>('site-content.json', forceRefresh);
+  if (storageData) return storageData;
+
+  // Priority 4: Static files fallback
   const staticData = await loadStaticFile<SiteContent>('site-content.json', forceRefresh);
-  if (staticData) {
-    console.log('📄 Loaded site content from static file');
+  if (staticData) return staticData;
+
+  console.error('Failed to load site content from all sources');
+  return null;
+}
+
+/**
+ * Load products - Supabase DB (source of truth) -> Storage -> static JSON fallback
+ * @param forceRefresh - Set to true after admin updates to bypass all caches
+ */
+export async function loadProducts(forceRefresh = false): Promise<Product[]> {
+  const cacheKey = 'db:products';
+
+  if (!forceRefresh) {
+    const cached = getCached<Product[]>(cacheKey);
+    if (cached !== undefined) return cached;
+  }
+
+  // Priority 1: Supabase Database (source of truth)
+  const dbData = await loadProductsFromDb();
+  if (dbData && dbData.length > 0) {
+    console.log(`✅ Loaded ${dbData.length} products from database`);
+    setCached(cacheKey, dbData);
+    return dbData;
+  }
+
+  // Priority 2: In-memory stale cache (better than missing products)
+  const stale = getCached<Product[]>(cacheKey, Infinity);
+  if (stale !== undefined && stale.length > 0) {
+    console.warn('⚠️ Using stale cached products');
+    return stale;
+  }
+
+  // Priority 3: Supabase Storage fallback
+  console.warn('Products DB load failed, falling back to Storage');
+  const storageData = await loadFromStorage<Product[]>('products.json', forceRefresh);
+  if (storageData && storageData.length > 0) return storageData;
+
+  // Priority 4: Static files fallback
+  const staticData = await loadStaticFile<Product[]>('products.json', forceRefresh);
+  if (staticData && staticData.length > 0) {
+    console.log('📄 Loaded products from static files');
     return staticData;
   }
 
-  // Priority 3: Fallback to Supabase if no static files
-  console.log('🌐 Loading site content from Supabase...');
-  const { data, error } = await supabase
-    .from('site_content')
-    .select('*')
-    .eq('id', 'current')
-    .single();
-
-  if (error) {
-    console.error('Failed to load site content:', error);
-    return null;
-  }
-
-  return data;
+  console.error('Failed to load products from all sources');
+  return [];
 }
 
 /**
- * Load products - Storage → Static → Supabase
- * @param forceRefresh - Set to true after admin updates to bypass CDN cache
- */
-export async function loadProducts(forceRefresh = false): Promise<Product[]> {
-  // Priority 1: Supabase Storage (CDN-cached, updated via admin)
-  if (!forceRefresh) {
-    const storageData = await loadFromStorage<Product[]>('products.json', false);
-    if (storageData && storageData.length > 0) {
-      return storageData;
-    }
-  }
-
-  // Priority 2: Supabase Database (ALWAYS query DB for fresh data after save)
-  // This ensures we get the latest data even if CDN export failed
-  console.log('🌐 Loading products from Supabase...');
-  const { data, error } = await supabase
-    .from('products')
-    .select('*')
-    .order('sort_order', { ascending: true });
-
-  if (error) {
-    console.error('Failed to load products from DB:', error);
-    
-    // Fallback to static files if DB fails
-    const staticData = await loadStaticFile<Product[]>('products.json');
-    if (staticData && staticData.length > 0) {
-      console.log('📄 Fallback: Loaded products from static files');
-      return staticData;
-    }
-    
-    return [];
-  }
-
-  console.log(`✅ Loaded ${data?.length || 0} products from database`);
-  return data || [];
-}
-
-/**
- * Load patches - Storage → Static → Supabase
- * @param forceRefresh - Set to true after admin updates to bypass CDN cache
+ * Load patches - Supabase DB (source of truth) -> Storage -> static JSON fallback
+ * @param forceRefresh - Set to true after admin updates to bypass all caches
  */
 export async function loadPatches(forceRefresh = false): Promise<Patch[]> {
-  // Priority 1: Supabase Storage (CDN-cached, updated via admin)
+  const cacheKey = 'db:patches';
+
   if (!forceRefresh) {
-    const storageData = await loadFromStorage<Patch[]>('patches.json', false);
-    if (storageData && storageData.length > 0) {
-      return storageData;
-    }
+    const cached = getCached<Patch[]>(cacheKey);
+    if (cached !== undefined) return cached;
   }
 
-  // Priority 2: Supabase Database (ALWAYS query DB for fresh data after save)
-  console.log('🌐 Loading patches from Supabase...');
-  const { data, error } = await supabase
-    .from('patches')
-    .select('*')
-    .order('sort_order', { ascending: true });
-
-  if (error) {
-    console.error('Failed to load patches from DB:', error);
-    
-    // Fallback to static files if DB fails
-    const staticData = await loadStaticFile<Patch[]>('patches.json');
-    if (staticData && staticData.length > 0) {
-      console.log('📄 Fallback: Loaded patches from static files');
-      return staticData;
-    }
-    
-    return [];
+  // Priority 1: Supabase Database (source of truth)
+  const dbData = await loadPatchesFromDb();
+  if (dbData && dbData.length > 0) {
+    console.log(`✅ Loaded ${dbData.length} patches from database`);
+    setCached(cacheKey, dbData);
+    return dbData;
   }
 
-  console.log(`✅ Loaded ${data?.length || 0} patches from database`);
-  return data || [];
+  // Priority 2: In-memory stale cache (better than missing patches)
+  const stale = getCached<Patch[]>(cacheKey, Infinity);
+  if (stale !== undefined && stale.length > 0) {
+    console.warn('⚠️ Using stale cached patches');
+    return stale;
+  }
+
+  // Priority 3: Supabase Storage fallback
+  console.warn('Patches DB load failed, falling back to Storage');
+  const storageData = await loadFromStorage<Patch[]>('patches.json', forceRefresh);
+  if (storageData && storageData.length > 0) return storageData;
+
+  // Priority 4: Static files fallback
+  const staticData = await loadStaticFile<Patch[]>('patches.json', forceRefresh);
+  if (staticData && staticData.length > 0) {
+    console.log('📄 Loaded patches from static files');
+    return staticData;
+  }
+
+  console.error('Failed to load patches from all sources');
+  return [];
 }
 
 /**
@@ -330,6 +351,64 @@ export function clearCmsCache(): void {
   cache.clear();
   refreshCacheBuster();
   console.log('🗑️ CMS cache cleared');
+}
+
+/**
+ * Load products directly from Supabase DB (source of truth)
+ */
+async function loadProductsFromDb(): Promise<Product[] | null> {
+  try {
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .order('sort_order', { ascending: true });
+
+    if (error) throw error;
+    if (!data || data.length === 0) return null;
+    return data;
+  } catch (err) {
+    console.error('Failed to load products from DB:', err);
+    return null;
+  }
+}
+
+/**
+ * Load patches directly from Supabase DB (source of truth)
+ */
+async function loadPatchesFromDb(): Promise<Patch[] | null> {
+  try {
+    const { data, error } = await supabase
+      .from('patches')
+      .select('*')
+      .order('sort_order', { ascending: true });
+
+    if (error) throw error;
+    if (!data || data.length === 0) return null;
+    return data;
+  } catch (err) {
+    console.error('Failed to load patches from DB:', err);
+    return null;
+  }
+}
+
+/**
+ * Load site content directly from Supabase DB (source of truth)
+ */
+async function loadSiteContentFromDb(): Promise<SiteContent | null> {
+  try {
+    const { data, error } = await supabase
+      .from('site_content')
+      .select('*')
+      .eq('id', 'current')
+      .single();
+
+    if (error) throw error;
+    if (!data) return null;
+    return data;
+  } catch (err) {
+    console.error('Failed to load site content from DB:', err);
+    return null;
+  }
 }
 
 /**

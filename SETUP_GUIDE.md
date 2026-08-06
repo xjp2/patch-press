@@ -168,13 +168,14 @@ create policy "Users can create orders" on public.orders
    - **Publishable key** (starts with `pk_test_`)
    - **Secret key** (starts with `sk_test_`)
 
-3. Add to your `.env` file:
+3. Add to your `.env` file (client-side keys only):
 
 ```bash
-# Stripe Configuration
+# Stripe Configuration (client-side)
 VITE_STRIPE_PUBLISHABLE_KEY=pk_test_your_key_here
-STRIPE_SECRET_KEY=sk_test_your_key_here
 ```
+
+> **Security note:** `STRIPE_SECRET_KEY` must never be added to `.env` or any client code. It is used only inside Supabase Edge Functions.
 
 ### Create Payment Intent Edge Function
 
@@ -223,12 +224,13 @@ serve(async (req) => {
 
 5. Click **Deploy**
 
-6. Add your Stripe Secret Key to Supabase Secrets:
-   - Go to **Project Settings** → **Edge Functions**
-   - Click **Add Secret**
-   - Name: `STRIPE_SECRET_KEY`
-   - Value: Your Stripe Secret Key (`sk_test_...`)
-   - Click **Add**
+6. Add your Stripe keys and Supabase service credentials to **Supabase Dashboard → Project Settings → Edge Functions → Secrets**:
+   - `STRIPE_SECRET_KEY`: Your Stripe Secret Key (`sk_test_...`) — **never** put this in `.env` or client code
+   - `STRIPE_WEBHOOK_SECRET`: Your Stripe webhook signing secret (configured later in the Webhooks section)
+   - `SUPABASE_URL`: Your Supabase project URL
+   - `SUPABASE_SERVICE_ROLE_KEY`: Your Supabase service role key
+   
+   To add each, click **Add Secret**, enter the name and value, then click **Add**.
 
 ### Configure Webhooks (Optional but Recommended)
 
@@ -315,10 +317,9 @@ Use these test card numbers:
 
 1. In Stripe Dashboard, switch to **Live mode**
 2. Get your **Live** API keys
-3. Update your environment variables:
+3. Update your client environment variables in `.env`:
    - `VITE_STRIPE_PUBLISHABLE_KEY=pk_live_...`
-   - `STRIPE_SECRET_KEY=sk_live_...`
-4. Update the Stripe Secret Key in Supabase Secrets
+4. Update the **Stripe Secret Key** (`STRIPE_SECRET_KEY`) and **Stripe Webhook Secret** (`STRIPE_WEBHOOK_SECRET`) in **Supabase Dashboard → Project Settings → Edge Functions → Secrets**. Also ensure `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are configured there for the Edge Functions.
 5. Create a new webhook endpoint for production
 
 ### Apple Sign In

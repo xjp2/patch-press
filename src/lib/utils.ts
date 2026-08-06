@@ -1,44 +1,32 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { optimizedImageMappings } from "../generated/optimized-images"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-/** Image map loaded from /cms/image-map.json — maps Supabase URLs to local CDN paths */
-let imageMap: Record<string, string> | null = null;
-
-export async function loadImageMap(): Promise<void> {
-  try {
-    const response = await fetch('/cms/image-map.json');
-    if (response.ok) {
-      imageMap = await response.json();
-    }
-  } catch {
-    // Image map not available — fall back to original URLs
-    imageMap = null;
-  }
-}
-
-/** Convert Supabase URLs to local CDN paths via image map */
+/**
+ * Return the original path, preferring a build-time optimized local image (WebP/AVIF)
+ * when one exists. Admin-uploaded images from Supabase Storage are returned as-is.
+ */
 export function fixImagePath(path?: string): string {
   if (!path) return '';
-  // If this URL is in the image map, use the local CDN path
-  if (imageMap && imageMap[path]) {
-    return imageMap[path];
-  }
-  return path;
+  // Prefer the build-time optimized image (WebP/AVIF) when one exists
+  return optimizedImageMappings[path] || path;
 }
 
 /**
- * Resize a Supabase Storage image via the image transformation API.
- * NOTE: Image transformations require enabling the feature in Supabase project settings.
- * Currently returns the original URL while lazy loading handles performance.
+ * Return the best available image URL.
+ * Currently applies the build-time optimization mapping. Supabase image
+ * transformations are disabled, so width/height are reserved for future use.
  */
 export function getResizedImageUrl(url: string | undefined, _width: number, _height?: number): string {
-  // Image transformations are not enabled on this Supabase project (returns 403).
-  // Return the original URL; performance is handled by loading="lazy" + decoding="async".
-  return url || '';
+  // Width/height are reserved for future responsive sizing; optimization is
+  // currently applied via the build-time image optimization manifest.
+  void _width;
+  void _height;
+  return fixImagePath(url);
 }
 
 export interface PlacementZone {

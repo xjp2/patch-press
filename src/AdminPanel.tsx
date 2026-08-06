@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useCurrency } from './context/CurrencyContext';
 import { db, storage, supabase, frontendProductToDb, frontendPatchToDb } from './lib/supabase';
-import { Settings, X, Plus, ShoppingCart, Palette, Layers, Camera, AlertCircle, Trash2, Layout, ChevronDown, ChevronUp, Eye, EyeOff, Facebook, Twitter, Loader2, ImageIcon, RefreshCw, Wand2, Sparkles, Crop, Beaker, PackagePlus } from 'lucide-react';
+import { Settings, X, Plus, ShoppingCart, Palette, Layers, Camera, AlertCircle, Trash2, Layout, ChevronDown, ChevronUp, Eye, EyeOff, Facebook, Twitter, Loader2, ImageIcon, RefreshCw, Wand2, Crop, PackagePlus } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { ImageTracer, type TracedZone } from './ImageTracer';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core';
@@ -9,9 +9,7 @@ import { arrayMove, SortableContext, verticalListSortingStrategy } from '@dnd-ki
 import { SortableSection } from './SortableSection';
 import { SortableItem } from './SortableItem';
 import { AdminOrderManagement } from './components/AdminOrderManagement';
-import { TestRunner } from './components/TestRunner';
 import { InventoryLogsViewer } from './components/InventoryLogsViewer';
-import { clearCmsCache } from './lib/cms';
 import { getResizedImageUrl } from './lib/utils';
 
 export interface Notice {
@@ -292,7 +290,7 @@ export const SECTION_META: Record<SectionType, { label: string; icon: string }> 
     transition: { label: 'Shape Transition', icon: '🌊' },
 };
 
-export type AdminTab = 'products' | 'patches' | 'orders' | 'inventory' | 'pages' | 'tests';
+export type AdminTab = 'products' | 'patches' | 'orders' | 'inventory' | 'pages';
 
 export interface AdminPanelProps {
     showAdmin: boolean;
@@ -306,11 +304,10 @@ export interface AdminPanelProps {
     siteContent: SiteContent;
     setSiteContent: (content: SiteContent) => void;
     onContentSaved?: () => Promise<boolean> | void;
-    usingStaticCms?: boolean;
     currentUser: { id: string; email: string; role: 'user' | 'admin'; name: string } | null;
 }
 
-export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, products, setProducts, patches, setPatches, siteContent, setSiteContent, onContentSaved, usingStaticCms = false, currentUser }: AdminPanelProps) {
+export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, products, setProducts, patches, setPatches, siteContent, setSiteContent, onContentSaved, currentUser }: AdminPanelProps) {
     const { formatPrice } = useCurrency();
     if (!showAdmin) return null;
     if (currentUser?.role !== 'admin') {
@@ -342,62 +339,12 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
     const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
     const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const productSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const patchSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // Ref to track latest siteContent for auto-save (avoids stale closure issues)
+    // Ref to track latest siteContent for manual saves (avoids stale closure issues)
     const siteContentRef = useRef(siteContent);
     useEffect(() => {
         siteContentRef.current = siteContent;
     }, [siteContent]);
-    
-    // Rebuild state
-    const [isRebuilding, setIsRebuilding] = useState(false);
-    const [rebuildStatus, setRebuildStatus] = useState<'idle' | 'success' | 'error'>('idle');
-    const [rebuildMessage, setRebuildMessage] = useState('');
-    
-
-
-    const handleRebuild = async () => {
-        if (isRebuilding) return;
-        
-        setIsRebuilding(true);
-        setRebuildStatus('idle');
-        setRebuildMessage('');
-        
-        try {
-            // Call the rebuild edge function
-            const { data, error } = await supabase.functions.invoke('rebuild-site', {
-                body: {}
-            });
-
-            if (error) {
-                throw error;
-            }
-
-            if (data.success) {
-                setRebuildStatus('success');
-                setRebuildMessage(data.message || 'Rebuild triggered successfully!');
-            } else {
-                throw new Error(data.error || 'Rebuild failed');
-            }
-        } catch (err: any) {
-            console.error('Rebuild error:', err);
-            setRebuildStatus('error');
-            
-            if (err.message?.includes('No deploy webhook configured')) {
-                setRebuildMessage('Deploy webhook not configured. Please set DEPLOY_WEBHOOK_URL in Supabase Edge Function secrets.');
-            } else {
-                setRebuildMessage(err.message || 'Failed to trigger rebuild');
-            }
-        } finally {
-            setIsRebuilding(false);
-            setTimeout(() => {
-                setRebuildStatus('idle');
-                setRebuildMessage('');
-            }, 5000);
-        }
-    }
 
     // Note: CDN export is now integrated into save functions
 
@@ -473,7 +420,7 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
         if (isSaving) return;
         setIsSaving(true);
         setSaveSuccess(null);
-        // Use ref to get latest state (avoids stale closure issues in auto-save)
+        // Use ref to get latest state (avoids stale closure issues on manual save)
         const content = siteContentRef.current;
         try {
             console.log('💾 handleSavePages saving navbar:', content.navbar);
@@ -487,8 +434,8 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
             if (error) throw error;
             console.log('✅ handleSavePages saved successfully');
             
-            // Only refresh data for manual saves, NOT auto-saves
-            // This prevents auto-save from overwriting user's ongoing edits
+            // Only refresh data for manual saves with feedback
+            // This prevents a save from overwriting user's ongoing edits
             if (showFeedback && onContentSaved) {
                 await onContentSaved();
             }
@@ -539,25 +486,18 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
         setSiteContent(newContent);
         siteContentRef.current = newContent;
         setHasUnsavedChanges(true);
-        // Auto-save after delay
-        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-        saveTimeoutRef.current = setTimeout(() => handleSavePages('pages', false), 2000);
     };
     const updateFooter = (patch: Partial<SiteContent['footer']>) => {
         const newContent = { ...siteContent, footer: { ...siteContent.footer, ...patch } };
         setSiteContent(newContent);
         siteContentRef.current = newContent;
         setHasUnsavedChanges(true);
-        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-        saveTimeoutRef.current = setTimeout(() => handleSavePages('pages', false), 2000);
     };
     const updateCustomizePage = (patch: Partial<CustomizePageContent>) => {
         const newContent = { ...siteContent, customizePage: { ...siteContent.customizePage, ...patch } };
         setSiteContent(newContent);
         siteContentRef.current = newContent;
         setHasUnsavedChanges(true);
-        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-        saveTimeoutRef.current = setTimeout(() => handleSavePages('pages', false), 2000);
     };
 
     const updateSectionContent = (sectionId: string, content: PageSection['content']) => {
@@ -573,14 +513,9 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
         // Update state
         const newContent = { ...siteContent, navbar: { ...siteContent.navbar, ...patch } };
         setSiteContent(newContent);
-        // Also update ref immediately for auto-save
+        // Also update ref immediately for manual save
         siteContentRef.current = newContent;
         setHasUnsavedChanges(true);
-        // Auto-save after delay
-        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-        saveTimeoutRef.current = setTimeout(() => {
-            handleSavePages('pages', false);
-        }, 2000);
     };
 
     const toggleSectionVisibility = (sectionId: string) => {
@@ -785,8 +720,6 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
         };
         const newProducts = [...products, product];
         setProducts(newProducts);
-        if (productSaveTimeoutRef.current) clearTimeout(productSaveTimeoutRef.current);
-        productSaveTimeoutRef.current = setTimeout(() => handleSaveProducts(newProducts, false), 800);
         // Reset forms
         setNewProductName(''); setNewProductPrice(''); setNewProductQuantity('10'); setNewProductFrontImage(''); setNewProductBackImage('');
         setTempZone({ x: 15, y: 25, width: 70, height: 60, type: 'rectangle' });
@@ -807,8 +740,6 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
         };
         const newPatches = [...patches, patch];
         setPatches(newPatches);
-        if (patchSaveTimeoutRef.current) clearTimeout(patchSaveTimeoutRef.current);
-        patchSaveTimeoutRef.current = setTimeout(() => handleSavePatches(newPatches, false), 800);
         setNewPatchName(''); setNewPatchPrice(''); setNewPatchQuantity('50'); setNewPatchImage('');
         setTempPatchZone({ x: 10, y: 10, width: 80, height: 80, type: 'rectangle' });
     };
@@ -822,8 +753,6 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
             }
             const newPatches = patches.filter(p => p.id !== id);
             setPatches(newPatches);
-            if (patchSaveTimeoutRef.current) clearTimeout(patchSaveTimeoutRef.current);
-            patchSaveTimeoutRef.current = setTimeout(() => handleSavePatches(newPatches, false), 800);
         }
     };
 
@@ -909,15 +838,11 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                         p.id === restockModal.id ? { ...p, quantity: newQuantity } : p
                     );
                     setProducts(newProducts);
-                    if (productSaveTimeoutRef.current) clearTimeout(productSaveTimeoutRef.current);
-                    productSaveTimeoutRef.current = setTimeout(() => handleSaveProducts(newProducts, false), 800);
                 } else {
                     const newPatches = patches.map(p => 
                         p.id === restockModal.id ? { ...p, quantity: newQuantity } : p
                     );
                     setPatches(newPatches);
-                    if (patchSaveTimeoutRef.current) clearTimeout(patchSaveTimeoutRef.current);
-                    patchSaveTimeoutRef.current = setTimeout(() => handleSavePatches(newPatches, false), 800);
                 }
                 setRestockModal(null);
                 setRestockAmount('');
@@ -957,64 +882,7 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                     {hasUnsavedChanges && (
                         <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-2 text-amber-700">
                             <AlertCircle className="w-5 h-5" />
-                            <span className="text-sm font-medium">You have unsaved changes. Click "Update Live Site" to save and deploy.</span>
-                        </div>
-                    )}
-
-                    {/* Rebuild Button - only show if usingStaticCms */}
-                    {usingStaticCms && (
-                        <div className="mb-6 flex items-center gap-3">
-                            <button
-                                onClick={handleRebuild}
-                                disabled={isRebuilding}
-                                className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all shadow-lg flex items-center gap-2 ${
-                                    rebuildStatus === 'success' 
-                                        ? 'bg-craft-mint text-white shadow-paper' 
-                                        : rebuildStatus === 'error'
-                                        ? 'bg-craft-pink text-white shadow-paper'
-                                        : 'bg-craft-mint text-white hover:bg-craft-mint/80 shadow-paper hover:shadow-xl hover:-translate-y-0.5'
-                                } ${isRebuilding ? 'opacity-70 cursor-not-allowed' : ''}`}
-                            >
-                                {isRebuilding ? (
-                                    <>
-                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                        Updating...
-                                    </>
-                                ) : rebuildStatus === 'success' ? (
-                                    <>
-                                        <Sparkles className="w-4 h-4" />
-                                        Updated!
-                                    </>
-                                ) : rebuildStatus === 'error' ? (
-                                    <>
-                                        <AlertCircle className="w-4 h-4" />
-                                        Failed
-                                    </>
-                                ) : (
-                                    <>
-                                        <RefreshCw className="w-4 h-4" />
-                                        Update Live Site
-                                    </>
-                                )}
-                            </button>
-                            {rebuildMessage && (
-                                <p className={`text-sm ${rebuildStatus === 'success' ? 'text-craft-mint' : 'text-craft-pink'}`}>
-                                    {rebuildMessage}
-                                </p>
-                            )}
-                            
-                            {/* Manual refresh button for admin's browser */}
-                            <button
-                                onClick={() => {
-                                    clearCmsCache();
-                                    window.location.reload();
-                                }}
-                                className="px-4 py-2 text-sm text-ink/60 hover:text-craft-mint hover:bg-craft-mint/10 rounded-lg transition-colors flex items-center gap-2"
-                                title="Force refresh this browser window to see latest changes"
-                            >
-                                <RefreshCw className="w-4 h-4" />
-                                Refresh My View
-                            </button>
+                            <span className="text-sm font-medium">You have unsaved changes. Click Save to publish.</span>
                         </div>
                     )}
 
@@ -1026,8 +894,6 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                             { id: 'orders', label: 'Orders', icon: Layers },
                             { id: 'inventory', label: 'Inventory', icon: RefreshCw },
                             { id: 'pages', label: 'Pages', icon: Layout },
-
-                            { id: 'tests', label: 'Tests', icon: Beaker }
                         ].map(tab => (
                             <button
                                 key={tab.id}
@@ -1050,16 +916,26 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                 <div className="flex justify-between items-center bg-craft-mint/5 p-4 rounded-2xl border border-craft-mint/10 mb-2">
                                     <div>
                                         <h2 className="font-heading text-xl font-bold text-ink">Products</h2>
-                                        <p className="text-xs text-ink-muted font-medium">Add or edit base products — changes auto-save</p>
+                                        <p className="text-xs text-ink-muted font-medium">Add or edit base products — click Save to publish</p>
                                     </div>
-                                    {isSaving && (
-                                        <span className="text-xs text-ink-muted flex items-center gap-1">
-                                            <Loader2 className="w-3 h-3 animate-spin" /> Saving...
-                                        </span>
-                                    )}
-                                    {saveSuccess === 'products' && !isSaving && (
-                                        <span className="text-xs text-craft-mint font-medium">✅ Saved</span>
-                                    )}
+                                    <div className="flex items-center gap-3">
+                                        <button
+                                            onClick={() => handleSaveProducts()}
+                                            disabled={isSaving}
+                                            className={`px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm ${saveSuccess === 'products' ? 'bg-craft-mint text-white' : 'bg-craft-mint text-white hover:bg-craft-mint/90'} ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        >
+                                            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : saveSuccess === 'products' ? null : <ShoppingCart className="w-4 h-4" />}
+                                            {saveSuccess === 'products' ? '✅ Saved' : '☁️ Save Products'}
+                                        </button>
+                                        {isSaving && (
+                                            <span className="text-xs text-ink-muted flex items-center gap-1">
+                                                <Loader2 className="w-3 h-3 animate-spin" /> Saving...
+                                            </span>
+                                        )}
+                                        {saveSuccess === 'products' && !isSaving && (
+                                            <span className="text-xs text-craft-mint font-medium">✅ Saved</span>
+                                        )}
+                                    </div>
                                 </div>
 
                                 {/* Context7 Best Practice: Section heading with proper spacing */}
@@ -1169,8 +1045,6 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                                             if (error) alert('Failed to delete product: ' + error.message);
                                                             const newProducts = products.filter(p => p.id !== product.id);
                                                             setProducts(newProducts);
-                                                            if (productSaveTimeoutRef.current) clearTimeout(productSaveTimeoutRef.current);
-                                                            productSaveTimeoutRef.current = setTimeout(() => handleSaveProducts(newProducts, false), 800);
                                                         }
                                                     }} className="p-1 bg-cardstock rounded shadow text-craft-pink hover:text-red-700 hover:scale-110" title="Delete Product"><Trash2 className="w-4 h-4" /></button>
                                                 </div>
@@ -1191,16 +1065,26 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                 <div className="flex justify-between items-center bg-craft-mint/5 p-4 rounded-2xl border border-craft-mint/10 mb-2">
                                     <div>
                                         <h2 className="font-heading text-xl font-bold text-ink">Patches</h2>
-                                        <p className="text-xs text-ink-muted font-medium">Manage custom patches — changes auto-save</p>
+                                        <p className="text-xs text-ink-muted font-medium">Manage custom patches — click Save to publish</p>
                                     </div>
-                                    {isSaving && (
-                                        <span className="text-xs text-ink-muted flex items-center gap-1">
-                                            <Loader2 className="w-3 h-3 animate-spin" /> Saving...
-                                        </span>
-                                    )}
-                                    {saveSuccess === 'patches' && !isSaving && (
-                                        <span className="text-xs text-craft-mint font-medium">✅ Saved</span>
-                                    )}
+                                    <div className="flex items-center gap-3">
+                                        <button
+                                            onClick={() => handleSavePatches()}
+                                            disabled={isSaving}
+                                            className={`px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm ${saveSuccess === 'patches' ? 'bg-craft-mint text-white' : 'bg-craft-mint text-white hover:bg-craft-mint/90'} ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                        >
+                                            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : saveSuccess === 'patches' ? null : <Palette className="w-4 h-4" />}
+                                            {saveSuccess === 'patches' ? '✅ Saved' : '☁️ Save Patches'}
+                                        </button>
+                                        {isSaving && (
+                                            <span className="text-xs text-ink-muted flex items-center gap-1">
+                                                <Loader2 className="w-3 h-3 animate-spin" /> Saving...
+                                            </span>
+                                        )}
+                                        {saveSuccess === 'patches' && !isSaving && (
+                                            <span className="text-xs text-craft-mint font-medium">✅ Saved</span>
+                                        )}
+                                    </div>
                                 </div>
                                 <h2 className="font-heading text-xl font-bold">Add New Patch</h2>
                                 <div className="grid gap-4">
@@ -1303,10 +1187,6 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                             </div>
                         )}
 
-                        {adminTab === 'tests' && (
-                            <TestRunner />
-                        )}
-
                         {/* ───── Pages CMS Tab ───── */}
                         {adminTab === 'pages' && (
                             <div className="space-y-4">
@@ -1319,20 +1199,14 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                             </button>
                                         ))}
                                     </div>
-                                    {!usingStaticCms ? (
-                                        <button
-                                            onClick={() => handleSavePages('pages')}
-                                            disabled={isSaving}
-                                            className={`px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm ${saveSuccess === 'pages' ? 'bg-craft-mint text-white' : 'bg-craft-mint text-white hover:bg-craft-mint/90'} ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                        >
-                                            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : saveSuccess === 'pages' ? null : <Layout className="w-4 h-4" />}
-                                            {saveSuccess === 'pages' ? '✅ Saved' : '☁️ Save Site Changes'}
-                                        </button>
-                                    ) : (
-                                        <div className="text-xs text-ink/40 bg-cardstock px-3 py-1.5 rounded-lg border border-craft-mint/10">
-                                            Changes saved automatically
-                                        </div>
-                                    )}
+                                    <button
+                                        onClick={() => handleSavePages('pages')}
+                                        disabled={isSaving}
+                                        className={`px-6 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-sm ${saveSuccess === 'pages' ? 'bg-craft-mint text-white' : 'bg-craft-mint text-white hover:bg-craft-mint/90'} ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    >
+                                        {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : saveSuccess === 'pages' ? null : <Layout className="w-4 h-4" />}
+                                        {saveSuccess === 'pages' ? '✅ Saved' : '☁️ Save Site Changes'}
+                                    </button>
                                 </div>
 
                                 {/* ─── Landing Page Builder ─── */}
@@ -2239,8 +2113,6 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                         if (editingProductId) {
                             const newProducts = products.map(p => p.id === editingProductId ? { ...p, placementZone: zone } : p);
                             setProducts(newProducts);
-                            if (productSaveTimeoutRef.current) clearTimeout(productSaveTimeoutRef.current);
-                            productSaveTimeoutRef.current = setTimeout(() => handleSaveProducts(newProducts, false), 800);
                         } else {
                             setTempZone(zone);
                         }
@@ -2268,8 +2140,6 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                         if (editingProductForCrop) {
                             const newProducts = products.map(p => p.id === editingProductForCrop ? { ...p, cropZone: zone } : p);
                             setProducts(newProducts);
-                            if (productSaveTimeoutRef.current) clearTimeout(productSaveTimeoutRef.current);
-                            productSaveTimeoutRef.current = setTimeout(() => handleSaveProducts(newProducts, false), 800);
                         }
                         setShowCropEditor(false);
                         setEditingProductForCrop(null);
@@ -2295,8 +2165,6 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                         if (editingPatchId) {
                             const newPatches = patches.map(p => p.id === editingPatchId ? { ...p, contentZone: zone } : p);
                             setPatches(newPatches);
-                            if (patchSaveTimeoutRef.current) clearTimeout(patchSaveTimeoutRef.current);
-                            patchSaveTimeoutRef.current = setTimeout(() => handleSavePatches(newPatches, false), 800);
                         } else {
                             setTempPatchZone(zone);
                         }

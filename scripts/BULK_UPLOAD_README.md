@@ -96,17 +96,13 @@ ls input/products/ | wc -l    # Should show ~1000 files (500 products × 2 sides
 - Products created in database
 
 ### Update Static CMS
+After bulk upload, trigger a Vercel deploy so the build fetches fresh CMS data from Supabase:
+
 ```bash
-# Export to static files
-npm run export-cms
-
-# Commit and deploy
-git add public/cms/
-git commit -m "Add 500 new products"
-git push origin main
-
-# Or click "Rebuild Site" in Admin Panel
+npm run export-and-deploy
 ```
+
+Or click **“Update Live Site”** in the admin panel.
 
 ## 🎨 Background Removal Quality
 

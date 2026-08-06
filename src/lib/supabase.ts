@@ -345,45 +345,70 @@ export const db = {
     }>) => {
       console.log('DB: Checking inventory availability...', items.length);
       const insufficient: Array<{ id: string; name: string; requested: number; available: number; type: 'product' | 'patch' }> = [];
-      
+
+      if (items.length === 0) return { insufficient, available: true };
+
+      const productIds = [...new Set(items.map(i => i.productId))];
+      const { data: products, error: productsError } = await supabase
+        .from('products')
+        .select('id, name, quantity')
+        .in('id', productIds);
+
+      if (productsError) {
+        console.error('DB Error (inventory.checkAvailability products):', productsError);
+        return { insufficient, available: false };
+      }
+
+      const productMap = new Map((products || []).map(p => [p.id, p]));
+
+      // Aggregate patch counts across all cart items
+      const patchCounts: Record<string, number> = {};
       for (const item of items) {
-        // Check product quantity
-        const { data: product, error: productError } = await supabase
-          .from('products')
+        for (const patchId of item.patchIds || []) {
+          patchCounts[patchId] = (patchCounts[patchId] || 0) + (item.quantity || 1);
+        }
+      }
+
+      const patchIds = Object.keys(patchCounts);
+      const patchMap = new Map<string, any>();
+      if (patchIds.length > 0) {
+        const { data: patches, error: patchesError } = await supabase
+          .from('patches')
           .select('id, name, quantity')
-          .eq('id', item.productId)
-          .single();
-        
-        if (productError || !product) {
+          .in('id', patchIds);
+
+        if (patchesError) {
+          console.error('DB Error (inventory.checkAvailability patches):', patchesError);
+          return { insufficient, available: false };
+        }
+
+        for (const patch of patches || []) {
+          patchMap.set(patch.id, patch);
+        }
+      }
+
+      for (const item of items) {
+        const product = productMap.get(item.productId);
+        if (!product) {
           insufficient.push({ id: item.productId, name: 'Unknown Product', requested: item.quantity || 1, available: 0, type: 'product' });
           continue;
         }
-        
         if ((product.quantity ?? 0) < (item.quantity || 1)) {
           insufficient.push({ id: product.id, name: product.name, requested: item.quantity || 1, available: product.quantity ?? 0, type: 'product' });
         }
-        
-        // Check patches quantities
-        if (item.patchIds && item.patchIds.length > 0) {
-          for (const patchId of item.patchIds) {
-            const { data: patch, error: patchError } = await supabase
-              .from('patches')
-              .select('id, name, quantity')
-              .eq('id', patchId)
-              .single();
-            
-            if (patchError || !patch) {
-              insufficient.push({ id: patchId, name: 'Unknown Patch', requested: 1, available: 0, type: 'patch' });
-              continue;
-            }
-            
-            if ((patch.quantity ?? 0) < 1) {
-              insufficient.push({ id: patch.id, name: patch.name, requested: 1, available: patch.quantity ?? 0, type: 'patch' });
-            }
-          }
+      }
+
+      for (const [patchId, requested] of Object.entries(patchCounts)) {
+        const patch = patchMap.get(patchId);
+        if (!patch) {
+          insufficient.push({ id: patchId, name: 'Unknown Patch', requested, available: 0, type: 'patch' });
+          continue;
+        }
+        if ((patch.quantity ?? 0) < requested) {
+          insufficient.push({ id: patch.id, name: patch.name, requested, available: patch.quantity ?? 0, type: 'patch' });
         }
       }
-      
+
       return { insufficient, available: insufficient.length === 0 };
     },
 
@@ -397,88 +422,21 @@ export const db = {
       quantity?: number;
     }>, orderId?: string) => {
       console.log('DB: Deducting inventory from order...', orderItems.length);
-      const errors: string[] = [];
-      
-      for (const item of orderItems) {
-        // Deduct product quantity
-        const { data: product } = await supabase
-          .from('products')
-          .select('id, quantity, name')
-          .eq('id', item.productId)
-          .single();
-        
-        if (product) {
-          const previousQuantity = product.quantity ?? 0;
-          const newQuantity = Math.max(0, previousQuantity - (item.quantity || 1));
-          
-          const { error } = await supabase
-            .from('products')
-            .update({ quantity: newQuantity, updated_at: new Date().toISOString() })
-            .eq('id', item.productId);
-          
-          if (error) {
-            console.error(`Failed to deduct product ${product.name}:`, error);
-            errors.push(`Failed to update product: ${product.name}`);
-          } else {
-            // Log the inventory change
-            await supabase.from('inventory_logs').insert({
-              product_id: item.productId,
-              item_type: 'product',
-              change_amount: -(item.quantity || 1),
-              previous_quantity: previousQuantity,
-              new_quantity: newQuantity,
-              reason: orderId ? `Order ${orderId}` : 'Order deduction',
-              order_id: orderId,
-            });
-          }
-        }
-        
-        // Deduct patch quantities - group by patch ID to avoid duplicate log entries
-        if (item.patchIds && item.patchIds.length > 0) {
-          // Count occurrences of each patch ID
-          const patchCounts = item.patchIds.reduce((acc, patchId) => {
-            acc[patchId] = (acc[patchId] || 0) + 1;
-            return acc;
-          }, {} as Record<string, number>);
-          
-          // Process each unique patch with its total count
-          for (const [patchId, count] of Object.entries(patchCounts)) {
-            const { data: patch } = await supabase
-              .from('patches')
-              .select('id, quantity, name')
-              .eq('id', patchId)
-              .single();
-            
-            if (patch) {
-              const previousQuantity = patch.quantity ?? 0;
-              const newQuantity = Math.max(0, previousQuantity - count);
-              
-              const { error } = await supabase
-                .from('patches')
-                .update({ quantity: newQuantity, updated_at: new Date().toISOString() })
-                .eq('id', patchId);
-              
-              if (error) {
-                console.error(`Failed to deduct patch ${patch.name}:`, error);
-                errors.push(`Failed to update patch: ${patch.name}`);
-              } else {
-                // Log the inventory change for patch (grouped)
-                await supabase.from('inventory_logs').insert({
-                  product_id: patchId,
-                  item_type: 'patch',
-                  change_amount: -count,
-                  previous_quantity: previousQuantity,
-                  new_quantity: newQuantity,
-                  reason: orderId ? `Order ${orderId} - ${count > 1 ? `${count}x ` : ''}Patch used` : `Order patch deduction (${count})`,
-                  order_id: orderId,
-                });
-              }
-            }
-          }
-        }
+      const orderItemsJson = orderItems.map(item => {
+        const patchCounts: Record<string, number> = {};
+        (item.patchIds || []).forEach(pid => { patchCounts[pid] = (patchCounts[pid] || 0) + 1; });
+        return {
+          productId: item.productId,
+          quantity: item.quantity || 1,
+          patchCounts,
+        };
+      });
+      const { data, error } = await supabase.rpc('deduct_inventory_for_order', { order_items: orderItemsJson, order_id: orderId });
+      if (error) {
+        console.error('DB Error (inventory.deductFromOrder):', error);
+        return { success: false, errors: [error.message] };
       }
-      
-      return { success: errors.length === 0, errors };
+      return { success: data?.success ?? false, errors: data?.errors || [] };
     },
 
     /**

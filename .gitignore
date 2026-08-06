@@ -46,3 +46,15 @@ coverage
 
 # Supabase
 .supabase
+
+# Generated optimized image variants (recreated by npm run optimize-images)
+public/**/*.webp
+public/**/*.avif
+
+# Generated CMS and SEO files (recreated during build by export-cms / build-sitemap)
+public/cms/
+public/robots.txt
+public/sitemap.xml
+
+# Playwright MCP temporary directory
+.playwright-mcp/

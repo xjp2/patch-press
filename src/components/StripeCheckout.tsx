@@ -13,9 +13,13 @@ import {
 import { Loader2, AlertCircle, CheckCircle, ShieldCheck } from 'lucide-react';
 import supabase from '../lib/supabase';
 import { useCurrency } from '../context/CurrencyContext';
+import { useAnalytics } from '../hooks/useAnalytics';
 
 // Initialize Stripe
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '');
+
+// Zero-decimal currencies where Stripe uses whole units instead of cents
+const isZeroDecimalCurrency = (currency: string) => ['jpy', 'krw'].includes(currency.toLowerCase());
 
 // Track in-flight PaymentIntent requests to prevent duplicates (React Strict Mode)
 const pendingRequests = new Set<string>();
@@ -23,16 +27,15 @@ const pendingRequests = new Set<string>();
 interface CheckoutFormProps {
   amount: number;
   customerEmail?: string;
-  userId?: string;
-  cartItems: any[];
+  orderNumber: string | null;
   paymentIntentId?: string | null;
   onSuccess: (orderData?: { orderId: string; orderNumber: string }) => void;
   onError: (error: string) => void;
 }
 
 // Checkout Form with PaymentElement and AddressElement
-function CheckoutForm({ amount, customerEmail, userId, cartItems, paymentIntentId, onSuccess, onError }: CheckoutFormProps) {
-  const { currency, formatPrice, convertPrice } = useCurrency();
+function CheckoutForm({ amount, customerEmail, orderNumber, paymentIntentId, onSuccess, onError }: CheckoutFormProps) {
+  const { formatPrice } = useCurrency();
   const stripe = useStripe();
   const elements = useElements();
   const [isProcessing, setIsProcessing] = useState(false);
@@ -103,140 +106,9 @@ function CheckoutForm({ amount, customerEmail, userId, cartItems, paymentIntentI
       } else if (paymentIntent) {
         // Payment succeeded or requires additional action
         if (paymentIntent.status === 'succeeded' || paymentIntent.status === 'processing') {
-          // Create order in database immediately
-          try {
-            const { db } = await import('../lib/supabase');
-            
-            // Get shipping address from AddressElement
-            const addressElement = elements.getElement(AddressElement);
-            let shippingAddress = null;
-            let customerName = '';
-            
-            if (addressElement) {
-              const { value } = await addressElement.getValue();
-              if (value) {
-                shippingAddress = {
-                  name: value.name || '',
-                  address_line1: value.address.line1,
-                  address_line2: value.address.line2,
-                  city: value.address.city,
-                  state: value.address.state,
-                  postal_code: value.address.postal_code,
-                  country: value.address.country,
-                };
-                customerName = value.name || '';
-              }
-            }
-            
-            // Format order items with FULL patch placement data
-            // Convert all prices from base currency to target currency
-            const orderItems = cartItems.map(item => ({
-              name: item.productName,
-              qty: item.quantity,
-              price: convertPrice(item.totalPrice),
-              basePrice: convertPrice(item.basePrice),
-              patches: [...(item.frontPatches || []), ...(item.backPatches || [])].map((p: any) => p.name),
-              productImage: item.productImage,
-              productBackImage: item.productBackImage,
-              placementZone: item.placementZone,
-              productWidth: item.width,
-              productHeight: item.height,
-              // Full patch data for production mode
-              frontPatches: (item.frontPatches || []).map((p: any) => ({
-                id: p.id,
-                name: p.name,
-                image: p.image,
-                price: convertPrice(p.price),
-                x: p.x,
-                y: p.y,
-                rotation: p.rotation,
-                widthPercent: p.widthPercent,
-                heightPercent: p.heightPercent,
-                contentZone: p.contentZone,
-              })),
-              backPatches: (item.backPatches || []).map((p: any) => ({
-                id: p.id,
-                name: p.name,
-                image: p.image,
-                price: convertPrice(p.price),
-                x: p.x,
-                y: p.y,
-                rotation: p.rotation,
-                widthPercent: p.widthPercent,
-                heightPercent: p.heightPercent,
-                contentZone: p.contentZone,
-              })),
-            }));
-            
-            // Generate order number
-            const orderNumber = `ORD-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 5).toUpperCase()}`;
-            
-            // Create order
-            const { data: order, error: orderError } = await db.orders.create({
-              order_number: orderNumber,
-              payment_intent_id: paymentIntent.id,
-              customer_email: customerEmail || 'guest@example.com',
-              customer_name: customerName,
-              items: orderItems,
-              total_amount: convertPrice(amount),
-              currency: currency,
-              shipping_address: shippingAddress,
-              shipping_country: shippingAddress?.country || '',
-              user_id: userId,
-            });
-            
-            if (orderError) {
-              // Check if order already exists (created by webhook)
-              if (orderError.code === '23505') {
-                console.log('Order already exists (likely created by webhook), fetching existing order...');
-                // Try to fetch the existing order by payment_intent_id
-                const { data: existingOrders } = await supabase
-                  .from('orders')
-                  .select('id, order_number')
-                  .eq('payment_intent_id', paymentIntent.id)
-                  .single();
-                
-                if (existingOrders) {
-                  console.log('Found existing order:', existingOrders.order_number);
-                  onSuccess({ orderId: existingOrders.id, orderNumber: existingOrders.order_number });
-                } else {
-                  // Webhook created it but we can't find it - use generated number
-                  onSuccess({ orderId: '', orderNumber: orderNumber });
-                }
-              } else {
-                console.error('Failed to create order:', orderError);
-                onSuccess();
-              }
-            } else {
-              console.log('Order created:', order.id, 'Order #:', order.order_number);
-              
-              // Deduct inventory after successful order creation
-              try {
-                const inventoryItems = cartItems.map(item => ({
-                  productId: item.productId,
-                  patchIds: [...(item.frontPatches || []), ...(item.backPatches || [])].map((p: any) => p.id),
-                  quantity: item.quantity,
-                }));
-                
-                const { success: inventorySuccess, errors: inventoryErrors } = await db.inventory.deductFromOrder(inventoryItems, order.id);
-                if (!inventorySuccess) {
-                  console.warn('Inventory deduction had errors:', inventoryErrors);
-                  // Continue anyway - order is already created
-                } else {
-                  console.log('Inventory deducted and logged successfully');
-                }
-              } catch (inventoryErr) {
-                console.error('Error deducting inventory:', inventoryErr);
-                // Continue anyway - order is already created
-              }
-              
-              onSuccess({ orderId: order.id, orderNumber: order.order_number });
-            }
-          } catch (err) {
-            console.error('Error creating order:', err);
-            // Still call onSuccess - webhook will create order as backup
-            onSuccess();
-          }
+          // The order is created asynchronously by the Stripe webhook. We only show the
+          // order number that was generated when the PaymentIntent was created.
+          onSuccess({ orderId: '', orderNumber: orderNumber || '' });
         } else {
           const errorMsg = 'Payment could not be completed. Please try again.';
           setPaymentError(errorMsg);
@@ -365,10 +237,9 @@ function CheckoutForm({ amount, customerEmail, userId, cartItems, paymentIntentI
 
 // Generate idempotency key from ALL parameters that affect the PaymentIntent.
 // Stripe rejects if the same key is ever used with different parameters,
-// so we must hash EVERYTHING: cart, amount, currency, user_id, email.
+// so we must hash EVERYTHING: cart, currency, user_id, email.
 function generateIdempotencyKey(
   cartItems: any[],
-  stripeAmount: number,
   currency: string,
   userId: string = '',
   customerEmail: string = ''
@@ -377,7 +248,7 @@ function generateIdempotencyKey(
     .map(item => `${item.productId}-${item.quantity}-${item.totalPrice}`)
     .sort()
     .join('|');
-  const raw = `${stripeAmount}|${currency}|${userId || 'guest'}|${customerEmail || ''}|${cartHash}`;
+  const raw = `${currency}|${userId || 'guest'}|${customerEmail || ''}|${cartHash}`;
   return `pp-${hashString(raw)}`;
 }
 
@@ -392,6 +263,11 @@ function hashString(str: string): string {
   return Math.abs(hash).toString(36);
 }
 
+function getStorageKey(userId: string, cartItems: any[]): string {
+  const cartHash = hashString(cartItems.map(i => i.productId).sort().join(','));
+  return `stripe_pi_${userId}_${cartHash}`;
+}
+
 // Main Checkout Component
 interface StripeCheckoutProps {
   amount: number;
@@ -404,17 +280,29 @@ interface StripeCheckoutProps {
 
 export function StripeCheckout({ 
   amount, 
-  userId,
+  userId: _userId,
   customerEmail,
   cartItems = [],
   onSuccess, 
   onError 
 }: StripeCheckoutProps) {
-  const { currency, toStripeAmount } = useCurrency();
+  const { currency, convertPrice } = useCurrency();
+  const { trackBeginCheckout, trackPurchase } = useAnalytics();
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
+  const [paymentTotal, setPaymentTotal] = useState<number | null>(null);
+  const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
+  const [orderNumber, setOrderNumber] = useState<string | null>(null);
+  const beginCheckoutSent = useRef(false);
+
+  // Satisfy noUnusedLocals while keeping the pending order id available for debugging
+  useEffect(() => {
+    if (pendingOrderId) {
+      console.log('Pending order id:', pendingOrderId);
+    }
+  }, [pendingOrderId]);
 
   // Create PaymentIntent with duplicate prevention
   useEffect(() => {
@@ -438,23 +326,27 @@ export function StripeCheckout({
         const actualUserId = session.user.id;
         
         // Check sessionStorage for existing PaymentIntent (prevents duplicates on remount)
-        // Use consistent key format: stripe_pi_{userId}_{cartHash}
-        const cartHash = hashString(cartItems.map(i => i.productId).sort().join(','));
-        const storageKey = `stripe_pi_${actualUserId}_${cartHash}`;
+        const storageKey = getStorageKey(actualUserId, cartItems);
+        const expectedStripeAmount = isZeroDecimalCurrency(currency)
+          ? Math.round(convertPrice(amount))
+          : Math.round(convertPrice(amount) * 100);
         const existingPI = sessionStorage.getItem(storageKey);
         
         if (existingPI) {
           try {
             const parsed = JSON.parse(existingPI);
-            // Check if it's less than 30 minutes old and same amount
+            // Check if it's less than 30 minutes old and same Stripe amount
             const isRecent = (Date.now() - parsed.timestamp) < 30 * 60 * 1000;
-            const sameAmount = parsed.amount === amount;
+            const sameAmount = parsed.amount === expectedStripeAmount;
             
             if (isRecent && sameAmount && parsed.clientSecret) {
               console.log('Reusing PaymentIntent from sessionStorage:', parsed.paymentIntentId);
               if (!isCancelled) {
                 setClientSecret(parsed.clientSecret);
                 setPaymentIntentId(parsed.paymentIntentId);
+                setPaymentTotal(parsed.paymentTotal ?? null);
+                setPendingOrderId(parsed.pendingOrderId ?? null);
+                setOrderNumber(parsed.orderNumber ?? null);
                 setIsLoading(false);
               }
               return;
@@ -466,16 +358,15 @@ export function StripeCheckout({
         }
         
         // Generate idempotency key that changes if ANY parameter changes
-        const stripeAmount = toStripeAmount(amount);
         const idempotencyKey = generateIdempotencyKey(
           cartItems,
-          stripeAmount,
           currency,
           actualUserId,
           session.user.email || ''
         );
         
         // Prevent concurrent requests for same user+cart (React Strict Mode double-mount)
+        const cartHash = hashString(cartItems.map(i => i.productId).sort().join(','));
         requestKey = `${actualUserId}:${cartHash}`;
         if (pendingRequests.has(requestKey)) {
           console.log('PaymentIntent request already in flight, waiting...');
@@ -491,6 +382,9 @@ export function StripeCheckout({
               if (!isCancelled) {
                 setClientSecret(parsed.clientSecret);
                 setPaymentIntentId(parsed.paymentIntentId);
+                setPaymentTotal(parsed.paymentTotal ?? null);
+                setPendingOrderId(parsed.pendingOrderId ?? null);
+                setOrderNumber(parsed.orderNumber ?? null);
                 setIsLoading(false);
               }
               return;
@@ -514,9 +408,21 @@ export function StripeCheckout({
               'Authorization': `Bearer ${session.access_token}`,
             },
             body: JSON.stringify({
-              amount: toStripeAmount(amount),
+              cartItems: cartItems.map(item => ({
+                productId: item.productId,
+                productName: item.productName,
+                quantity: item.quantity || 1,
+                basePrice: item.basePrice,
+                totalPrice: item.totalPrice,
+                productImage: item.productImage,
+                productBackImage: item.productBackImage,
+                placementZone: item.placementZone,
+                width: item.width,
+                height: item.height,
+                frontPatches: item.frontPatches || [],
+                backPatches: item.backPatches || [],
+              })),
               currency,
-              user_id: actualUserId,  // Use actual user ID from session
               customer_email: session.user.email,
               idempotency_key: idempotencyKey,
             }),
@@ -543,7 +449,10 @@ export function StripeCheckout({
           sessionStorage.setItem(storageKey, JSON.stringify({
             clientSecret: data.clientSecret,
             paymentIntentId: data.paymentIntentId,
-            amount: data.amount,
+            pendingOrderId: data.pendingOrderId,
+            orderNumber: data.orderNumber,
+            amount: data.stripeAmount,
+            paymentTotal: data.amount,
             timestamp: Date.now(),
           }));
         }
@@ -551,6 +460,9 @@ export function StripeCheckout({
         if (!isCancelled) {
           setClientSecret(data.clientSecret);
           setPaymentIntentId(data.paymentIntentId);
+          setPaymentTotal(data.amount ?? null);
+          setPendingOrderId(data.pendingOrderId ?? null);
+          setOrderNumber(data.orderNumber ?? null);
         }
       } catch (err: any) {
         console.error('Payment intent error:', err);
@@ -582,18 +494,45 @@ export function StripeCheckout({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Track begin_checkout once when the checkout form is ready to display
+  useEffect(() => {
+    if (!clientSecret || beginCheckoutSent.current) return;
+    beginCheckoutSent.current = true;
+
+    const analyticsItems = cartItems.map((item) => ({
+      id: item.productId,
+      name: item.productName,
+      price: item.totalPrice,
+      quantity: item.quantity || 1,
+      currency,
+    }));
+    trackBeginCheckout(analyticsItems, paymentTotal ?? amount, currency);
+  }, [clientSecret, cartItems, amount, paymentTotal, currency, trackBeginCheckout]);
   
-  // Clear sessionStorage on successful payment
+  // Clear sessionStorage on successful payment and track purchase
   const handleSuccess = async (orderData?: { orderId: string; orderNumber: string }) => {
     // Get actual user ID from session (not prop)
     const { data: sessionData } = await supabase.auth.getSession();
     const actualUserId = sessionData.session?.user?.id;
     
     if (actualUserId && cartItems.length > 0) {
-      const cartHash = hashString(cartItems.map(i => i.productId).sort().join(','));
-      const storageKey = `stripe_pi_${actualUserId}_${cartHash}`;
+      const storageKey = getStorageKey(actualUserId, cartItems);
       sessionStorage.removeItem(storageKey);
     }
+
+    // Track purchase for analytics
+    if (orderData?.orderNumber) {
+      const analyticsItems = cartItems.map((item) => ({
+        id: item.productId,
+        name: item.productName,
+        price: item.totalPrice,
+        quantity: item.quantity || 1,
+        currency,
+      }));
+      trackPurchase(orderData.orderNumber, analyticsItems, paymentTotal ?? amount, currency);
+    }
+
     onSuccess(orderData);
   };
 
@@ -641,10 +580,9 @@ export function StripeCheckout({
       }}
     >
       <CheckoutForm
-        amount={amount}
+        amount={paymentTotal ?? amount}
         customerEmail={customerEmail}
-        userId={userId}
-        cartItems={cartItems}
+        orderNumber={orderNumber}
         paymentIntentId={paymentIntentId}
         onSuccess={handleSuccess}
         onError={onError}

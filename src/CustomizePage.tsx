@@ -823,6 +823,7 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                                                     : 'none'
                                                             }}
                                                             draggable={false}
+                                                            decoding="async"
                                                             onMouseDown={(e) => startDragPatch(e, patch.uniqueId)}
                                                             onTouchStart={(e) => startDragPatch(e, patch.uniqueId)}
                                                             onClick={(e) => { e.stopPropagation(); setSelectedPatchId(patch.uniqueId); }}
@@ -1013,13 +1014,13 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                             const s = getClipAndCenter(selectedProduct.placementZone);
                                             return (
                                                 <div className="relative mx-auto" style={{ maxWidth: 260, transform: s.transform }}>
-                                                    <img src={fixImagePath(selectedProduct.frontImage)} alt={`${selectedProduct.name} Front`} className="w-full object-contain" style={{ clipPath: s.clipPath }} />
+                                                    <img src={fixImagePath(selectedProduct.frontImage)} alt={`${selectedProduct.name} Front`} className="w-full object-contain" loading="lazy" decoding="async" style={{ clipPath: s.clipPath }} />
                                                     {frontPatches.map((patch) => {
                                                         const cz = patch.contentZone || { x: 0, y: 0, width: 100, height: 100 };
                                                         const cx = cz.x + cz.width / 2;
                                                         const cy = cz.y + cz.height / 2;
                                                         return (
-                                                            <img key={patch.uniqueId} src={fixImagePath(patch.image)} alt={patch.name} className="absolute object-contain" style={{
+                                                            <img key={patch.uniqueId} src={fixImagePath(patch.image)} alt={patch.name} className="absolute object-contain" loading="lazy" decoding="async" style={{
                                                                 left: `${patch.x}%`, top: `${patch.y}%`, width: `${patch.widthPercent}%`, height: `${patch.heightPercent}%`,
                                                                 transform: `rotate(${patch.rotation}deg)`,
                                                                 transformOrigin: `${cx}% ${cy}%`,
@@ -1044,13 +1045,13 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                             const s = getClipAndCenter(selectedProduct.placementZone);
                                             return (
                                                 <div className="relative mx-auto" style={{ maxWidth: 260, transform: s.transform }}>
-                                                    <img src={fixImagePath(selectedProduct.backImage)} alt={`${selectedProduct.name} Back`} className="w-full object-contain" style={{ clipPath: s.clipPath }} />
+                                                    <img src={fixImagePath(selectedProduct.backImage)} alt={`${selectedProduct.name} Back`} className="w-full object-contain" loading="lazy" decoding="async" style={{ clipPath: s.clipPath }} />
                                                     {backPatches.map((patch) => {
                                                         const cz = patch.contentZone || { x: 0, y: 0, width: 100, height: 100 };
                                                         const cx = cz.x + cz.width / 2;
                                                         const cy = cz.y + cz.height / 2;
                                                         return (
-                                                            <img key={patch.uniqueId} src={fixImagePath(patch.image)} alt={patch.name} className="absolute object-contain" style={{
+                                                            <img key={patch.uniqueId} src={fixImagePath(patch.image)} alt={patch.name} className="absolute object-contain" loading="lazy" decoding="async" style={{
                                                                 left: `${patch.x}%`, top: `${patch.y}%`, width: `${patch.widthPercent}%`, height: `${patch.heightPercent}%`,
                                                                 transform: `rotate(${patch.rotation}deg)`,
                                                                 transformOrigin: `${cx}% ${cy}%`,

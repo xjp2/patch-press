@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { LogOut, Settings, User, ShoppingCart, X, Plus, Minus, Trash2, ChevronDown, ChevronUp, Package, Loader2, Menu } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import './App.css';
@@ -6,13 +6,17 @@ import { AuthModal } from './AuthModal';
 import type { UserType, AuthView } from './AuthModal';
 import { AdminPanel } from './AdminPanel';
 import { PatchuuLogo } from './components/PatchuuLogo';
+import { LoadingSkeleton } from './components/LoadingSkeleton';
+import { SeoHead } from './components/SeoHead';
+import { websiteJsonLd } from './lib/seo';
+import { useAnalytics } from './hooks/useAnalytics';
 import type { Product, Patch, SiteContent } from './AdminPanel';
 import { LandingPage } from './LandingPage';
 import { CustomizePage } from './CustomizePage';
 import { CartProvider, useCart } from './context/CartContext';
 import { CurrencyProvider, useCurrency } from './context/CurrencyContext';
 import supabase, { auth } from './lib/supabase';
-import { preloadCmsData, clearCmsCache, hasStaticCms } from './lib/cms';
+import { preloadCmsData, clearCmsCache } from './lib/cms';
 import type { Product as DbProduct, Patch as DbPatch } from './lib/cms';
 import { fixImagePath, getResizedImageUrl } from './lib/utils';
 import { CroppedThumbnail } from './components/CroppedThumbnail';
@@ -642,7 +646,6 @@ function UserOrdersModal({ show, onClose, userId, onViewOrder }: { show: boolean
 // Navbar Component
 interface NavbarProps {
   navbar: import('./AdminPanel').NavbarContent;
-  global: import('./AdminPanel').GlobalSettings;
   currentUser: UserType | null;
   isAuthLoading: boolean;
   totalItems: number;
@@ -656,7 +659,7 @@ interface NavbarProps {
   currency: string;
 }
 
-function Navbar({ navbar, global: _global, currentUser, isAuthLoading, totalItems, onCartClick, onAdminClick, onUserOrdersClick, onAuthClick, onLogout, onHomeClick }: NavbarProps) {
+function Navbar({ navbar, currentUser, isAuthLoading, totalItems, onCartClick, onAdminClick, onUserOrdersClick, onAuthClick, onLogout, onHomeClick }: NavbarProps) {
   const { currency, setCurrency } = useCurrency();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -957,7 +960,9 @@ function AppContent() {
   const [patches, setPatches] = useState<Patch[]>(initialPatches);
 
   const { totalItems, setIsCartOpen } = useCart();
+  const { trackPageView } = useAnalytics();
 
+  const resolvedRoles = useRef<Map<string, 'user' | 'admin'>>(new Map());
   const [siteContent, setSiteContent] = useState<SiteContent>({
     landingPage: [
       {
@@ -1052,11 +1057,13 @@ function AppContent() {
   });
 
   // ============================================
-  // STATIC CMS DATA LOADING (Build-time exported)
-  // Fast, no DB hits, CDN-cached
+  // CMS DATA LOADING (Supabase DB -> Storage -> static JSON fallback)
+  // Products/patches/site content always load from Supabase DB first so
+  // customers never see stale or missing items. Storage and static JSON are
+  // only used as fallbacks. Admin-triggered refreshes bypass the in-memory cache.
   // ============================================
   const [isDataLoading, setIsDataLoading] = useState(true);
-  const [usingStaticCms, setUsingStaticCms] = useState(false);
+  const [dataLoadError, setDataLoadError] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -1072,17 +1079,9 @@ function AppContent() {
           }
         }, 5000);
 
-        // Check if we have static CMS files
-        const hasStatic = await hasStaticCms();
-        
-        if (mounted) {
-          setUsingStaticCms(hasStatic);
-        }
-
-        // Load all CMS data
-        // Always load from Supabase (forceRefresh=true) to see latest changes immediately
-        // This ensures admin panel changes appear on the live site without needing a rebuild
-        const { siteContent: sc, products: prods, patches: patcs } = await preloadCmsData(true);
+        // Load all CMS data. The cms loader queries Supabase DB first and only
+        // falls back to cached Storage/static files if the DB is unreachable.
+        const { siteContent: sc, products: prods, patches: patcs } = await preloadCmsData(false);
 
         if (!mounted) return;
 
@@ -1151,9 +1150,12 @@ function AppContent() {
           });
         }
 
-        console.log(`✅ CMS loaded: ${hasStatic ? 'static files' : 'Supabase (dev mode)'}`);
+        console.log('✅ CMS loaded from Supabase DB (or fallback)');
       } catch (err) {
         console.error('Failed to load CMS data:', err);
+        if (mounted) {
+          setDataLoadError(true);
+        }
       } finally {
         clearTimeout(timeoutId);
         if (mounted) {
@@ -1170,16 +1172,26 @@ function AppContent() {
     };
   }, []);
 
+  // Retry loading CMS data after a failure
+  const handleRetryLoad = useCallback(async () => {
+    setDataLoadError(false);
+    setIsDataLoading(true);
+    try {
+      await refreshCmsData();
+    } finally {
+      setIsDataLoading(false);
+    }
+  }, []);
+
   // Consolidate auth listener and session check
   useEffect(() => {
     let mounted = true;
 
     const handleUserAuthenticated = async (user: any, isInstant = false) => {
-      // Role should be in user_metadata from the updated signIn flow
-      // For existing sessions, try to get it from the database
-      let userRole = user.user_metadata?.role as 'user' | 'admin' | undefined;
+      // Re-use previously resolved role for this user to avoid DB calls on every token refresh
+      let userRole = resolvedRoles.current.get(user.id) || user.user_metadata?.role as 'user' | 'admin' | undefined;
       
-      // If no role in metadata (legacy sessions), fetch it once
+      // Only fetch profile from DB once per user (legacy sessions without role in metadata)
       if (!userRole) {
         try {
           const { data: profile } = await supabase
@@ -1195,9 +1207,13 @@ function AppContent() {
               data: { role: profile.role }
             });
           }
-        } catch (err) {
+        } catch {
           console.warn('App: Could not fetch role, defaulting to user');
         }
+      }
+      
+      if (userRole) {
+        resolvedRoles.current.set(user.id, userRole);
       }
       
       const baseUser = {
@@ -1423,6 +1439,51 @@ function AppContent() {
 
   const startCustomizing = () => { setCurrentView('customize'); };
 
+  // Track virtual page views since this is a single-page app without a router
+  useEffect(() => {
+    const pageTitle =
+      currentView === 'customize'
+        ? 'Design Your Creation'
+        : currentView === 'order-detail'
+        ? 'Order Details'
+        : currentView === 'admin'
+        ? 'Admin Panel'
+        : currentView === 'privacy'
+        ? 'Privacy Policy'
+        : currentView === 'terms'
+        ? 'Terms of Service'
+        : currentView === 'refund'
+        ? 'Refund Policy'
+        : currentView === 'shipping'
+        ? 'Shipping Policy'
+        : siteContent.global.logoText || 'Patch & Press';
+    trackPageView(pageTitle);
+  }, [currentView, siteContent.global.logoText, trackPageView]);
+
+  const pageSeo = {
+    title:
+      currentView === 'customize'
+        ? 'Design Your Creation'
+        : currentView === 'order-detail'
+        ? 'Order Details'
+        : currentView === 'admin'
+        ? 'Admin Panel'
+        : currentView === 'privacy'
+        ? 'Privacy Policy'
+        : currentView === 'terms'
+        ? 'Terms of Service'
+        : currentView === 'refund'
+        ? 'Refund Policy'
+        : currentView === 'shipping'
+        ? 'Shipping Policy'
+        : siteContent.global.logoText || 'Patch & Press',
+    description:
+      currentView === 'landing'
+        ? siteContent.footer?.tagline || undefined
+        : undefined,
+    noindex: currentView === 'admin' || currentView === 'order-detail',
+  };
+
   return (
     <div
       className="min-h-screen bg-paper font-body overflow-x-hidden"
@@ -1433,15 +1494,36 @@ function AppContent() {
         ['--font-body' as any]: `'${siteContent.global.bodyFont || 'Inter'}', 'Nunito', sans-serif`,
       }}
     >
+      <SeoHead
+        title={pageSeo.title}
+        description={pageSeo.description}
+        noindex={pageSeo.noindex}
+        canonical={typeof window !== 'undefined' ? window.location.href : undefined}
+        jsonLd={currentView === 'landing' ? websiteJsonLd() : undefined}
+      />
+
       {/* Context7 Best Practice: Skip link for keyboard accessibility */}
       <a href="#main-content" className="skip-link">
         Skip to main content
       </a>
+
+      {/* Non-blocking data-load error banner */}
+      {dataLoadError && (
+        <div className="fixed top-0 left-0 right-0 z-[70] bg-craft-rose/90 text-white px-4 py-2 text-sm flex items-center justify-center gap-3">
+          <span>We couldn't load the latest content. You're seeing a cached version.</span>
+          <button
+            onClick={handleRetryLoad}
+            disabled={isDataLoading}
+            className="font-semibold underline underline-offset-2 disabled:opacity-60"
+          >
+            {isDataLoading ? 'Retrying...' : 'Retry'}
+          </button>
+        </div>
+      )}
       
       {/* Customizable Navbar */}
       <Navbar 
         navbar={siteContent.navbar}
-        global={siteContent.global}
         currentUser={currentUser}
         isAuthLoading={isAuthLoading}
         totalItems={totalItems}
@@ -1479,12 +1561,7 @@ function AppContent() {
       />
 
       {/* Full-screen loading overlay to prevent flash of default content */}
-      {isDataLoading && (
-        <div className="fixed inset-0 z-[60] bg-paper flex flex-col items-center justify-center gap-4">
-          <PatchuuLogo height={80} className="animate-pulse" />
-          <div className="w-6 h-6 border-2 border-cardstock border-t-craft-mint rounded-full animate-spin" />
-        </div>
-      )}
+      {isDataLoading && <LoadingSkeleton />}
 
       {/* Context7 Best Practice: Main content landmark with id for skip link */}
       <main 
@@ -1537,7 +1614,6 @@ function AppContent() {
               siteContent={siteContent}
               setSiteContent={setSiteContent}
               onContentSaved={refreshCmsData}
-              usingStaticCms={usingStaticCms}
               currentUser={currentUser}
             />
           </div>
