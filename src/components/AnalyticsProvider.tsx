@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode, type ReactElement } from 'react';
+import { useEffect, useMemo, type ReactNode, type ReactElement } from 'react';
 import { AnalyticsContext } from '../context/AnalyticsContext';
 import type { AnalyticsContextValue, AnalyticsProduct, GtagWindow, Currency } from '../lib/analytics';
 
@@ -51,61 +51,51 @@ function buildAnalyticsItems(items: AnalyticsProduct[]) {
 function useAnalyticsValue(): AnalyticsContextValue {
   useGa4Script();
 
-  const trackEvent = (name: string, params?: Record<string, unknown>) => {
-    if (!GA_ID) return;
-    gtag('event', name, params);
-  };
-
-  const trackPageView = (pageTitle?: string) => {
-    if (!GA_ID) return;
-    gtag('event', 'page_view', {
-      page_title: pageTitle || document.title,
-      page_location: window.location.href,
-      page_path: window.location.pathname + window.location.hash,
-    });
-  };
-
-  const trackAddToCart = (item: AnalyticsProduct) => {
-    if (!GA_ID) return;
-    gtag('event', 'add_to_cart', {
-      currency: item.currency,
-      value: item.price * (item.quantity || 1),
-      items: [{
-        item_id: item.id,
-        item_name: item.name,
-        price: item.price,
-        quantity: item.quantity || 1,
+  return useMemo<AnalyticsContextValue>(() => ({
+    trackEvent: (name: string, params?: Record<string, unknown>) => {
+      if (!GA_ID) return;
+      gtag('event', name, params);
+    },
+    trackPageView: (pageTitle?: string) => {
+      if (!GA_ID) return;
+      gtag('event', 'page_view', {
+        page_title: pageTitle || document.title,
+        page_location: window.location.href,
+        page_path: window.location.pathname + window.location.hash,
+      });
+    },
+    trackAddToCart: (item: AnalyticsProduct) => {
+      if (!GA_ID) return;
+      gtag('event', 'add_to_cart', {
         currency: item.currency,
-      }],
-    });
-  };
-
-  const trackBeginCheckout = (items: AnalyticsProduct[], value: number, currency: Currency) => {
-    if (!GA_ID) return;
-    gtag('event', 'begin_checkout', {
-      currency,
-      value,
-      items: buildAnalyticsItems(items),
-    });
-  };
-
-  const trackPurchase = (transactionId: string, items: AnalyticsProduct[], value: number, currency: Currency) => {
-    if (!GA_ID) return;
-    gtag('event', 'purchase', {
-      transaction_id: transactionId,
-      currency,
-      value,
-      items: buildAnalyticsItems(items),
-    });
-  };
-
-  return {
-    trackEvent,
-    trackPageView,
-    trackAddToCart,
-    trackBeginCheckout,
-    trackPurchase,
-  };
+        value: item.price * (item.quantity || 1),
+        items: [{
+          item_id: item.id,
+          item_name: item.name,
+          price: item.price,
+          quantity: item.quantity || 1,
+          currency: item.currency,
+        }],
+      });
+    },
+    trackBeginCheckout: (items: AnalyticsProduct[], value: number, currency: Currency) => {
+      if (!GA_ID) return;
+      gtag('event', 'begin_checkout', {
+        currency,
+        value,
+        items: buildAnalyticsItems(items),
+      });
+    },
+    trackPurchase: (transactionId: string, items: AnalyticsProduct[], value: number, currency: Currency) => {
+      if (!GA_ID) return;
+      gtag('event', 'purchase', {
+        transaction_id: transactionId,
+        currency,
+        value,
+        items: buildAnalyticsItems(items),
+      });
+    },
+  }), []);
 }
 
 export function AnalyticsProvider({ children }: { children: ReactNode }): ReactElement {

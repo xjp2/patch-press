@@ -67,8 +67,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(false);
   const lastSyncedItems = useRef<string>('');
   const syncInProgress = useRef(false);
+  const isInitializedRef = useRef(false);
   const { trackAddToCart } = useAnalytics();
   const { currency } = useCurrency();
+
+  // Keep refs in sync with state so callbacks can be stable
+  useEffect(() => {
+    isInitializedRef.current = isInitialized;
+  }, [isInitialized]);
 
   // Initialize cart on mount
   useEffect(() => {
@@ -168,12 +174,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (!isInitialized) {
+    if (!isInitializedRef.current) {
       console.log('🛒 Cart: Skip sync - not initialized yet');
       return;
     }
 
     const itemsJson = JSON.stringify(items);
+    const user = currentUserRef.current;
     
     // Skip if items haven't changed
     if (itemsJson === lastSyncedItems.current) {
@@ -184,19 +191,19 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     syncInProgress.current = true;
     
     try {
-      if (currentUser) {
+      if (user) {
         // Save to cloud for logged-in user
-        console.log('🛒 Cart: Syncing to cloud for user:', currentUser.id, 'Items:', items.length);
+        console.log('🛒 Cart: Syncing to cloud for user:', user.id, 'Items:', items.length);
         
         const { db } = await import('../lib/supabase');
         
         if (items.length === 0) {
           // Clear cart in database
           console.log('🛒 Cart: Clearing cloud cart');
-          await db.cart.clear(currentUser.id);
+          await db.cart.clear(user.id);
         } else {
           const dbItems = items.map(item => ({
-            user_id: currentUser.id,
+            user_id: user.id,
             id: item.id,
             product_id: item.productId,
             product_name: item.productName,
@@ -244,7 +251,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     } finally {
       syncInProgress.current = false;
     }
-  }, [items, currentUser, isInitialized]);
+  }, [items]);
 
   // Auto-sync when items change (debounced)
   useEffect(() => {
@@ -252,7 +259,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       syncCart();
     }, 300);
     return () => clearTimeout(timeoutId);
-  }, [items, syncCart]);
+  }, [items]);
 
   // Load user's cart from cloud
   const loadUserCart = async (userId: string) => {

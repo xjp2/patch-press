@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { LogOut, Settings, User, ShoppingCart, X, Plus, Minus, Trash2, ChevronDown, ChevronUp, Package, Loader2, Menu } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import './App.css';
@@ -259,6 +259,13 @@ function CartDrawer({ currentUser, setShowAuth, setAuthView }: CartDrawerProps) 
   const [showOrderConfirmation, setShowOrderConfirmation] = useState(false);
   const [orderNumber, setOrderNumber] = useState('');
   const [orderSummary, setOrderSummary] = useState<{items: typeof items, totalPrice: number} | null>(null);
+  const clearCartTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (clearCartTimeoutRef.current) clearTimeout(clearCartTimeoutRef.current);
+    };
+  }, []);
 
   const handleCheckoutSuccess = async (orderData?: { orderId: string; orderNumber: string }) => {
     setCheckoutState('success');
@@ -272,7 +279,8 @@ function CartDrawer({ currentUser, setShowAuth, setAuthView }: CartDrawerProps) 
     setShowOrderConfirmation(true);
     
     // Clear cart after a delay
-    setTimeout(() => {
+    if (clearCartTimeoutRef.current) clearTimeout(clearCartTimeoutRef.current);
+    clearCartTimeoutRef.current = setTimeout(() => {
       clearCart();
     }, 500);
   };
@@ -663,12 +671,31 @@ function Navbar({ navbar, currentUser, isAuthLoading, totalItems, onCartClick, o
   const { currency, setCurrency } = useCurrency();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+    };
   }, []);
+
+  const handleNavClick = (url: string) => {
+    if (url.startsWith('#')) {
+      onHomeClick();
+      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+      scrollTimeoutRef.current = setTimeout(() => {
+        const el = document.querySelector(url);
+        el?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    } else if (url.startsWith('http')) {
+      window.open(url, '_blank');
+    } else {
+      window.location.href = url;
+    }
+  };
 
   const getShadowClass = () => {
     if (navbar.isTransparent && !scrolled) return '';
@@ -728,19 +755,7 @@ function Navbar({ navbar, currentUser, isAuthLoading, totalItems, onCartClick, o
             {(navbar.links || []).map((link) => (
               <button
                 key={link.id || link.url}
-                onClick={() => {
-                  if (link.url.startsWith('#')) {
-                    onHomeClick();
-                    setTimeout(() => {
-                      const el = document.querySelector(link.url);
-                      el?.scrollIntoView({ behavior: 'smooth' });
-                    }, 100);
-                  } else if (link.url.startsWith('http')) {
-                    window.open(link.url, '_blank');
-                  } else {
-                    window.location.href = link.url;
-                  }
-                }}
+                onClick={() => handleNavClick(link.url)}
                 className="text-sm font-medium hover:opacity-70 transition-opacity"
               >
                 {link.label}
@@ -873,20 +888,7 @@ function Navbar({ navbar, currentUser, isAuthLoading, totalItems, onCartClick, o
             {(navbar.links || []).map((link) => (
               <button
                 key={link.id || link.url}
-                onClick={() => {
-                  setIsMenuOpen(false);
-                  if (link.url.startsWith('#')) {
-                    onHomeClick();
-                    setTimeout(() => {
-                      const el = document.querySelector(link.url);
-                      el?.scrollIntoView({ behavior: 'smooth' });
-                    }, 100);
-                  } else if (link.url.startsWith('http')) {
-                    window.open(link.url, '_blank');
-                  } else {
-                    window.location.href = link.url;
-                  }
-                }}
+                onClick={() => { setIsMenuOpen(false); handleNavClick(link.url); }}
                 className="w-full text-left px-6 py-3 text-sm font-medium hover:bg-black/5 transition-colors"
               >
                 {link.label}
@@ -1081,9 +1083,13 @@ function AppContent() {
 
         // Load all CMS data. The cms loader queries Supabase DB first and only
         // falls back to cached Storage/static files if the DB is unreachable.
-        const { siteContent: sc, products: prods, patches: patcs } = await preloadCmsData(false);
+        const { siteContent: sc, products: prods, patches: patcs, fromFallback } = await preloadCmsData(false);
 
         if (!mounted) return;
+
+        if (fromFallback) {
+          setDataLoadError(true);
+        }
 
         // Process and set products
         if (prods && prods.length > 0) {
@@ -1484,6 +1490,8 @@ function AppContent() {
     noindex: currentView === 'admin' || currentView === 'order-detail',
   };
 
+  const landingJsonLd = useMemo(() => currentView === 'landing' ? websiteJsonLd() : undefined, [currentView]);
+
   return (
     <div
       className="min-h-screen bg-paper font-body overflow-x-hidden"
@@ -1499,7 +1507,7 @@ function AppContent() {
         description={pageSeo.description}
         noindex={pageSeo.noindex}
         canonical={typeof window !== 'undefined' ? window.location.href : undefined}
-        jsonLd={currentView === 'landing' ? websiteJsonLd() : undefined}
+        jsonLd={landingJsonLd}
       />
 
       {/* Context7 Best Practice: Skip link for keyboard accessibility */}

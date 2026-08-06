@@ -47,18 +47,20 @@ export function useCachedData<T>(
     setIsLoading(true);
     setError(null);
 
-    // Create a timeout promise
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error('Request timeout')), FETCH_TIMEOUT);
+      timeoutId = setTimeout(() => reject(new Error('Request timeout')), FETCH_TIMEOUT);
     });
 
     try {
       // Race between fetch and timeout
       const result = await Promise.race([fetcher(), timeoutPromise]);
+      clearTimeout(timeoutId);
       globalCache.set(key, { data: result, timestamp: now });
       setData(result);
       onSuccess?.(result);
     } catch (err) {
+      clearTimeout(timeoutId);
       console.error(`useCachedData[${key}]:`, err);
       const error = err instanceof Error ? err : new Error('Failed to fetch');
       setError(error);

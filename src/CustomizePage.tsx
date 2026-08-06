@@ -160,6 +160,20 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
     const productImageRef = useRef<HTMLImageElement>(null);
     const reviewRef = useRef<HTMLDivElement>(null);
     const heatPressTimeouts = useRef<ReturnType<typeof setTimeout>[]>([]);
+    const freshPatchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const addToCartSyncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const addToCartSuccessTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Cleanup all design timeouts on unmount
+    useEffect(() => {
+        return () => {
+            heatPressTimeouts.current.forEach((id) => clearTimeout(id));
+            heatPressTimeouts.current = [];
+            if (freshPatchTimeoutRef.current) clearTimeout(freshPatchTimeoutRef.current);
+            if (addToCartSyncTimeoutRef.current) clearTimeout(addToCartSyncTimeoutRef.current);
+            if (addToCartSuccessTimeoutRef.current) clearTimeout(addToCartSuccessTimeoutRef.current);
+        };
+    }, []);
 
     // Auto-dismiss onboarding after 6s or when user places first patch
     useEffect(() => {
@@ -242,7 +256,8 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
         else { setFrontPatches(prev => [...prev, newPatch]); }
         setSelectedPatchId(newPatch.uniqueId);
         setFreshPatchId(newPatch.uniqueId);
-        setTimeout(() => setFreshPatchId(null), 900);
+        if (freshPatchTimeoutRef.current) clearTimeout(freshPatchTimeoutRef.current);
+        freshPatchTimeoutRef.current = setTimeout(() => setFreshPatchId(null), 900);
 
         // Trigger particle burst at click position if available
         if (clickX !== undefined && clickY !== undefined) {
@@ -279,6 +294,10 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
         setIsHeatPressing(true);
         setHeatPressPhase(1); // Lowering press
         
+        // Clear any previous heat-press timers before starting a new sequence
+        heatPressTimeouts.current.forEach((id) => clearTimeout(id));
+        heatPressTimeouts.current = [];
+        
         // Store timeout IDs for cleanup
         heatPressTimeouts.current = [
             setTimeout(() => setHeatPressPhase(2), 1000), // Applying heat
@@ -292,14 +311,6 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
         ];
     };
     
-    // Cleanup timeouts on unmount
-    useEffect(() => {
-        return () => {
-            heatPressTimeouts.current.forEach((id) => clearTimeout(id));
-            heatPressTimeouts.current = [];
-        };
-    }, []);
-
     const handleAddToCart = () => {
         playDing();
         // Create cart item from current design with full patch placement data
@@ -343,9 +354,11 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
         };
         addItem(cartItem);
         // Explicitly sync to ensure cart is saved
-        setTimeout(() => syncCart(), 100);
+        if (addToCartSyncTimeoutRef.current) clearTimeout(addToCartSyncTimeoutRef.current);
+        addToCartSyncTimeoutRef.current = setTimeout(() => syncCart(), 100);
         setShowSuccess(true);
-        setTimeout(() => setShowSuccess(false), 2000);
+        if (addToCartSuccessTimeoutRef.current) clearTimeout(addToCartSuccessTimeoutRef.current);
+        addToCartSuccessTimeoutRef.current = setTimeout(() => setShowSuccess(false), 2000);
     };
 
     const startNewDesign = () => {
