@@ -1059,10 +1059,11 @@ function AppContent() {
   });
 
   // ============================================
-  // CMS DATA LOADING (Supabase DB -> Storage -> static JSON fallback)
-  // Products/patches/site content always load from Supabase DB first so
-  // customers never see stale or missing items. Storage and static JSON are
-  // only used as fallbacks. Admin-triggered refreshes bypass the in-memory cache.
+  // CMS DATA LOADING (Supabase DB only)
+  // Products/patches/site content always load fresh from Supabase DB. Static
+  // build-time JSON files are intentionally not used as fallback because they
+  // become stale after admin CMS edits and can show missing products/patches.
+  // Admin-triggered refreshes bypass the in-memory cache.
   // ============================================
   const [isDataLoading, setIsDataLoading] = useState(true);
   const [dataLoadError, setDataLoadError] = useState(false);
@@ -1523,7 +1524,7 @@ function AppContent() {
       {/* Non-blocking data-load error banner */}
       {dataLoadError && (
         <div className="fixed top-0 left-0 right-0 z-[70] bg-craft-rose/90 text-white px-4 py-2 text-sm flex items-center justify-center gap-3">
-          <span>We couldn't load the latest content. You're seeing a cached version.</span>
+          <span>We couldn't load the latest content from the server.</span>
           <button
             onClick={handleRetryLoad}
             disabled={isDataLoading}

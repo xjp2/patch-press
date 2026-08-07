@@ -2,18 +2,19 @@
  * CMS Data Loader
  * 
  * Loads content in priority order:
- * 1. Supabase Database (source of truth)
- * 2. In-memory stale cache (only used after a real DB error)
- * 3. Supabase Storage (fallback when DB is unreachable)
- * 4. Local static JSON files (last-resort fallback)
+ * 1. Supabase Database (source of truth), with retry + timeout
+ * 2. In-memory stale cache (only within the same session after a real DB error)
+ * 
+ * Static build-time JSON files are intentionally NOT used as a runtime fallback.
+ * They shadow live CMS edits because Vercel only rebuilds them on git push, so
+ * a customer who refreshes after an admin save could see stale products/patches
+ * or missing content (e.g. /cms/patches.json 404).
  * 
  * When forceRefresh=true (admin updates), the in-memory cache is bypassed and
  * a fresh DB request is made. Public customer traffic uses the cache to avoid
  * hammering Supabase on every render.
  * 
  * Important: an empty DB result (e.g., zero products) is NOT treated as an error.
- * We only fall back to Storage/static when the DB request actually fails, so
- * customers never see stale build-time artifacts after the catalog is updated.
  */
 
 import { supabase } from './supabase';
@@ -85,12 +86,6 @@ export interface SiteContent {
   navbar?: any;
 }
 
-export interface CmsMetadata {
-  exportedAt: string;
-  supabaseUrl: string;
-  version: string;
-}
-
 interface CacheEntry<T> {
   data: T;
   timestamp: number;
@@ -99,17 +94,6 @@ interface CacheEntry<T> {
 // In-memory cache with TTL so users always see recent data without hammering the DB
 const cache = new Map<string, CacheEntry<unknown>>();
 const DEFAULT_CACHE_TTL = 60 * 1000; // 1 minute
-
-// Timestamp for cache-busting after admin updates
-let cacheBuster = Date.now();
-
-/**
- * Update cache buster to force fresh data load
- */
-export function refreshCacheBuster(): void {
-  cacheBuster = Date.now();
-  console.log('🔄 Cache buster updated:', cacheBuster);
-}
 
 function getCached<T>(key: string, ttl = DEFAULT_CACHE_TTL): T | undefined {
   const entry = cache.get(key);
@@ -126,116 +110,43 @@ function setCached<T>(key: string, data: T): void {
 }
 
 /**
- * Load from Supabase Storage (CDN-cached, priority 1)
- * Uses cache-busting to get fresh data after admin updates
+ * Run a promise with a timeout. Note: this races the promise; the underlying
+ * Supabase request may still complete in the background but we stop waiting.
  */
-async function loadFromStorage<T>(path: string, bustCache = false): Promise<T | null> {
-  const cacheKey = `storage:${path}:${bustCache ? cacheBuster : 'static'}`;
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+    ),
+  ]);
+}
 
-  if (!bustCache) {
-    const cached = getCached<T>(cacheKey);
-    if (cached !== undefined) return cached;
-  }
-
-  try {
-    const { data: { publicUrl } } = supabase
-      .storage
-      .from('assets')
-      .getPublicUrl(`cms/${path}`);
-
-    // Always cache-bust Storage requests to avoid stale CDN data after admin updates
-    const url = `${publicUrl}?t=${bustCache ? cacheBuster : Date.now()}`;
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-    const response = await fetch(url, {
-      cache: 'no-cache',
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+/**
+ * Retry an async operation with exponential backoff.
+ */
+async function withRetry<T>(fn: () => Promise<T>, retries = 2, baseDelay = 800): Promise<T> {
+  let lastError: unknown;
+  for (let i = 0; i <= retries; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      if (i < retries) {
+        const delay = baseDelay * Math.pow(2, i);
+        console.warn(`⏳ CMS retry ${i + 1}/${retries} after error, waiting ${delay}ms:`, err);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
     }
-
-    const data = (await response.json()) as T;
-
-    // Validate data is not empty
-    if (Array.isArray(data) && data.length === 0) {
-      throw new Error('Empty array returned');
-    }
-
-    setCached(cacheKey, data);
-    console.log(`☁️ Loaded ${path} from Storage (${Array.isArray(data) ? data.length : 1} items)`);
-    return data;
-  } catch (err) {
-    console.warn(`Storage load failed for ${path}:`, err);
-    return null;
   }
+  throw lastError;
 }
 
 /**
- * Load static JSON file (build-time exported, priority 2)
- * Uses cache-busting to ensure fresh content after rebuilds
- */
-async function loadStaticFile<T>(filename: string, bustCache = false): Promise<T | null> {
-  const cacheKey = bustCache ? `${filename}:fresh` : filename;
-
-  if (!bustCache) {
-    const cached = getCached<T>(cacheKey);
-    if (cached !== undefined) return cached;
-  }
-
-  try {
-    // Always cache-bust static JSON so stale build artifacts are never served
-    const url = `/cms/${filename}?t=${bustCache ? cacheBuster : Date.now()}`;
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-    const response = await fetch(url, {
-      cache: 'no-cache',
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-    const data = (await response.json()) as T;
-    setCached(cacheKey, data);
-    console.log(`📄 Loaded ${filename} from static files${bustCache ? ' (fresh)' : ''}`);
-    return data;
-  } catch (err) {
-    console.warn(`Failed to load static ${filename}:`, err);
-    return null;
-  }
-}
-
-/**
- * Check if static CMS files exist
- */
-export async function hasStaticCms(): Promise<boolean> {
-  try {
-    const response = await fetch('/cms/metadata.json', { method: 'HEAD' });
-    return response.ok;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Get CMS metadata
- */
-export async function getCmsMetadata(bustCache = false): Promise<CmsMetadata | null> {
-  return loadStaticFile<CmsMetadata>('metadata.json', bustCache);
-}
-
-/**
- * Load site content - Supabase DB (source of truth) -> Storage -> static JSON fallback
- * @param forceRefresh - Set to true after admin updates to bypass all caches
- * @returns Object with the loaded content and whether fallback data was used
+ * Load site content from Supabase DB only.
+ * Stale build-time static files are intentionally NOT used as fallback, because
+ * they shadow live CMS edits. Only the in-memory session cache is allowed to
+ * soften a transient DB failure.
  */
 export async function loadSiteContent(forceRefresh = false): Promise<{ data: SiteContent | null; fromFallback: boolean }> {
   const cacheKey = 'db:site_content';
@@ -245,43 +156,42 @@ export async function loadSiteContent(forceRefresh = false): Promise<{ data: Sit
     if (cached !== undefined) return { data: cached, fromFallback: false };
   }
 
-  // Priority 1: Supabase Database (source of truth)
-  const dbResult = await loadSiteContentFromDb();
-  if (dbResult.error === null) {
-    if (dbResult.data) {
-      console.log('✅ Loaded site content from database');
-      setCached(cacheKey, dbResult.data);
-      return { data: dbResult.data, fromFallback: false };
+  try {
+    const dbResult = await withRetry(
+      () => withTimeout(loadSiteContentFromDb(), 8000, 'loadSiteContentFromDb'),
+      2,
+      800
+    );
+
+    if (dbResult.error === null) {
+      if (dbResult.data) {
+        console.log('✅ Loaded site content from database');
+        setCached(cacheKey, dbResult.data);
+        return { data: dbResult.data, fromFallback: false };
+      }
+      // DB is reachable but the row is missing; don't cache or fall back
+      console.warn('Site content row missing in DB');
+      return { data: null, fromFallback: false };
     }
-    // DB is reachable but the row is missing; don't cache or fall back — let defaults show
-    console.warn('Site content row missing in DB');
-    return { data: null, fromFallback: false };
+
+    throw dbResult.error;
+  } catch (err) {
+    console.error('❌ Failed to load site content from DB after retry:', err);
+
+    // In-memory stale cache only (survives within a single session, not across refreshes)
+    const stale = getCached<SiteContent>(cacheKey, Infinity);
+    if (stale !== undefined) {
+      console.warn('⚠️ Using stale cached site content');
+      return { data: stale, fromFallback: true };
+    }
+
+    return { data: null, fromFallback: true };
   }
-
-  // Priority 2: In-memory stale cache (only after a real DB error)
-  const stale = getCached<SiteContent>(cacheKey, Infinity);
-  if (stale !== undefined) {
-    console.warn('⚠️ Using stale cached site content');
-    return { data: stale, fromFallback: true };
-  }
-
-  // Priority 3: Supabase Storage fallback
-  console.warn('Site content DB load failed, falling back to Storage');
-  const storageData = await loadFromStorage<SiteContent>('site-content.json', forceRefresh);
-  if (storageData) return { data: storageData, fromFallback: true };
-
-  // Priority 4: Static files fallback
-  const staticData = await loadStaticFile<SiteContent>('site-content.json', forceRefresh);
-  if (staticData) return { data: staticData, fromFallback: true };
-
-  console.error('Failed to load site content from all sources');
-  return { data: null, fromFallback: true };
 }
 
 /**
- * Load products - Supabase DB (source of truth) -> Storage -> static JSON fallback
- * @param forceRefresh - Set to true after admin updates to bypass all caches
- * @returns Object with the loaded products and whether fallback data was used
+ * Load products from Supabase DB only.
+ * See loadSiteContent for fallback policy.
  */
 export async function loadProducts(forceRefresh = false): Promise<{ data: Product[]; fromFallback: boolean }> {
   const cacheKey = 'db:products';
@@ -291,41 +201,36 @@ export async function loadProducts(forceRefresh = false): Promise<{ data: Produc
     if (cached !== undefined) return { data: cached, fromFallback: false };
   }
 
-  // Priority 1: Supabase Database (source of truth)
-  const dbResult = await loadProductsFromDb();
-  if (dbResult.error === null) {
-    console.log(`✅ Loaded ${dbResult.data.length} products from database`);
-    setCached(cacheKey, dbResult.data);
-    return { data: dbResult.data, fromFallback: false };
+  try {
+    const dbResult = await withRetry(
+      () => withTimeout(loadProductsFromDb(), 8000, 'loadProductsFromDb'),
+      2,
+      800
+    );
+
+    if (dbResult.error === null) {
+      console.log(`✅ Loaded ${dbResult.data.length} products from database`);
+      setCached(cacheKey, dbResult.data);
+      return { data: dbResult.data, fromFallback: false };
+    }
+
+    throw dbResult.error;
+  } catch (err) {
+    console.error('❌ Failed to load products from DB after retry:', err);
+
+    const stale = getCached<Product[]>(cacheKey, Infinity);
+    if (stale !== undefined && stale.length > 0) {
+      console.warn('⚠️ Using stale cached products');
+      return { data: stale, fromFallback: true };
+    }
+
+    return { data: [], fromFallback: true };
   }
-
-  // Priority 2: In-memory stale cache (only after a real DB error)
-  const stale = getCached<Product[]>(cacheKey, Infinity);
-  if (stale !== undefined && stale.length > 0) {
-    console.warn('⚠️ Using stale cached products');
-    return { data: stale, fromFallback: true };
-  }
-
-  // Priority 3: Supabase Storage fallback
-  console.warn('Products DB load failed, falling back to Storage');
-  const storageData = await loadFromStorage<Product[]>('products.json', forceRefresh);
-  if (storageData && storageData.length > 0) return { data: storageData, fromFallback: true };
-
-  // Priority 4: Static files fallback
-  const staticData = await loadStaticFile<Product[]>('products.json', forceRefresh);
-  if (staticData && staticData.length > 0) {
-    console.log('📄 Loaded products from static files');
-    return { data: staticData, fromFallback: true };
-  }
-
-  console.error('Failed to load products from all sources');
-  return { data: [], fromFallback: true };
 }
 
 /**
- * Load patches - Supabase DB (source of truth) -> Storage -> static JSON fallback
- * @param forceRefresh - Set to true after admin updates to bypass all caches
- * @returns Object with the loaded patches and whether fallback data was used
+ * Load patches from Supabase DB only.
+ * See loadSiteContent for fallback policy.
  */
 export async function loadPatches(forceRefresh = false): Promise<{ data: Patch[]; fromFallback: boolean }> {
   const cacheKey = 'db:patches';
@@ -335,44 +240,38 @@ export async function loadPatches(forceRefresh = false): Promise<{ data: Patch[]
     if (cached !== undefined) return { data: cached, fromFallback: false };
   }
 
-  // Priority 1: Supabase Database (source of truth)
-  const dbResult = await loadPatchesFromDb();
-  if (dbResult.error === null) {
-    console.log(`✅ Loaded ${dbResult.data.length} patches from database`);
-    setCached(cacheKey, dbResult.data);
-    return { data: dbResult.data, fromFallback: false };
+  try {
+    const dbResult = await withRetry(
+      () => withTimeout(loadPatchesFromDb(), 8000, 'loadPatchesFromDb'),
+      2,
+      800
+    );
+
+    if (dbResult.error === null) {
+      console.log(`✅ Loaded ${dbResult.data.length} patches from database`);
+      setCached(cacheKey, dbResult.data);
+      return { data: dbResult.data, fromFallback: false };
+    }
+
+    throw dbResult.error;
+  } catch (err) {
+    console.error('❌ Failed to load patches from DB after retry:', err);
+
+    const stale = getCached<Patch[]>(cacheKey, Infinity);
+    if (stale !== undefined && stale.length > 0) {
+      console.warn('⚠️ Using stale cached patches');
+      return { data: stale, fromFallback: true };
+    }
+
+    return { data: [], fromFallback: true };
   }
-
-  // Priority 2: In-memory stale cache (only after a real DB error)
-  const stale = getCached<Patch[]>(cacheKey, Infinity);
-  if (stale !== undefined && stale.length > 0) {
-    console.warn('⚠️ Using stale cached patches');
-    return { data: stale, fromFallback: true };
-  }
-
-  // Priority 3: Supabase Storage fallback
-  console.warn('Patches DB load failed, falling back to Storage');
-  const storageData = await loadFromStorage<Patch[]>('patches.json', forceRefresh);
-  if (storageData && storageData.length > 0) return { data: storageData, fromFallback: true };
-
-  // Priority 4: Static files fallback
-  const staticData = await loadStaticFile<Patch[]>('patches.json', forceRefresh);
-  if (staticData && staticData.length > 0) {
-    console.log('📄 Loaded patches from static files');
-    return { data: staticData, fromFallback: true };
-  }
-
-  console.error('Failed to load patches from all sources');
-  return { data: [], fromFallback: true };
 }
 
 /**
- * Clear CMS cache (useful after admin updates)
- * Also updates cache buster to force fresh data from CDN
+ * Clear CMS in-memory cache (useful after admin updates)
  */
 export function clearCmsCache(): void {
   cache.clear();
-  refreshCacheBuster();
   console.log('🗑️ CMS cache cleared');
 }
 
