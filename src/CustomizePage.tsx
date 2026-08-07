@@ -8,7 +8,7 @@ import {
     ChevronRight, ChevronLeft, Check, Flame, X, Search,
     Package, Layers
 } from 'lucide-react';
-import { playPop, playClick, playWhoosh, playDing, playSnap } from './lib/sounds';
+import { playPop, playWhoosh, playDing, playSnap } from './lib/sounds';
 import { StepTransition, PatchBurst, FloatingDecorations, FreshPatchGlow } from './components/DesignEffects';
 import { ProductCard } from './components/ProductCard';
 import { MotionStep } from './components/MotionStep';
@@ -114,7 +114,6 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
 
     // When a new product is selected, clear all placed patches
     const selectProduct = (product: Product) => {
-        playClick();
         if (product.id !== selectedProduct.id) {
             setFrontPatches([]);
             setBackPatches([]);

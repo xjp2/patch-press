@@ -188,17 +188,6 @@ export function ProductCard({ product, isSelected, onClick, index }: ProductCard
           : 'shadow-soft hover:shadow-[0_8px_30px_rgba(0,0,0,0.08)]'
       }`}
     >
-      {/* Selected ripple ring */}
-      {isSelected && (
-        <motion.div
-          layoutId="selected-ring"
-          className="absolute inset-0 rounded-2xl ring-2 ring-craft-mint"
-          initial={{ scale: 1, opacity: 0.6 }}
-          animate={{ scale: 1.15, opacity: 0 }}
-          transition={{ duration: 0.6, ease: 'easeOut' }}
-        />
-      )}
-
       {/* Hover sparkle */}
       {!isSelected && (
         <motion.div
