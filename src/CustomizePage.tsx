@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect, useCallback } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -8,8 +8,8 @@ import {
     ChevronRight, ChevronLeft, Check, Flame, X, Search,
     Package, Layers
 } from 'lucide-react';
-import { playPop, playWhoosh, playDing, playSnap } from './lib/sounds';
-import { StepTransition, PatchBurst, FloatingDecorations, FreshPatchGlow } from './components/DesignEffects';
+import { playPop, playDing, playSnap } from './lib/sounds';
+import { PatchBurst, FloatingDecorations, FreshPatchGlow } from './components/DesignEffects';
 import { ProductCard } from './components/ProductCard';
 import { MotionStep } from './components/MotionStep';
 import { PatchFlight } from './components/PatchFlight';
@@ -139,7 +139,6 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
     const [zoom, setZoom] = useState(1);
     const [showOnboarding, setShowOnboarding] = useState(true);
     // Creative effects state
-    const [showStepTransition, setShowStepTransition] = useState(false);
     const [patchBursts, setPatchBursts] = useState<Array<{id: string, x: number, y: number}>>([]);
     const [freshPatchId, setFreshPatchId] = useState<string | null>(null);
     const [flyingPatches, setFlyingPatches] = useState<FlyingPatch[]>([]);
@@ -426,14 +425,8 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
     };
 
     const handleGoToDesign = () => {
-        playWhoosh();
-        setShowStepTransition(true);
-    };
-
-    const handleTransitionComplete = useCallback(() => {
-        setShowStepTransition(false);
         setCurrentStep('design');
-    }, []);
+    };
 
     // --- Global Resize/Move Listener ---
 
@@ -1154,15 +1147,6 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                 )}
                 </AnimatePresence>
 
-
-                {/* Step Transition Overlay */}
-                <StepTransition
-                    show={showStepTransition}
-                    productImage={selectedProduct.frontImage}
-                    productName={selectedProduct.name}
-                    placementZone={selectedProduct.placementZone}
-                    onComplete={handleTransitionComplete}
-                />
 
                 {/* Patch Burst Particles */}
                 <PatchBurst bursts={patchBursts} onBurstEnd={(id) => setPatchBursts(prev => prev.filter(b => b.id !== id))} />
