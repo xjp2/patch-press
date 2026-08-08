@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect } from 'react';
 import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
-import { Check, Sparkles } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import type { Product } from '../AdminPanel';
 import { useCurrency } from '../context/CurrencyContext';
 import { getResizedImageUrl } from '../lib/utils';
@@ -218,18 +218,6 @@ export function ProductCard({ product, isSelected, onClick, index }: ProductCard
         {/* Visible crop */}
         {cropDiv}
       </motion.div>
-
-      {/* Selected checkmark — outside the card */}
-      {isSelected && (
-        <motion.div
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ type: 'spring', stiffness: 500, damping: 15 }}
-          className="absolute -bottom-2 -right-2 w-7 h-7 bg-craft-mint rounded-full flex items-center justify-center shadow-md z-20"
-        >
-          <Check className="w-4 h-4 text-ink" />
-        </motion.div>
-      )}
 
       {/* Text */}
       <div style={{ transform: 'translateZ(20px)' }}>
