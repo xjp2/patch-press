@@ -1,48 +1,34 @@
 import { motion } from 'framer-motion';
 import type { ReactNode } from 'react';
 
-type StepDirection = 'right' | 'left' | 'up' | 'down';
-
 interface MotionStepProps {
   stepKey: string;
   children: ReactNode;
-  direction?: StepDirection;
 }
 
 const variants = {
-  enter: (dir: StepDirection) => ({
-    x: dir === 'right' ? 80 : dir === 'left' ? -80 : 0,
-    y: dir === 'up' ? 60 : dir === 'down' ? -60 : 0,
+  enter: {
     opacity: 0,
-    scale: 0.96,
-  }),
-  center: {
-    x: 0,
-    y: 0,
-    opacity: 1,
-    scale: 1,
   },
-  exit: (dir: StepDirection) => ({
-    x: dir === 'right' ? -80 : dir === 'left' ? 80 : 0,
-    y: dir === 'up' ? -60 : dir === 'down' ? 60 : 0,
+  center: {
+    opacity: 1,
+  },
+  exit: {
     opacity: 0,
-    scale: 0.96,
-  }),
+  },
 };
 
-export function MotionStep({ stepKey, children, direction = 'right' }: MotionStepProps) {
+export function MotionStep({ stepKey, children }: MotionStepProps) {
   return (
     <motion.div
       key={stepKey}
-      custom={direction}
       variants={variants}
       initial="enter"
       animate="center"
       exit="exit"
       transition={{
-        type: 'spring',
-        stiffness: 300,
-        damping: 30,
+        duration: 0.25,
+        ease: 'easeInOut',
       }}
       className="w-full"
     >

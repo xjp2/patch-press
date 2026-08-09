@@ -609,7 +609,7 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                 <AnimatePresence mode="wait">
                 {/* STEP 1: Product Selection */}
                 {currentStep === 'product' && (
-                    <MotionStep key="product" stepKey="product" direction="right">
+                    <MotionStep key="product" stepKey="product">
                         <div className="text-center mb-8">
                             <h2 className="font-heading text-3xl sm:text-4xl font-bold text-ink mb-2">{siteContent.customizePage.step1Title}</h2>
                             <p className="text-ink/60">{siteContent.customizePage.step1Subtitle}</p>
@@ -640,7 +640,7 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
 
                 {/* STEP 2: Design */}
                 {currentStep === 'design' && (
-                    <MotionStep key="design" stepKey="design" direction="right">
+                    <MotionStep key="design" stepKey="design">
                         <div className="flex flex-col lg:flex-row gap-6">
                             {/* Left Panel: Patches */}
                             <div className="lg:w-1/4 order-2 lg:order-1 animate-slide-in-left">
@@ -990,7 +990,7 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
 
                 {/* STEP 3: Review */}
                 {currentStep === 'review' && (
-                    <MotionStep key="review" stepKey="review" direction="up">
+                    <MotionStep key="review" stepKey="review">
                         {/* Confetti */}
                         <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
                             {confettiColors.map((color, i) => (
