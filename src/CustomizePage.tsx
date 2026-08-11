@@ -5,7 +5,7 @@ import {
     ZoomIn, ZoomOut, RotateCcw, RotateCw,
     Trash2, ShoppingCart,
     Sparkles, Maximize2, Grid3X3,
-    ChevronRight, ChevronLeft, Check, Flame, X, Search,
+    ChevronRight, ChevronLeft, Check, X, Search,
     Package, Layers
 } from 'lucide-react';
 import { playPop, playDing, playSnap } from './lib/sounds';
@@ -282,9 +282,11 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
     };
 
     const clearAllPatches = () => {
-        const updatePatches = showBackSide ? setBackPatches : setFrontPatches;
-        updatePatches([]);
-        setSelectedPatchId(null);
+        if (window.confirm('Clear all patches on this side?')) {
+            const updatePatches = showBackSide ? setBackPatches : setFrontPatches;
+            updatePatches([]);
+            setSelectedPatchId(null);
+        }
     };
 
     const handleHeatPress = () => {
@@ -644,7 +646,7 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                         <div className="flex flex-col lg:flex-row gap-6">
                             {/* Left Panel: Patches */}
                             <div className="lg:w-1/4 order-2 lg:order-1 animate-slide-in-left">
-                                <div className="bg-cardstock rounded-2xl p-4 shadow-soft">
+                                <div className="bg-cardstock rounded-2xl p-3 sm:p-4 shadow-soft">
                                     <h3 className="font-heading text-lg font-bold text-ink mb-3 flex items-center gap-2"><Sparkles className="w-5 h-5 text-craft-mint" /> Patch Collection <span className="text-sm font-normal text-ink/50">({filteredPatches.length})</span></h3>
                                     <div className="relative mb-3">
                                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink/40" />
@@ -661,12 +663,12 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                             </button>
                                         )}
                                     </div>
-                                    <div className="flex flex-wrap gap-2 mb-3">
+                                    <div className="flex gap-2 mb-3 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                                         {categories.map(cat => (
-                                            <button key={cat.id} onClick={() => { setSelectedCategory(cat.id); }} className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${selectedCategory === cat.id ? 'bg-craft-mint text-white' : 'bg-cardstock text-ink hover:bg-craft-mint/20'}`}>{cat.name}</button>
+                                            <button key={cat.id} onClick={() => { setSelectedCategory(cat.id); }} className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${selectedCategory === cat.id ? 'bg-craft-mint text-white' : 'bg-cardstock text-ink hover:bg-craft-mint/20'}`}>{cat.name}</button>
                                         ))}
                                     </div>
-                                    <div className="grid grid-cols-3 gap-2 max-h-[300px] sm:max-h-[400px] overflow-y-auto p-1">
+                                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-[300px] sm:max-h-[400px] overflow-y-auto p-1">
                                         {filteredPatches.length > 0 ? filteredPatches.map((patch) => (
                                             <motion.button
                                                 key={patch.id}
@@ -709,7 +711,20 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <button onClick={() => setShowPlacementZone(!showPlacementZone)} className={`flex items-center gap-2 px-3 py-2 rounded-lg shadow-sm ${showPlacementZone ? 'bg-craft-mint text-white' : 'bg-cardstock hover:bg-craft-mint/20'}`} title="Show Placement Zone"><Grid3X3 className="w-4 h-4" /></button>
-                                        <button onClick={() => setShowBackSide(!showBackSide)} className="flex items-center gap-2 px-3 py-2 bg-cardstock rounded-lg shadow-sm hover:bg-craft-mint/20"><RotateCw className="w-4 h-4" /><span className="text-sm font-semibold">{showBackSide ? 'Back' : 'Front'}</span></button>
+                                        <div className="flex items-center bg-cardstock rounded-lg shadow-sm p-1">
+                                            <button
+                                                onClick={() => setShowBackSide(false)}
+                                                className={`px-3 py-1.5 rounded-md text-sm font-semibold transition-all ${!showBackSide ? 'bg-craft-mint text-white shadow-sm' : 'text-ink hover:bg-craft-mint/10'}`}
+                                            >
+                                                Front
+                                            </button>
+                                            <button
+                                                onClick={() => setShowBackSide(true)}
+                                                className={`px-3 py-1.5 rounded-md text-sm font-semibold transition-all ${showBackSide ? 'bg-craft-mint text-white shadow-sm' : 'text-ink hover:bg-craft-mint/10'}`}
+                                            >
+                                                Back
+                                            </button>
+                                        </div>
 
                                         <button onClick={deleteSelectedPatch} disabled={!selectedPatchId} className="p-2 bg-craft-pink/10 rounded-lg shadow-sm hover:bg-craft-pink/20 disabled:opacity-50"><Trash2 className="w-5 h-5 text-craft-pink" /></button>
                                     </div>
@@ -835,6 +850,11 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                                         />
                                                         {isFresh && <FreshPatchGlow active={isFresh} />}
                                                         {selectedPatchId === patch.uniqueId && (
+                                                            <div className="absolute -top-7 left-0 bg-craft-mint text-white text-[10px] font-bold px-2 py-0.5 rounded-full pointer-events-none z-50 shadow-sm">
+                                                                Selected
+                                                            </div>
+                                                        )}
+                                                        {selectedPatchId === patch.uniqueId && (
                                                             <>
                                                                 {/* Traced Zone Overlay - Semi-transparent fill with border */}
                                                                 <div className="absolute inset-0 pointer-events-none" style={{ margin: '-4px' }}>
@@ -907,7 +927,7 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                     <button onClick={() => setCurrentStep('product')} className="flex items-center gap-2 px-4 py-2 text-ink/70 hover:text-ink"><ChevronLeft className="w-4 h-4" /> Back</button>
                                     <div className="flex gap-3">
                                         <button onClick={clearAllPatches} className="flex items-center gap-2 px-4 py-2 text-craft-pink hover:bg-craft-pink/10 rounded-full" disabled={placedPatches.length === 0}><RotateCcw className="w-4 h-4" /> Clear All</button>
-                                        <button onClick={handleHeatPress} className="btn-primary flex items-center gap-2" disabled={placedPatches.length === 0 || isHeatPressing}><Flame className="w-5 h-5" /> {isHeatPressing ? 'Pressing...' : 'Heat Press'}</button>
+                                        <button onClick={handleHeatPress} className="btn-primary flex items-center gap-2" disabled={placedPatches.length === 0 || isHeatPressing}><ShoppingCart className="w-5 h-5" /> {isHeatPressing ? 'Saving...' : 'Preview & Add to Cart'}</button>
                                     </div>
                                 </div>
                             </div>
