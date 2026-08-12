@@ -202,12 +202,16 @@ export function PatchCapture({ onPatchSaved }: PatchCaptureProps) {
     if (result) {
       setProcessedUrl(result.url);
       setCroppedBlob(result.blob);
+      setWidth(String(result.bbox.w));
+      setHeight(String(result.bbox.h));
     } else {
       // Fallback: use full image without cropping
       const res = await fetch(rawUrl);
       const blob = await res.blob();
       setProcessedUrl(rawUrl);
       setCroppedBlob(blob);
+      setWidth(String(canvas.width));
+      setHeight(String(canvas.height));
     }
     setIsProcessing(false);
   };
@@ -242,7 +246,7 @@ export function PatchCapture({ onPatchSaved }: PatchCaptureProps) {
         width: newPatch.width,
         height: newPatch.height,
         content_zone: newPatch.contentZone,
-        sort_order: Date.now(),
+        sort_order: 0,
       };
 
       const { error } = await db.patches.upsert(dbPatch);
@@ -365,6 +369,8 @@ export function PatchCapture({ onPatchSaved }: PatchCaptureProps) {
                           if (processedUrl && processedUrl !== capturedUrl) URL.revokeObjectURL(processedUrl);
                           setProcessedUrl(result.url);
                           setCroppedBlob(result.blob);
+                          setWidth(String(result.bbox.w));
+                          setHeight(String(result.bbox.h));
                         }
                         setIsProcessing(false);
                       });
@@ -411,7 +417,7 @@ export function PatchCapture({ onPatchSaved }: PatchCaptureProps) {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-ink/70 block mb-1">Width (mm)</label>
+                  <label className="text-xs font-semibold text-ink/70 block mb-1">Width</label>
                   <input
                     type="number"
                     value={width}
@@ -420,7 +426,7 @@ export function PatchCapture({ onPatchSaved }: PatchCaptureProps) {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-ink/70 block mb-1">Height (mm)</label>
+                  <label className="text-xs font-semibold text-ink/70 block mb-1">Height</label>
                   <input
                     type="number"
                     value={height}
@@ -447,6 +453,9 @@ export function PatchCapture({ onPatchSaved }: PatchCaptureProps) {
                   </div>
                 </div>
               </div>
+              <p className="text-[10px] text-ink/50">
+                Width/Height set the patch&apos;s size ratio in the designer. With a fixed camera, the cropped pixel size is filled in automatically; replace it with real millimetres if you have a calibration.
+              </p>
               <button
                 onClick={handleSave}
                 disabled={!croppedBlob || !name.trim() || isUploading}
