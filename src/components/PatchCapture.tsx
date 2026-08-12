@@ -39,6 +39,8 @@ export function PatchCapture({ onPatchSaved }: PatchCaptureProps) {
   }
   const [calibration, setCalibration] = useState<Calibration | null>(null);
   const [calibrating, setCalibrating] = useState(false);
+  const [calibrationError, setCalibrationError] = useState('');
+  const [calibrationPreview, setCalibrationPreview] = useState('');
   const [refWidth, setRefWidth] = useState('85.6');
   const [refHeight, setRefHeight] = useState('53.98');
 
@@ -245,12 +247,17 @@ export function PatchCapture({ onPatchSaved }: PatchCaptureProps) {
   const handleCalibrate = async () => {
     if (!videoRef.current || !stream) return;
     setCalibrating(true);
-    setCameraError('');
+    setCalibrationError('');
+    setCalibrationPreview('');
     try {
       const video = videoRef.current;
       const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      canvas.width = video.videoWidth || video.clientWidth;
+      canvas.height = video.videoHeight || video.clientHeight;
+      if (canvas.width === 0 || canvas.height === 0) {
+        setCalibrationError('Camera is not ready. Wait a moment and try again.');
+        return;
+      }
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -258,8 +265,22 @@ export function PatchCapture({ onPatchSaved }: PatchCaptureProps) {
 
       const result = await processImage(rawUrl);
       if (!result) {
-        setCameraError('Could not detect the reference object. Make sure it has good contrast against a plain background.');
+        setCalibrationError('Could not detect the reference object. Make sure it has strong contrast against a plain, light background.');
+        setCalibrationPreview(rawUrl);
         return;
+      }
+
+      // Draw the detected rectangle on the captured frame so the user can see what was measured
+      const previewCanvas = document.createElement('canvas');
+      previewCanvas.width = canvas.width;
+      previewCanvas.height = canvas.height;
+      const pctx = previewCanvas.getContext('2d');
+      if (pctx) {
+        pctx.drawImage(video, 0, 0);
+        pctx.strokeStyle = '#22c55e';
+        pctx.lineWidth = Math.max(2, Math.round(canvas.width / 300));
+        pctx.strokeRect(result.bbox.x, result.bbox.y, result.bbox.w, result.bbox.h);
+        setCalibrationPreview(previewCanvas.toDataURL('image/png'));
       }
 
       const realW = Number(refWidth) || 1;
@@ -405,6 +426,8 @@ export function PatchCapture({ onPatchSaved }: PatchCaptureProps) {
             <button
               onClick={() => {
                 setCalibration(null);
+                setCalibrationPreview('');
+                setCalibrationError('');
                 localStorage.removeItem('patchpress-camera-calibration');
               }}
               className="px-4 py-2 rounded-xl text-sm font-semibold text-ink/60 hover:bg-paper transition-colors"
@@ -413,6 +436,20 @@ export function PatchCapture({ onPatchSaved }: PatchCaptureProps) {
             </button>
           )}
         </div>
+
+        {calibrationError && (
+          <div className="flex items-start gap-2 text-xs text-craft-rose bg-craft-rose/10 p-3 rounded-xl">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>{calibrationError}</span>
+          </div>
+        )}
+
+        {calibrationPreview && (
+          <div className="space-y-2">
+            <p className="text-xs text-ink/70">This is what the camera saw. The green box is the detected reference object.</p>
+            <img src={calibrationPreview} alt="Calibration preview" className="w-full rounded-xl border border-ink/10" />
+          </div>
+        )}
       </div>
 
       {/* Camera preview */}
