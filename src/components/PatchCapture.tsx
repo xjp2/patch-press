@@ -30,6 +30,27 @@ export function PatchCapture({ onPatchSaved }: PatchCaptureProps) {
   const [width, setWidth] = useState('80');
   const [height, setHeight] = useState('80');
 
+  // Camera calibration for real-world mm sizing
+  interface Calibration {
+    pixelsPerMm: number;
+    refWidth: number;
+    refHeight: number;
+    capturedAt: number;
+  }
+  const [calibration, setCalibration] = useState<Calibration | null>(null);
+  const [calibrating, setCalibrating] = useState(false);
+  const [refWidth, setRefWidth] = useState('85.6');
+  const [refHeight, setRefHeight] = useState('53.98');
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('patchpress-camera-calibration');
+      if (saved) setCalibration(JSON.parse(saved));
+    } catch {
+      // ignore corrupt calibration
+    }
+  }, []);
+
   // Start camera on mount
   useEffect(() => {
     startCamera();
@@ -202,8 +223,13 @@ export function PatchCapture({ onPatchSaved }: PatchCaptureProps) {
     if (result) {
       setProcessedUrl(result.url);
       setCroppedBlob(result.blob);
-      setWidth(String(result.bbox.w));
-      setHeight(String(result.bbox.h));
+      if (calibration) {
+        setWidth(String(Math.round(result.bbox.w / calibration.pixelsPerMm)));
+        setHeight(String(Math.round(result.bbox.h / calibration.pixelsPerMm)));
+      } else {
+        setWidth(String(result.bbox.w));
+        setHeight(String(result.bbox.h));
+      }
     } else {
       // Fallback: use full image without cropping
       const res = await fetch(rawUrl);
@@ -214,6 +240,45 @@ export function PatchCapture({ onPatchSaved }: PatchCaptureProps) {
       setHeight(String(canvas.height));
     }
     setIsProcessing(false);
+  };
+
+  const handleCalibrate = async () => {
+    if (!videoRef.current || !stream) return;
+    setCalibrating(true);
+    setCameraError('');
+    try {
+      const video = videoRef.current;
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const rawUrl = canvas.toDataURL('image/png');
+
+      const result = await processImage(rawUrl);
+      if (!result) {
+        setCameraError('Could not detect the reference object. Make sure it has good contrast against a plain background.');
+        return;
+      }
+
+      const realW = Number(refWidth) || 1;
+      const realH = Number(refHeight) || 1;
+      const ppmW = result.bbox.w / realW;
+      const ppmH = result.bbox.h / realH;
+      const pixelsPerMm = (ppmW + ppmH) / 2;
+
+      const newCalibration: Calibration = {
+        pixelsPerMm,
+        refWidth: realW,
+        refHeight: realH,
+        capturedAt: Date.now(),
+      };
+      setCalibration(newCalibration);
+      localStorage.setItem('patchpress-camera-calibration', JSON.stringify(newCalibration));
+    } finally {
+      setCalibrating(false);
+    }
   };
 
   const handleSave = async () => {
@@ -294,6 +359,62 @@ export function PatchCapture({ onPatchSaved }: PatchCaptureProps) {
 
   return (
     <div className="space-y-4">
+      {/* Calibration panel */}
+      <div className="bg-cardstock rounded-2xl p-4 shadow-soft space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="font-heading text-sm font-bold text-ink">Camera Calibration</h3>
+          {calibration ? (
+            <span className="text-xs font-semibold text-craft-mint">✅ Calibrated</span>
+          ) : (
+            <span className="text-xs font-semibold text-craft-rose">Not calibrated</span>
+          )}
+        </div>
+        <p className="text-xs text-ink/70">
+          Place a reference object of known size (e.g., a credit card) in the frame and snap it. After that, every patch captured will be measured in real millimetres.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-[10px] font-semibold text-ink/60 block mb-1">Reference width (mm)</label>
+            <input
+              type="number"
+              value={refWidth}
+              onChange={(e) => setRefWidth(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-ink/10 focus:border-craft-mint outline-none text-sm"
+            />
+          </div>
+          <div>
+            <label className="text-[10px] font-semibold text-ink/60 block mb-1">Reference height (mm)</label>
+            <input
+              type="number"
+              value={refHeight}
+              onChange={(e) => setRefHeight(e.target.value)}
+              className="w-full px-3 py-2 rounded-xl border border-ink/10 focus:border-craft-mint outline-none text-sm"
+            />
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={handleCalibrate}
+            disabled={!stream || calibrating}
+            className="flex-1 btn-primary flex items-center justify-center gap-2 text-sm disabled:opacity-50"
+          >
+            {calibrating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
+            {calibrating ? 'Calibrating...' : 'Calibrate Camera'}
+          </button>
+          {calibration && (
+            <button
+              onClick={() => {
+                setCalibration(null);
+                localStorage.removeItem('patchpress-camera-calibration');
+              }}
+              className="px-4 py-2 rounded-xl text-sm font-semibold text-ink/60 hover:bg-paper transition-colors"
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Camera preview */}
       {!capturedUrl && (
         <div className="relative bg-black rounded-2xl overflow-hidden aspect-[4/3] shadow-soft">
@@ -369,8 +490,13 @@ export function PatchCapture({ onPatchSaved }: PatchCaptureProps) {
                           if (processedUrl && processedUrl !== capturedUrl) URL.revokeObjectURL(processedUrl);
                           setProcessedUrl(result.url);
                           setCroppedBlob(result.blob);
-                          setWidth(String(result.bbox.w));
-                          setHeight(String(result.bbox.h));
+                          if (calibration) {
+                            setWidth(String(Math.round(result.bbox.w / calibration.pixelsPerMm)));
+                            setHeight(String(Math.round(result.bbox.h / calibration.pixelsPerMm)));
+                          } else {
+                            setWidth(String(result.bbox.w));
+                            setHeight(String(result.bbox.h));
+                          }
                         }
                         setIsProcessing(false);
                       });
@@ -454,7 +580,7 @@ export function PatchCapture({ onPatchSaved }: PatchCaptureProps) {
                 </div>
               </div>
               <p className="text-[10px] text-ink/50">
-                Width/Height set the patch&apos;s size ratio in the designer. With a fixed camera, the cropped pixel size is filled in automatically; replace it with real millimetres if you have a calibration.
+                Width/Height set the patch&apos;s real size in millimetres. Calibrate the camera once with a reference card and these will be filled automatically for every patch.
               </p>
               <button
                 onClick={handleSave}

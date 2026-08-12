@@ -660,6 +660,8 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
     const [newProductQuantity, setNewProductQuantity] = useState('10');
     const [newProductFrontImage, setNewProductFrontImage] = useState('');
     const [newProductBackImage, setNewProductBackImage] = useState('');
+    const [newProductWidth, setNewProductWidth] = useState('');
+    const [newProductHeight, setNewProductHeight] = useState('');
     // Visual Zone Editor State
     const [showZoneEditor, setShowZoneEditor] = useState(false);
     const [showCropEditor, setShowCropEditor] = useState(false);
@@ -732,14 +734,14 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
             backImage: newProductBackImage || newProductFrontImage,
             basePrice: parseInt(newProductPrice),
             quantity: parseInt(newProductQuantity) || 10,
-            width: 400, // Default base width
-            height: 500, // Default base height 
+            width: Number(newProductWidth) || 400,
+            height: Number(newProductHeight) || 500,
             placementZone: tempZone
         };
         const newProducts = [...products, product];
         setProducts(newProducts);
         // Reset forms
-        setNewProductName(''); setNewProductPrice(''); setNewProductQuantity('10'); setNewProductFrontImage(''); setNewProductBackImage('');
+        setNewProductName(''); setNewProductPrice(''); setNewProductQuantity('10'); setNewProductFrontImage(''); setNewProductBackImage(''); setNewProductWidth(''); setNewProductHeight('');
         setTempZone({ x: 15, y: 25, width: 70, height: 60, type: 'rectangle' });
     };
 
@@ -986,6 +988,23 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                             className="w-full px-4 py-3 rounded-xl border border-ink/10 focus:border-craft-mint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-craft-mint/50 focus-visible:ring-offset-2 transition-all" 
                                         />
                                     </div>
+                                    <p className="text-xs text-ink-muted">Width and height in millimetres are used to size patches accurately.</p>
+                                    <div className="grid md:grid-cols-2 gap-4">
+                                        <input 
+                                            type="number" 
+                                            value={newProductWidth || ''} 
+                                            onChange={(e) => setNewProductWidth(e.target.value)} 
+                                            placeholder="Width (mm)" 
+                                            className="w-full px-4 py-3 rounded-xl border border-ink/10 focus:border-craft-mint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-craft-mint/50 focus-visible:ring-offset-2 transition-all" 
+                                        />
+                                        <input 
+                                            type="number" 
+                                            value={newProductHeight || ''} 
+                                            onChange={(e) => setNewProductHeight(e.target.value)} 
+                                            placeholder="Height (mm)" 
+                                            className="w-full px-4 py-3 rounded-xl border border-ink/10 focus:border-craft-mint focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-craft-mint/50 focus-visible:ring-offset-2 transition-all" 
+                                        />
+                                    </div>
 
                                     <div className="grid md:grid-cols-2 gap-6">
                                         {/* Context7 Best Practice: Field groups with gap-2 for label+input */}
@@ -1070,6 +1089,30 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                                 <p className="text-sm font-semibold truncate">{product.name}</p>
                                                 <p className="text-sm text-craft-mint">{formatPrice(product.basePrice)}</p>
                                                 <p className={`text-xs ${(product.quantity ?? 0) <= 5 ? 'text-craft-pink font-bold' : 'text-craft-mint'}`}>Stock: {product.quantity ?? 0}</p>
+                                                <div className="flex gap-1 mt-1 justify-center">
+                                                    <input
+                                                        type="number"
+                                                        value={product.width || ''}
+                                                        onChange={(e) => {
+                                                            const v = Number(e.target.value);
+                                                            setProducts(products.map(p => p.id === product.id ? { ...p, width: v } : p));
+                                                        }}
+                                                        placeholder="W"
+                                                        className="w-14 px-1 py-1 text-[10px] rounded border border-ink/10 text-center"
+                                                    />
+                                                    <span className="text-[10px] text-ink/40 self-center">×</span>
+                                                    <input
+                                                        type="number"
+                                                        value={product.height || ''}
+                                                        onChange={(e) => {
+                                                            const v = Number(e.target.value);
+                                                            setProducts(products.map(p => p.id === product.id ? { ...p, height: v } : p));
+                                                        }}
+                                                        placeholder="H"
+                                                        className="w-14 px-1 py-1 text-[10px] rounded border border-ink/10 text-center"
+                                                    />
+                                                    <span className="text-[10px] text-ink/40 self-center">mm</span>
+                                                </div>
                                             </div>
                                         ))}
                                     </div>

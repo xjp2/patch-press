@@ -233,8 +233,11 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
         const centerX = (zoneX + zoneW / 2) / rect.width * 100; // Convert to percentage
         const centerY = (zoneY + zoneH / 2) / rect.height * 100; // Convert to percentage
 
-        // Default patch size (e.g., 10% of product image width, maintaining aspect ratio)
-        const defaultPatchWidthPercent = 10;
+        // Default patch size based on real-world dimensions so it matches the physical product.
+        // Falls back to 10% width if dimensions are missing.
+        const defaultPatchWidthPercent = (selectedProduct.width > 0 && patch.width > 0)
+            ? (patch.width / selectedProduct.width) * 100
+            : 10;
         const patchAspectRatio = patch.height > 0 ? patch.width / patch.height : 1;
         const defaultPatchHeightPercent = patchAspectRatio > 0 
             ? defaultPatchWidthPercent / patchAspectRatio * (rect.width / rect.height) 
