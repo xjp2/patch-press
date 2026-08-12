@@ -291,7 +291,7 @@ export const SECTION_META: Record<SectionType, { label: string; icon: string }> 
     transition: { label: 'Shape Transition', icon: '🌊' },
 };
 
-export type AdminTab = 'products' | 'patches' | 'capture' | 'orders' | 'inventory' | 'pages';
+export type AdminTab = 'products' | 'patches' | 'orders' | 'inventory' | 'pages';
 
 export interface AdminPanelProps {
     showAdmin: boolean;
@@ -680,6 +680,8 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
     // Patch dimensions
     const [newPatchWidth, setNewPatchWidth] = useState('80');
     const [newPatchHeight, setNewPatchHeight] = useState('80');
+    // Camera capture mode for adding new patches
+    const [captureMode, setCaptureMode] = useState(false);
     // Patch content zone editor (for trimming patch bounds)
     const [showPatchSizer, setShowPatchSizer] = useState(false);
     const [tempPatchZone, setTempPatchZone] = useState<TracedZone>({ x: 10, y: 10, width: 80, height: 80, type: 'rectangle' });
@@ -907,7 +909,6 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                         {[
                             { id: 'products', label: 'Products', icon: ShoppingCart },
                             { id: 'patches', label: 'Patches', icon: Palette },
-                            { id: 'capture', label: 'Capture', icon: Camera },
                             { id: 'orders', label: 'Orders', icon: Layers },
                             { id: 'inventory', label: 'Inventory', icon: RefreshCw },
                             { id: 'pages', label: 'Pages', icon: Layout },
@@ -1103,51 +1104,78 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                         )}
                                     </div>
                                 </div>
-                                <h2 className="font-heading text-xl font-bold">Add New Patch</h2>
-                                <div className="grid gap-4">
-                                    <input type="text" value={newPatchName || ''} onChange={(e) => setNewPatchName(e.target.value)} placeholder="Patch Name" className="w-full px-4 py-3 rounded-xl border border-ink/10 focus:border-craft-mint outline-none" />
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <input type="number" value={newPatchPrice || ''} onChange={(e) => setNewPatchPrice(e.target.value)} placeholder="Price ($)" className="w-full px-4 py-3 rounded-xl border border-ink/10 focus:border-craft-mint outline-none" />
-                                        <input type="number" min="0" value={newPatchQuantity || ''} onChange={(e) => setNewPatchQuantity(e.target.value)} placeholder="Stock Quantity" className="w-full px-4 py-3 rounded-xl border border-ink/10 focus:border-craft-mint outline-none" />
+                                <div className="flex items-center justify-between">
+                                    <h2 className="font-heading text-xl font-bold">Add New Patch</h2>
+                                    <div className="flex gap-2 p-1 bg-paper-ruled rounded-xl">
+                                        {(['manual', 'capture'] as const).map((mode) => (
+                                            <button
+                                                key={mode}
+                                                onClick={() => setCaptureMode(mode === 'capture')}
+                                                className={`py-2 px-4 rounded-lg text-sm font-semibold transition-all ${
+                                                    (mode === 'capture') === captureMode
+                                                        ? 'bg-cardstock shadow-sm text-ink'
+                                                        : 'text-ink-muted hover:text-ink/70'
+                                                }`}
+                                            >
+                                                {mode === 'capture' ? '📷 Camera' : '📁 Manual'}
+                                            </button>
+                                        ))}
                                     </div>
+                                </div>
 
-                                    <div>
-                                        <label className="block text-sm font-semibold mb-2">Patch Image <span className="text-xs text-ink-muted font-normal">(size auto-detected)</span></label>
-                                        <label className="flex items-center justify-center gap-2 px-4 py-8 bg-cardstock rounded-xl cursor-pointer hover:bg-craft-mint/10 transition-colors border-2 border-dashed border-ink/10">
-                                            <Camera className="w-6 h-6 text-craft-mint" /><span className="text-sm">Upload Patch Image</span>
-                                            <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, setNewPatchImage, 'patches', (w, h) => {
-                                                setNewPatchWidth(String(w));
-                                                setNewPatchHeight(String(h));
-                                            })} className="hidden" />
-                                        </label>
+                                {captureMode ? (
+                                    <PatchCapture
+                                        onPatchSaved={(newPatch) => {
+                                            setPatches([...patches, newPatch]);
+                                            setCaptureMode(false);
+                                        }}
+                                    />
+                                ) : (
+                                    <div className="grid gap-4">
+                                        <input type="text" value={newPatchName || ''} onChange={(e) => setNewPatchName(e.target.value)} placeholder="Patch Name" className="w-full px-4 py-3 rounded-xl border border-ink/10 focus:border-craft-mint outline-none" />
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <input type="number" value={newPatchPrice || ''} onChange={(e) => setNewPatchPrice(e.target.value)} placeholder="Price ($)" className="w-full px-4 py-3 rounded-xl border border-ink/10 focus:border-craft-mint outline-none" />
+                                            <input type="number" min="0" value={newPatchQuantity || ''} onChange={(e) => setNewPatchQuantity(e.target.value)} placeholder="Stock Quantity" className="w-full px-4 py-3 rounded-xl border border-ink/10 focus:border-craft-mint outline-none" />
+                                        </div>
+
+                                        <div>
+                                            <label className="block text-sm font-semibold mb-2">Patch Image <span className="text-xs text-ink-muted font-normal">(size auto-detected)</span></label>
+                                            <label className="flex items-center justify-center gap-2 px-4 py-8 bg-cardstock rounded-xl cursor-pointer hover:bg-craft-mint/10 transition-colors border-2 border-dashed border-ink/10">
+                                                <Camera className="w-6 h-6 text-craft-mint" /><span className="text-sm">Upload Patch Image</span>
+                                                <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, setNewPatchImage, 'patches', (w, h) => {
+                                                    setNewPatchWidth(String(w));
+                                                    setNewPatchHeight(String(h));
+                                                })} className="hidden" />
+                                            </label>
+                                            {newPatchImage && (
+                                                <div className="mt-2">
+                                                    <img src={getResizedImageUrl(newPatchImage, 192)} alt="Patch Preview" className="w-24 h-24 object-contain" loading="lazy" decoding="async" />
+                                                    <p className="text-xs text-ink-muted mt-1">Size: {newPatchWidth} × {newPatchHeight} px (auto-detected)</p>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Content Zone Editor for New Patches */}
                                         {newPatchImage && (
-                                            <div className="mt-2">
-                                                <img src={getResizedImageUrl(newPatchImage, 192)} alt="Patch Preview" className="w-24 h-24 object-contain" loading="lazy" decoding="async" />
-                                                <p className="text-xs text-ink-muted mt-1">Size: {newPatchWidth} × {newPatchHeight} px (auto-detected)</p>
+                                            <div className="bg-paper-ruled p-4 rounded-xl border border-ink/10">
+                                                <div className="flex justify-between items-center">
+                                                    <div>
+                                                        <h4 className="font-bold text-ink/70">Patch Content Zone</h4>
+                                                        <p className="text-xs text-ink-muted">Define the usable area of this patch</p>
+                                                    </div>
+                                                    <button
+                                                        onClick={openPatchSizer}
+                                                        className="text-craft-mint hover:text-craft-mint font-semibold text-sm flex items-center gap-1 bg-craft-mint/10 px-3 py-1.5 rounded-lg hover:bg-craft-mint/20 transition-colors"
+                                                    >
+                                                        <Crop className="w-4 h-4" /> Edit Content Zone
+                                                    </button>
+                                                </div>
                                             </div>
                                         )}
+
+                                        <button onClick={handleAddPatch} className="btn-primary w-fit"><Plus className="w-4 h-4 inline mr-2" />Add Patch</button>
                                     </div>
-
-                                    {/* Content Zone Editor for New Patches */}
-                                    {newPatchImage && (
-                                        <div className="bg-paper-ruled p-4 rounded-xl border border-ink/10">
-                                            <div className="flex justify-between items-center">
-                                                <div>
-                                                    <h4 className="font-bold text-ink/70">Patch Content Zone</h4>
-                                                    <p className="text-xs text-ink-muted">Define the usable area of this patch</p>
-                                                </div>
-                                                <button
-                                                    onClick={openPatchSizer}
-                                                    className="text-craft-mint hover:text-craft-mint font-semibold text-sm flex items-center gap-1 bg-craft-mint/10 px-3 py-1.5 rounded-lg hover:bg-craft-mint/20 transition-colors"
-                                                >
-                                                    <Crop className="w-4 h-4" /> Edit Content Zone
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    <button onClick={handleAddPatch} className="btn-primary w-fit"><Plus className="w-4 h-4 inline mr-2" />Add Patch</button>
-                                </div>
+                                )}
 
                                 <div className="mt-8">
                                     <h3 className="font-heading text-lg font-bold mb-4">Existing Patches ({patches.length})</h3>
@@ -1186,10 +1214,6 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                     </div>
                                 </div>
                             </div>
-                        )}
-
-                        {adminTab === 'capture' && (
-                            <PatchCapture onPatchSaved={(newPatch) => setPatches([...patches, newPatch])} />
                         )}
 
                         {adminTab === 'orders' && (
