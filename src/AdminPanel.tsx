@@ -10,6 +10,7 @@ import { SortableSection } from './SortableSection';
 import { SortableItem } from './SortableItem';
 import { AdminOrderManagement } from './components/AdminOrderManagement';
 import { InventoryLogsViewer } from './components/InventoryLogsViewer';
+import { PatchCapture } from './components/PatchCapture';
 import { getResizedImageUrl } from './lib/utils';
 
 export interface Notice {
@@ -290,7 +291,7 @@ export const SECTION_META: Record<SectionType, { label: string; icon: string }> 
     transition: { label: 'Shape Transition', icon: '🌊' },
 };
 
-export type AdminTab = 'products' | 'patches' | 'orders' | 'inventory' | 'pages';
+export type AdminTab = 'products' | 'patches' | 'capture' | 'orders' | 'inventory' | 'pages';
 
 export interface AdminPanelProps {
     showAdmin: boolean;
@@ -906,6 +907,7 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                         {[
                             { id: 'products', label: 'Products', icon: ShoppingCart },
                             { id: 'patches', label: 'Patches', icon: Palette },
+                            { id: 'capture', label: 'Capture', icon: Camera },
                             { id: 'orders', label: 'Orders', icon: Layers },
                             { id: 'inventory', label: 'Inventory', icon: RefreshCw },
                             { id: 'pages', label: 'Pages', icon: Layout },
@@ -1184,6 +1186,10 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                     </div>
                                 </div>
                             </div>
+                        )}
+
+                        {adminTab === 'capture' && (
+                            <PatchCapture onPatchSaved={(newPatch) => setPatches([...patches, newPatch])} />
                         )}
 
                         {adminTab === 'orders' && (
