@@ -34,6 +34,16 @@ interface OrderItem {
   productBackImage?: string;
   frontPatches?: PlacedPatch[];
   backPatches?: PlacedPatch[];
+  productWidth?: number;
+  productHeight?: number;
+  placementZone?: {
+    type: 'rectangle' | 'polygon';
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+    points?: { x: number; y: number }[];
+  };
 }
 
 interface ShippingAddress {
@@ -85,6 +95,8 @@ export function ProductionMode({
   const [showMeasurements, setShowMeasurements] = useState(true);
   const [completedPatches, setCompletedPatches] = useState<Set<string>>(new Set());
   const modalRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
 
   // Reset item index when order changes
   useEffect(() => {
@@ -162,6 +174,39 @@ export function ProductionMode({
   const displayImage = currentSide === 'front' 
     ? (currentItem?.productImage || '/placeholder-product.png')
     : (currentItem?.productBackImage || currentItem?.productImage || '/placeholder-product.png');
+
+  // Real-world dimensions for this item (width/height are stored in mm)
+  const productWidthCm = (currentItem?.productWidth || 400) / 10;
+  const productHeightCm = (currentItem?.productHeight || 500) / 10;
+  const placementZone = currentItem?.placementZone || { x: 0, y: 0, width: 100, height: 100, type: 'rectangle' };
+  const hasDimensions = !!(currentItem?.productWidth && currentItem?.productHeight);
+
+  // Measure product canvas size so overlays can be drawn in real-world units
+  useEffect(() => {
+    const measure = () => {
+      if (canvasRef.current) {
+        setCanvasSize({
+          width: canvasRef.current.offsetWidth,
+          height: canvasRef.current.offsetHeight,
+        });
+      }
+    };
+    measure();
+    const img = canvasRef.current?.querySelector('img');
+    img?.addEventListener('load', measure);
+    window.addEventListener('resize', measure);
+    return () => {
+      img?.removeEventListener('load', measure);
+      window.removeEventListener('resize', measure);
+    };
+  }, [currentItem, currentSide, displayImage]);
+
+  const pxPerCm = canvasSize.width > 0 && productWidthCm > 0
+    ? canvasSize.width / productWidthCm
+    : 0;
+  const pxPerCmY = canvasSize.height > 0 && productHeightCm > 0
+    ? canvasSize.height / productHeightCm
+    : 0;
 
   const totalItems = currentOrder.items.reduce((sum, item) => sum + item.qty, 0);
   const totalPatches = currentOrder.items.reduce((sum, item) => 
@@ -287,30 +332,67 @@ export function ProductionMode({
             {/* Left - Product Canvas (75%) */}
             <div className="w-[75%] bg-gray-900 p-6 flex items-center justify-center">
               <div className="relative max-w-2xl w-full">
-                <div className="relative flex items-center justify-center">
+                <div ref={canvasRef} className="relative flex items-center justify-center">
                   <img
                     src={displayImage}
                     alt={currentItem?.name}
                     className="max-w-full max-h-[70vh] object-contain"
                   />
 
-                  {/* Grid Overlay */}
-                  {showMeasurements && (
-                    <div className="absolute inset-0 pointer-events-none">
-                      {Array.from({ length: 21 }).map((_, i) => (
+                  {/* Real-world grid overlay in centimetres */}
+                  {showMeasurements && hasDimensions && pxPerCm > 0 && (
+                    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                      {/* Major grid every 5 cm, minor every 1 cm */}
+                      {Array.from({ length: Math.floor(productWidthCm) + 1 }).map((_, i) => {
+                        const major = i % 5 === 0;
+                        return (
+                          <div
+                            key={`v-${i}`}
+                            className={`absolute top-0 bottom-0 ${major ? 'border-l border-pink/50' : 'border-l border-pink/20'}`}
+                            style={{ left: `${i * pxPerCm}px` }}
+                          />
+                        );
+                      })}
+                      {Array.from({ length: Math.floor(productHeightCm) + 1 }).map((_, i) => {
+                        const major = i % 5 === 0;
+                        return (
+                          <div
+                            key={`h-${i}`}
+                            className={`absolute left-0 right-0 ${major ? 'border-t border-pink/50' : 'border-t border-pink/20'}`}
+                            style={{ top: `${i * pxPerCmY}px` }}
+                          />
+                        );
+                      })}
+
+                      {/* Center crosshair */}
+                      <div
+                        className="absolute top-0 bottom-0 border-l-2 border-dashed border-green-400/70"
+                        style={{ left: `${(productWidthCm / 2) * pxPerCm}px` }}
+                      />
+                      <div
+                        className="absolute left-0 right-0 border-t-2 border-dashed border-green-400/70"
+                        style={{ top: `${(productHeightCm / 2) * pxPerCmY}px` }}
+                      />
+
+                      {/* TOP marker */}
+                      <div
+                        className="absolute -top-6 left-1/2 -translate-x-1/2 text-xs font-bold text-green-400 bg-gray-900/80 px-2 py-0.5 rounded"
+                      >
+                        TOP
+                      </div>
+
+                      {/* Placement zone outline */}
+                      {placementZone.type === 'rectangle' && (
                         <div
-                          key={`v-${i}`}
-                          className="absolute top-0 bottom-0 border-l border-dashed border-pink/30"
-                          style={{ left: `${i * 5}%` }}
+                          className="absolute border-2 border-dashed border-yellow-400/70 rounded-sm"
+                          style={{
+                            left: `${(placementZone.x || 0) * canvasSize.width / 100}px`,
+                            top: `${(placementZone.y || 0) * canvasSize.height / 100}px`,
+                            width: `${(placementZone.width || 100) * canvasSize.width / 100}px`,
+                            height: `${(placementZone.height || 100) * canvasSize.height / 100}px`,
+                          }}
                         />
-                      ))}
-                      {Array.from({ length: 21 }).map((_, i) => (
-                        <div
-                          key={`h-${i}`}
-                          className="absolute left-0 right-0 border-t border-dashed border-pink/30"
-                          style={{ top: `${i * 5}%` }}
-                        />
-                      ))}
+                      )}
                     </div>
                   )}
 
@@ -385,10 +467,15 @@ export function ProductionMode({
                 </div>
 
                 {/* Scale indicator */}
-                {showMeasurements && (
+                {showMeasurements && hasDimensions && pxPerCm > 0 && (
                   <div className="mt-4 flex items-center gap-2 text-gray-400 text-sm justify-center">
-                    <div className="w-20 h-0.5 bg-pink" />
-                    <span>5cm (reference)</span>
+                    <div className="h-0.5 bg-pink" style={{ width: `${5 * pxPerCm}px` }} />
+                    <span>5 cm</span>
+                  </div>
+                )}
+                {!hasDimensions && (
+                  <div className="mt-4 text-center text-xs text-yellow-400 bg-yellow-400/10 px-3 py-2 rounded-lg">
+                    Product dimensions missing. Set width/height in mm for accurate alignment.
                   </div>
                 )}
               </div>
@@ -450,6 +537,12 @@ export function ProductionMode({
                 <div className="space-y-2">
                   {patches.map((patch, idx) => {
                     const isCompleted = completedPatches.has(`${currentSide}-${idx}`);
+                    const patchW = (patch.widthPercent / 100) * productWidthCm;
+                    const patchH = (patch.heightPercent / 100) * productHeightCm;
+                    const centerX = (patch.x / 100) * productWidthCm;
+                    const centerY = (patch.y / 100) * productHeightCm;
+                    const fromLeft = centerX - patchW / 2;
+                    const fromTop = centerY - patchH / 2;
                     return (
                       <div
                         key={idx}
@@ -479,7 +572,8 @@ export function ProductionMode({
                             {patch.name}
                           </p>
                           <p className="text-xs text-gray-400">
-                            {patch.x.toFixed(1)}%, {patch.y.toFixed(1)}%
+                            {fromLeft.toFixed(1)}cm, {fromTop.toFixed(1)}cm • {patchW.toFixed(1)}×{patchH.toFixed(1)}cm
+                            {patch.rotation !== 0 && ` • ${Math.round(patch.rotation)}°`}
                           </p>
                         </div>
                       </div>
