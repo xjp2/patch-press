@@ -5,6 +5,7 @@ import {
   Maximize, Minimize, SkipForward, MapPin, Package,
   Clock, User, Ruler
 } from 'lucide-react';
+import { CroppedProductImage } from './CroppedProductImage';
 
 interface PlacedPatch {
   id: string;
@@ -356,9 +357,10 @@ export function ProductionMode({
             <div className="w-[75%] bg-gray-900 p-6 overflow-auto flex items-start justify-center">
               <div className={wrapperClass} style={wrapperStyle}>
                 <div ref={canvasRef} className="relative w-full h-full flex items-center justify-center">
-                  <img
+                  <CroppedProductImage
                     src={displayImage}
                     alt={currentItem?.name}
+                    zone={placementZone}
                     className={imgClass}
                   />
 

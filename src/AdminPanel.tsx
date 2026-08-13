@@ -9,6 +9,7 @@ import { arrayMove, SortableContext, verticalListSortingStrategy } from '@dnd-ki
 import { SortableSection } from './SortableSection';
 import { SortableItem } from './SortableItem';
 import { AdminOrderManagement } from './components/AdminOrderManagement';
+import { CroppedProductImage } from './components/CroppedProductImage';
 import { InventoryLogsViewer } from './components/InventoryLogsViewer';
 import { PatchCapture } from './components/PatchCapture';
 import { getResizedImageUrl } from './lib/utils';
@@ -1015,7 +1016,7 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                                 <span className="text-sm">Upload Front</span>
                                                 <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, setNewProductFrontImage, 'products')} className="hidden" />
                                             </label>
-                                            {newProductFrontImage && <img src={getResizedImageUrl(newProductFrontImage, 192)} alt="Front Preview" className="mt-2 w-24 h-24 object-contain rounded-lg" loading="lazy" decoding="async" />}
+                                            {newProductFrontImage && <CroppedProductImage src={getResizedImageUrl(newProductFrontImage, 192)} alt="Front Preview" zone={tempZone} className="mt-2 w-24 h-24 object-contain rounded-lg" />}
                                         </div>
                                         <div className="flex flex-col gap-2">
                                             <label className="text-sm font-semibold text-foreground">Back Image</label>
@@ -1024,7 +1025,7 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                                 <span className="text-sm">Upload Back</span>
                                                 <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, setNewProductBackImage, 'products')} className="hidden" />
                                             </label>
-                                            {newProductBackImage && <img src={getResizedImageUrl(newProductBackImage, 192)} alt="Back Preview" className="mt-2 w-24 h-24 object-contain rounded-lg" loading="lazy" decoding="async" />}
+                                            {newProductBackImage && <CroppedProductImage src={getResizedImageUrl(newProductBackImage, 192)} alt="Back Preview" zone={tempZone} className="mt-2 w-24 h-24 object-contain rounded-lg" />}
                                         </div>
                                     </div>
                                 </div>
@@ -1085,7 +1086,7 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                                         }
                                                     }} className="p-1 bg-cardstock rounded shadow text-craft-pink hover:text-red-700 hover:scale-110" title="Delete Product"><Trash2 className="w-4 h-4" /></button>
                                                 </div>
-                                                <img src={getResizedImageUrl(product.frontImage, 320)} alt={product.name} className="w-full h-20 object-contain mb-2" loading="lazy" decoding="async" />
+                                                <CroppedProductImage src={getResizedImageUrl(product.frontImage, 320)} alt={product.name} zone={product.placementZone} className="w-full h-20 object-contain mb-2" />
                                                 <p className="text-sm font-semibold truncate">{product.name}</p>
                                                 <p className="text-sm text-craft-mint">{formatPrice(product.basePrice)}</p>
                                                 <p className={`text-xs ${(product.quantity ?? 0) <= 5 ? 'text-craft-pink font-bold' : 'text-craft-mint'}`}>Stock: {product.quantity ?? 0}</p>
