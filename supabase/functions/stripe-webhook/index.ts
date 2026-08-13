@@ -9,6 +9,9 @@ const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
 
 const webhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET') || '';
 
+const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || '';
+const FROM_EMAIL = Deno.env.get('FROM_EMAIL') || 'orders@patchuu.shop';
+
 // Initialize Supabase admin client
 const supabaseAdmin = createClient(
   Deno.env.get('SUPABASE_URL') || '',
@@ -402,6 +405,9 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
   }
 
   console.log('Order fulfilled:', order.id, 'Order #:', pendingOrder.order_number);
+
+  // Send order confirmation email
+  await sendOrderConfirmationEmail(order, pendingOrder);
 }
 
 async function handlePaymentIntentFailed(paymentIntent: Stripe.PaymentIntent) {
@@ -442,5 +448,101 @@ async function handlePaymentIntentFailed(paymentIntent: Stripe.PaymentIntent) {
   } catch (e) {
     // Table might not exist, ignore
     console.log('Could not log payment failure:', e);
+  }
+}
+
+async function sendOrderConfirmationEmail(order: any, pendingOrder: any) {
+  if (!RESEND_API_KEY) {
+    console.log('RESEND_API_KEY not set, skipping order confirmation email.');
+    return;
+  }
+  if (!order?.customer_email) {
+    console.log('No customer email, skipping order confirmation email.');
+    return;
+  }
+
+  const formatCurrency = (amount: number, currency: string) => {
+    try {
+      return new Intl.NumberFormat('en-SG', { style: 'currency', currency: currency.toUpperCase() }).format(amount);
+    } catch {
+      return `${amount} ${currency.toUpperCase()}`;
+    }
+  };
+
+  const items = order.items || pendingOrder?.items || [];
+  const itemsHtml = items.map((item: any) => {
+    const allPatches = [...(item.frontPatches || []), ...(item.backPatches || [])];
+    const patchNames = allPatches.map((p: any) => p.name || p).filter(Boolean).join(', ');
+    const qty = item.qty || item.quantity || 1;
+    const price = item.price ?? item.totalPrice ?? 0;
+    return `<tr>
+      <td style="padding:8px;border-bottom:1px solid #eee;">${item.name || item.productName || 'Item'}</td>
+      <td style="padding:8px;border-bottom:1px solid #eee;text-align:center;">${qty}</td>
+      <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;">${formatCurrency(price, order.currency)}</td>
+    </tr>
+    ${patchNames ? `<tr><td colspan="3" style="padding:0 8px 8px;font-size:12px;color:#666;">Patches: ${patchNames}</td></tr>` : ''}`;
+  }).join('');
+
+  const shipping = order.shipping_address || {};
+  const shippingHtml = shipping.name || shipping.address_line1 ? `
+    <p style="margin-top:16px;"><strong>Ship to:</strong><br/>
+    ${shipping.name || ''}<br/>
+    ${shipping.address_line1 || ''}<br/>
+    ${shipping.address_line2 ? shipping.address_line2 + '<br/>' : ''}
+    ${shipping.city || ''}${shipping.city && shipping.state ? ', ' : ''}${shipping.state || ''} ${shipping.postal_code || ''}<br/>
+    ${shipping.country || ''}</p>
+  ` : '<p style="margin-top:16px;">No shipping address provided.</p>';
+
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#333;">
+      <h2 style="color:#ec4899;">Thank you for your order!</h2>
+      <p>Hi ${order.customer_name || shipping.name || 'there'},</p>
+      <p>We've received your payment and started preparing your order.</p>
+      <p><strong>Order #:</strong> ${order.order_number}</p>
+      <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+        <thead>
+          <tr style="background:#f9f9f9;">
+            <th style="padding:8px;text-align:left;">Item</th>
+            <th style="padding:8px;text-align:center;">Qty</th>
+            <th style="padding:8px;text-align:right;">Price</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${itemsHtml}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="2" style="padding:8px;text-align:right;font-weight:bold;">Total</td>
+            <td style="padding:8px;text-align:right;font-weight:bold;">${formatCurrency(order.total_amount, order.currency)}</td>
+          </tr>
+        </tfoot>
+      </table>
+      ${shippingHtml}
+      <p style="font-size:12px;color:#666;margin-top:24px;">If you have any questions, reply to this email.</p>
+    </div>
+  `;
+
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: FROM_EMAIL,
+        to: order.customer_email,
+        subject: `Order Confirmation #${order.order_number}`,
+        html,
+      }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      console.error('Resend email failed:', res.status, text);
+    } else {
+      console.log('Order confirmation email sent to', order.customer_email);
+    }
+  } catch (e) {
+    console.error('Failed to send order confirmation email:', e);
   }
 }
