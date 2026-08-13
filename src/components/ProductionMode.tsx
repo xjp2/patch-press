@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { 
   X, ChevronLeft, ChevronRight, CheckCircle, 
   Maximize, Minimize, SkipForward, MapPin, Package,
-  Clock, User, Ruler
+  Clock, User
 } from 'lucide-react';
 import { CroppedProductImage } from './CroppedProductImage';
 
@@ -95,20 +95,10 @@ export function ProductionMode({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showMeasurements, setShowMeasurements] = useState(true);
   const [completedPatches, setCompletedPatches] = useState<Set<string>>(new Set());
-  const [showScreenCalibrate, setShowScreenCalibrate] = useState(false);
-  const [screenPpcm, setScreenPpcm] = useState(37.7952755906);
   const modalRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
 
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('patchpress-screen-ppcm');
-      if (saved) setScreenPpcm(Number(saved));
-    } catch {
-      // ignore
-    }
-  }, []);
   useEffect(() => {
     setCurrentItemIndex(0);
     setCurrentSide('front');
@@ -191,18 +181,13 @@ export function ProductionMode({
   const placementZone = currentItem?.placementZone || { x: 0, y: 0, width: 100, height: 100, type: 'rectangle' };
   const hasDimensions = !!(currentItem?.productWidth && currentItem?.productHeight);
 
-  const wrapperClass = hasDimensions ? 'relative flex-shrink-0' : 'relative max-w-2xl w-full';
-  const wrapperStyle = hasDimensions ? { width: `${productWidthCm * screenPpcm}px`, height: `${productHeightCm * screenPpcm}px` } : undefined;
-  const imgClass = hasDimensions ? 'w-full h-full object-contain' : 'max-w-full max-h-[70vh] object-contain';
-
-  // Measure product canvas size so overlays can be drawn in real-world units
+  // Measure the rendered product image so overlays match the visible product
   useEffect(() => {
     const measure = () => {
-      if (canvasRef.current) {
-        setCanvasSize({
-          width: canvasRef.current.offsetWidth,
-          height: canvasRef.current.offsetHeight,
-        });
+      const img = canvasRef.current?.querySelector('img');
+      if (img) {
+        const rect = img.getBoundingClientRect();
+        setCanvasSize({ width: rect.width, height: rect.height });
       }
     };
     measure();
@@ -213,7 +198,7 @@ export function ProductionMode({
       img?.removeEventListener('load', measure);
       window.removeEventListener('resize', measure);
     };
-  }, [currentItem, currentSide, displayImage, screenPpcm]);
+  }, [currentItem, currentSide, displayImage]);
 
   const pxPerCm = canvasSize.width > 0 && productWidthCm > 0
     ? canvasSize.width / productWidthCm
@@ -250,7 +235,7 @@ export function ProductionMode({
         position: 'fixed', 
         top: 0, 
         left: 0, 
-        right: 0, 
+        right: 0,
         bottom: 0,
         width: '100vw',
         height: '100vh',
@@ -313,16 +298,6 @@ export function ProductionMode({
               </button>
 
               <button
-                onClick={() => setShowScreenCalibrate(!showScreenCalibrate)}
-                className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  showScreenCalibrate ? 'bg-pink text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                }`}
-              >
-                <Ruler className="w-4 h-4 inline mr-1" />
-                Calibrate
-              </button>
-
-              <button
                 onClick={toggleFullscreen}
                 className="p-2 hover:bg-gray-700 rounded-lg text-gray-400 transition-colors"
               >
@@ -354,17 +329,17 @@ export function ProductionMode({
           {/* Main Content */}
           <div className="flex-1 flex overflow-hidden min-h-0">
             {/* Left - Product Canvas (75%) */}
-            <div className="w-[75%] bg-gray-900 p-6 overflow-auto flex items-start justify-center">
-              <div className={wrapperClass} style={wrapperStyle}>
-                <div ref={canvasRef} className="relative w-full h-full flex items-center justify-center">
+            <div className="w-[75%] bg-gray-900 p-6 overflow-auto flex items-center justify-center">
+              <div className="relative max-w-2xl w-full">
+                <div ref={canvasRef} className="relative inline-block max-w-full max-h-[70vh]">
                   <CroppedProductImage
                     src={displayImage}
                     alt={currentItem?.name}
                     zone={placementZone}
-                    className={imgClass}
+                    className="max-w-full max-h-[70vh] object-contain"
                   />
 
-                  {/* Real-world grid overlay in centimetres */}
+                  {/* Proportional grid overlay in centimetres (relative to product, not screen) */}
                   {showMeasurements && hasDimensions && pxPerCm > 0 && (
                     <div className="absolute inset-0 pointer-events-none overflow-hidden">
                       {/* Major grid every 5 cm, minor every 1 cm */}
@@ -461,7 +436,7 @@ export function ProductionMode({
                             clipPath: patch.contentZone
                               ? (patch.contentZone.type === 'polygon' && patch.contentZone.points
                                 ? `polygon(${patch.contentZone.points.map((p: {x: number, y: number}) => `${p.x}% ${p.y}%`).join(', ')})`
-                                : `inset(${patch.contentZone.y}% ${100 - (patch.contentZone.x + patch.contentZone.width)}% ${100 - (patch.contentZone.y + patch.contentZone.height)}% ${patch.contentZone.x}%)`)
+                                : `inset(${patch.contentZone.y}% ${100 - (patch.contentZone.x + patch.contentZone.width)}% ${100 - (patch.contentZone.y + patch.contentZone.height)}% ${patch.contentZone.x}%`)
                               : 'none'
                           }}
                         />
@@ -491,18 +466,6 @@ export function ProductionMode({
                   })}
                 </div>
 
-                {/* Scale indicator / calibration hint */}
-                {showMeasurements && hasDimensions && (
-                  <div className="mt-4 flex flex-col items-center gap-1 text-gray-400 text-sm">
-                    <div className="flex items-center gap-2">
-                      <div className="h-0.5 bg-pink" style={{ width: `${5 * screenPpcm}px` }} />
-                      <span>5 cm on screen</span>
-                    </div>
-                    <p className="text-[10px] text-gray-500">
-                      Hold a ruler to this line and use Calibrate to make it exact.
-                    </p>
-                  </div>
-                )}
                 {!hasDimensions && (
                   <div className="mt-4 text-center text-xs text-yellow-400 bg-yellow-400/10 px-3 py-2 rounded-lg">
                     Product dimensions missing. Set width/height in mm for accurate alignment.
@@ -563,63 +526,6 @@ export function ProductionMode({
                   </div>
                 )}
               </div>
-
-              {/* Screen Calibration */}
-              {showScreenCalibrate && hasDimensions && (
-                <div className="p-4 border-b border-gray-700 bg-gray-800/50">
-                  <h3 className="font-bold text-white text-sm mb-2 flex items-center gap-2">
-                    <Ruler className="w-4 h-4 text-pink" />
-                    Screen Calibration
-                  </h3>
-                  <p className="text-xs text-gray-400 mb-3">
-                    Hold a physical ruler to the pink 5 cm line on the left and adjust until they match.
-                  </p>
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 text-xs text-gray-400">
-                      <span>px/cm</span>
-                      <input
-                        type="number"
-                        value={screenPpcm.toFixed(2)}
-                        onChange={(e) => {
-                          const v = Number(e.target.value);
-                          if (v > 0) {
-                            setScreenPpcm(v);
-                            localStorage.setItem('patchpress-screen-ppcm', String(v));
-                          }
-                        }}
-                        className="w-20 px-2 py-1 rounded bg-gray-700 text-white border border-gray-600 text-right"
-                      />
-                    </div>
-                    <input
-                      type="range"
-                      min="10"
-                      max="120"
-                      step="0.5"
-                      value={screenPpcm}
-                      onChange={(e) => {
-                        const v = Number(e.target.value);
-                        setScreenPpcm(v);
-                        localStorage.setItem('patchpress-screen-ppcm', String(v));
-                      }}
-                      className="w-full accent-pink"
-                    />
-                    <div className="flex justify-between text-xs text-gray-500">
-                      <span>Small</span>
-                      <span>Large</span>
-                    </div>
-                    <button
-                      onClick={() => {
-                        const d = 37.7952755906;
-                        setScreenPpcm(d);
-                        localStorage.setItem('patchpress-screen-ppcm', String(d));
-                      }}
-                      className="w-full py-1.5 text-xs text-gray-300 hover:bg-gray-700 rounded-lg transition-colors"
-                    >
-                      Reset to 96 DPI default
-                    </button>
-                  </div>
-                </div>
-              )}
 
               {/* Patch Checklist */}
               <div className="flex-1 overflow-y-auto p-4 min-h-0">
