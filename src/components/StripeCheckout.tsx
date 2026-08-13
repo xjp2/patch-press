@@ -295,7 +295,14 @@ export function StripeCheckout({
   const [paymentTotal, setPaymentTotal] = useState<number | null>(null);
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
   const [orderNumber, setOrderNumber] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
   const beginCheckoutSent = useRef(false);
+
+  const handleRetry = () => {
+    setError(null);
+    setIsLoading(true);
+    setRetryKey(prev => prev + 1);
+  };
 
   // Satisfy noUnusedLocals while keeping the pending order id available for debugging
   useEffect(() => {
@@ -311,14 +318,23 @@ export function StripeCheckout({
     
     const createPaymentIntent = async () => {
       try {
-        // Refresh session to ensure we have a valid JWT and get the REAL user ID
-        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-        if (refreshError) {
-          console.error('Failed to refresh session:', refreshError);
-          throw new Error('SESSION_REFRESH_FAILED');
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        if (!supabaseUrl) {
+          throw new Error('Payment service is not configured. Please contact support.');
         }
-        
-        const session = refreshData.session;
+
+        // Use the existing session first; only refresh if none exists.
+        let { data: sessionData } = await supabase.auth.getSession();
+        let session = sessionData?.session;
+
+        if (!session) {
+          const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+          if (refreshError) {
+            console.error('Failed to refresh session:', refreshError);
+          }
+          session = refreshData?.session || null;
+        }
+
         console.log('StripeCheckout session:', { hasSession: !!session, userId: session?.user?.id });
         if (!session) throw new Error('AUTH_REQUIRED');
         
@@ -467,7 +483,13 @@ export function StripeCheckout({
       } catch (err: any) {
         console.error('Payment intent error:', err);
         if (!isCancelled) {
-          const errorMsg = err.message || 'Failed to initialize payment';
+          let errorMsg = err?.message || 'Failed to initialize payment';
+          const raw = String(errorMsg).toLowerCase();
+          if (raw.includes('failed to fetch') || raw.includes('networkerror') || raw.includes('typeerror')) {
+            errorMsg = 'Could not reach the payment server. Please check your internet connection and try again.';
+          } else if (errorMsg === 'AUTH_REQUIRED' || errorMsg === 'SESSION_REFRESH_FAILED') {
+            errorMsg = 'Please sign in to complete your purchase.';
+          }
           setError(errorMsg);
           onError(errorMsg);
         }
@@ -493,7 +515,7 @@ export function StripeCheckout({
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [retryKey]);
 
   // Track begin_checkout once when the checkout form is ready to display
   useEffect(() => {
@@ -553,7 +575,7 @@ export function StripeCheckout({
           <p className="font-semibold text-red-800">Error</p>
           <p className="text-red-700 text-sm">{error || 'Failed to initialize payment'}</p>
           <button 
-            onClick={() => window.location.reload()} 
+            onClick={handleRetry} 
             className="mt-2 text-sm text-pink hover:underline"
           >
             Retry
