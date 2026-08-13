@@ -10,6 +10,7 @@ import { SortableSection } from './SortableSection';
 import { SortableItem } from './SortableItem';
 import { AdminOrderManagement } from './components/AdminOrderManagement';
 import { CroppedProductImage } from './components/CroppedProductImage';
+import { CroppedThumbnail } from './components/CroppedThumbnail';
 import { InventoryLogsViewer } from './components/InventoryLogsViewer';
 import { PatchCapture } from './components/PatchCapture';
 import { getResizedImageUrl } from './lib/utils';
@@ -1086,7 +1087,7 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                                         }
                                                     }} className="p-1 bg-cardstock rounded shadow text-craft-pink hover:text-red-700 hover:scale-110" title="Delete Product"><Trash2 className="w-4 h-4" /></button>
                                                 </div>
-                                                <CroppedProductImage src={getResizedImageUrl(product.frontImage, 320)} alt={product.name} zone={product.placementZone} className="w-full h-20 object-contain mb-2" />
+                                                <CroppedThumbnail src={getResizedImageUrl(product.frontImage, 320)} alt={product.name} zone={product.placementZone} className="w-full h-20 mb-2" />
                                                 <p className="text-sm font-semibold truncate">{product.name}</p>
                                                 <p className="text-sm text-craft-mint">{formatPrice(product.basePrice)}</p>
                                                 <p className={`text-xs ${(product.quantity ?? 0) <= 5 ? 'text-craft-pink font-bold' : 'text-craft-mint'}`}>Stock: {product.quantity ?? 0}</p>
@@ -1249,7 +1250,7 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                                         <X className="w-3 h-3" />
                                                     </button>
                                                 </div>
-                                                <img src={getResizedImageUrl(patch.image, 192)} alt={patch.name} className="w-full aspect-square object-contain mb-1" loading="lazy" decoding="async" />
+                                                <CroppedThumbnail src={getResizedImageUrl(patch.image, 192)} alt={patch.name} zone={patch.contentZone} className="w-full aspect-square mb-1" />
                                                 <p className="text-[10px] font-semibold truncate">{patch.name}</p>
                                                 <p className="text-[10px] text-ink/40">{patch.width}×{patch.height}px</p>
                                                 <p className={`text-[10px] ${(patch.quantity ?? 0) <= 10 ? 'text-craft-pink font-bold' : 'text-craft-mint'}`}>Stock: {patch.quantity ?? 0}</p>
