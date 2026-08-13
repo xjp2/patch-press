@@ -6,6 +6,7 @@ import {
   Clock, User
 } from 'lucide-react';
 import { CroppedProductImage } from './CroppedProductImage';
+import { getClipAndCenter } from '../lib/utils';
 
 interface PlacedPatch {
   id: string;
@@ -180,6 +181,7 @@ export function ProductionMode({
   const productHeightCm = (currentItem?.productHeight || 500) / 10;
   const placementZone = currentItem?.placementZone || { x: 0, y: 0, width: 100, height: 100, type: 'rectangle' };
   const hasDimensions = !!(currentItem?.productWidth && currentItem?.productHeight);
+  const { transform: cropTransform } = getClipAndCenter(placementZone);
 
   // Measure the rendered product image so overlays match the visible product
   useEffect(() => {
@@ -331,7 +333,11 @@ export function ProductionMode({
             {/* Left - Product Canvas (75%) */}
             <div className="w-[75%] bg-gray-900 p-6 overflow-auto flex items-center justify-center">
               <div className="relative max-w-2xl w-full">
-                <div ref={canvasRef} className="relative inline-block max-w-full max-h-[70vh]">
+                <div
+                  ref={canvasRef}
+                  className="relative inline-block max-w-full max-h-[70vh]"
+                  style={{ transform: cropTransform === 'none' ? undefined : cropTransform }}
+                >
                   <CroppedProductImage
                     src={displayImage}
                     alt={currentItem?.name}
