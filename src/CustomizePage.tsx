@@ -853,11 +853,6 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                                         />
                                                         {isFresh && <FreshPatchGlow active={isFresh} />}
                                                         {selectedPatchId === patch.uniqueId && (
-                                                            <div className="absolute -top-7 left-0 bg-craft-mint text-white text-[10px] font-bold px-2 py-0.5 rounded-full pointer-events-none z-50 shadow-sm">
-                                                                Selected
-                                                            </div>
-                                                        )}
-                                                        {selectedPatchId === patch.uniqueId && (
                                                             <>
                                                                 {/* Traced Zone Overlay - Semi-transparent fill with border */}
                                                                 <div className="absolute inset-0 pointer-events-none" style={{ margin: '-4px' }}>
