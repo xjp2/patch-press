@@ -14,7 +14,6 @@ import { ProductCard } from './components/ProductCard';
 import { MotionStep } from './components/MotionStep';
 import { PatchFlight } from './components/PatchFlight';
 import type { FlyingPatch } from './components/PatchFlight';
-import { HeatPressSequence } from './components/HeatPressSequence';
 import type { Product, Patch, SiteContent } from './AdminPanel';
 import { useCart } from './context/CartContext';
 import { useCurrency } from './context/CurrencyContext';
@@ -132,8 +131,6 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
 
     const [selectedCategory, setSelectedCategory] = useState('all');
     const [patchSearch, setPatchSearch] = useState('');
-    const [isHeatPressing, setIsHeatPressing] = useState(false);
-    const [heatPressPhase, setHeatPressPhase] = useState(0);
     const [showSuccess, setShowSuccess] = useState(false);
 
     const [zoom, setZoom] = useState(1);
@@ -157,7 +154,6 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
     const canvasRef = useRef<HTMLDivElement>(null);
     const productImageRef = useRef<HTMLImageElement>(null);
     const reviewRef = useRef<HTMLDivElement>(null);
-    const heatPressTimeouts = useRef<ReturnType<typeof setTimeout>[]>([]);
     const freshPatchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const addToCartSyncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const addToCartSuccessTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -165,8 +161,6 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
     // Cleanup all design timeouts on unmount
     useEffect(() => {
         return () => {
-            heatPressTimeouts.current.forEach((id) => clearTimeout(id));
-            heatPressTimeouts.current = [];
             if (freshPatchTimeoutRef.current) clearTimeout(freshPatchTimeoutRef.current);
             if (addToCartSyncTimeoutRef.current) clearTimeout(addToCartSyncTimeoutRef.current);
             if (addToCartSuccessTimeoutRef.current) clearTimeout(addToCartSuccessTimeoutRef.current);
@@ -294,24 +288,7 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
 
     const handleHeatPress = () => {
         if (placedPatches.length === 0) return;
-        setIsHeatPressing(true);
-        setHeatPressPhase(1); // Lowering press
-        
-        // Clear any previous heat-press timers before starting a new sequence
-        heatPressTimeouts.current.forEach((id) => clearTimeout(id));
-        heatPressTimeouts.current = [];
-        
-        // Store timeout IDs for cleanup
-        heatPressTimeouts.current = [
-            setTimeout(() => setHeatPressPhase(2), 1000), // Applying heat
-            setTimeout(() => setHeatPressPhase(3), 2800), // Cooling down
-            setTimeout(() => setHeatPressPhase(4), 3800), // Done flash
-            setTimeout(() => {
-                setIsHeatPressing(false);
-                setHeatPressPhase(0);
-                setCurrentStep('review');
-            }, 4300)
-        ];
+        setCurrentStep('review');
     };
     
     const handleAddToCart = () => {
@@ -736,7 +713,7 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                 <div className="relative bg-paper-grid rounded-[1.25rem] overflow-hidden border-[2.5px] border-ink shadow-paper cursor-grab active:cursor-grabbing" style={{ height: '500px' }} onMouseDown={startPan} onTouchStart={startPan}>
                                     <div className="absolute inset-0 grid-pattern opacity-50" />
                                     <FloatingDecorations />
-                                    <div ref={canvasRef} className={`absolute inset-0 flex items-center justify-center transition-transform duration-100 ${isHeatPressing ? 'animate-heat-press' : ''}`} style={{ transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`, transformOrigin: 'center center' }}>
+                                    <div ref={canvasRef} className="absolute inset-0 flex items-center justify-center transition-transform duration-100" style={{ transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`, transformOrigin: 'center center' }}>
                                         {(() => {
                                             const s = getClipAndCenter(selectedProduct.placementZone);
                                             return (
@@ -909,10 +886,6 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                                 );
                                             })}
 
-                                            <AnimatePresence>
-                                                {isHeatPressing && <HeatPressSequence phase={heatPressPhase} />}
-                                            </AnimatePresence>
-
                                             </div>
                                         );
                                     })()}
@@ -925,7 +898,7 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                     <button onClick={() => setCurrentStep('product')} className="flex items-center gap-2 px-4 py-2 text-ink/70 hover:text-ink"><ChevronLeft className="w-4 h-4" /> Back</button>
                                     <div className="flex gap-3">
                                         <button onClick={clearAllPatches} className="flex items-center gap-2 px-4 py-2 text-craft-pink hover:bg-craft-pink/10 rounded-full" disabled={placedPatches.length === 0}><RotateCcw className="w-4 h-4" /> Clear All</button>
-                                        <button onClick={handleHeatPress} className="btn-primary flex items-center gap-2" disabled={placedPatches.length === 0 || isHeatPressing}><ShoppingCart className="w-5 h-5" /> {isHeatPressing ? 'Saving...' : 'Preview & Add to Cart'}</button>
+                                        <button onClick={handleHeatPress} className="btn-primary flex items-center gap-2" disabled={placedPatches.length === 0}><ShoppingCart className="w-5 h-5" /> Preview & Add to Cart</button>
                                     </div>
                                 </div>
                             </div>
