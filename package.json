@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npm run export-cms && npm run optimize-images && npm run build-sitemap && tsc -b && vite build",
+    "build": "npm run export-cms && npm run build-sitemap && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "export-cms": "tsx scripts/export-cms.ts",
