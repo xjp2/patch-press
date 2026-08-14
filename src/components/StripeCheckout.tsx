@@ -27,7 +27,6 @@ interface CheckoutFormProps {
   amount: number;
   customerEmail?: string;
   orderNumber: string | null;
-  sessionId: string | null;
   onSuccess: (orderData?: { orderId: string; orderNumber: string }) => void;
   onError: (error: string) => void;
 }
@@ -37,7 +36,7 @@ function formatSgd(amount: number): string {
   return new Intl.NumberFormat('en-SG', { style: 'currency', currency: 'SGD' }).format(amount);
 }
 
-function CheckoutForm({ amount, customerEmail, orderNumber, sessionId, onSuccess, onError }: CheckoutFormProps) {
+function CheckoutForm({ amount, customerEmail, orderNumber, onSuccess, onError }: CheckoutFormProps) {
   const checkoutResult = useCheckout();
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
@@ -61,12 +60,10 @@ function CheckoutForm({ amount, customerEmail, orderNumber, sessionId, onSuccess
     setPaymentError(null);
 
     try {
-      // Build the return URL for redirect-based payment methods (3D Secure, etc.)
-      const returnUrl = sessionId
-        ? `${window.location.origin}${window.location.pathname}?checkout_session_id=${sessionId}&checkout_return=1${window.location.hash || ''}`
-        : window.location.href;
-
-      const confirmOptions: { returnUrl: string; email?: string } = { returnUrl };
+      // Confirm the payment with Stripe Checkout Elements.
+      // The return_url is configured server-side when the Checkout Session is created,
+      // so we must NOT pass returnUrl here — doing so throws an Elements error.
+      const confirmOptions: { email?: string } = {};
       if (customerEmail) confirmOptions.email = customerEmail;
       const confirmResult = await checkout.confirm(confirmOptions);
 
@@ -90,7 +87,8 @@ function CheckoutForm({ amount, customerEmail, orderNumber, sessionId, onSuccess
         setPaymentError(errorMessage);
         onError(errorMessage);
       } else if (confirmResult.type === 'success') {
-        // Synchronous success. Redirects never reach here (customer sent to returnUrl).
+        // Synchronous success. Redirect-based payment methods never reach here
+        // because the customer is sent to the server-configured return URL.
         onSuccess({ orderId: '', orderNumber: orderNumber || '' });
       }
     } catch (err: unknown) {
@@ -274,7 +272,6 @@ export function StripeCheckout({
   const { baseCurrency } = useCurrency();
   const { trackBeginCheckout, trackPurchase } = useAnalytics();
   const [clientSecret, setClientSecret] = useState<string | null>(null);
-  const [sessionId, setSessionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [paymentTotal, setPaymentTotal] = useState<number | null>(null);
@@ -345,7 +342,6 @@ export function StripeCheckout({
               console.log('Reusing Checkout Session from sessionStorage:', parsed.sessionId);
               if (!isCancelled) {
                 setClientSecret(parsed.clientSecret);
-                setSessionId(parsed.sessionId);
                 setPaymentTotal(parsed.paymentTotal ?? null);
                 setPendingOrderId(parsed.pendingOrderId ?? null);
                 setOrderNumber(parsed.orderNumber ?? null);
@@ -383,7 +379,6 @@ export function StripeCheckout({
               const parsed = JSON.parse(stored);
               if (!isCancelled) {
                 setClientSecret(parsed.clientSecret);
-                setSessionId(parsed.sessionId);
                 setPaymentTotal(parsed.paymentTotal ?? null);
                 setPendingOrderId(parsed.pendingOrderId ?? null);
                 setOrderNumber(parsed.orderNumber ?? null);
@@ -465,7 +460,6 @@ export function StripeCheckout({
 
         if (!isCancelled) {
           setClientSecret(data.clientSecret);
-          setSessionId(data.sessionId);
           setPaymentTotal(data.amount ?? null);
           setPendingOrderId(data.pendingOrderId ?? null);
           setOrderNumber(data.orderNumber ?? null);
@@ -596,7 +590,6 @@ export function StripeCheckout({
         amount={paymentTotal ?? amount}
         customerEmail={customerEmail}
         orderNumber={orderNumber}
-        sessionId={sessionId}
         onSuccess={handleSuccess}
         onError={onError}
       />
