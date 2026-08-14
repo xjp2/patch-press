@@ -126,7 +126,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     const setupAuthListener = async () => {
       const { auth } = await import('../lib/supabase');
       
-      authSubscriptionRef.current = auth.onAuthStateChange(async (event, session) => {
+      authSubscriptionRef.current = auth.onAuthStateChange((event, session) => {
+        // Defer out of the callback: supabase-js may invoke it while holding
+        // its internal auth lock, and the DB calls in mergeGuestCartOnLogin
+        // (which call auth.getSession() internally for the access token)
+        // would deadlock that lock and hang all later getSession() calls.
+        setTimeout(async () => {
         if (!mounted) return;
 
         const user = session?.user || null;
@@ -150,6 +155,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             lastSyncedItems.current = guestCart;
           }
         }
+        }, 0);
       });
     };
 

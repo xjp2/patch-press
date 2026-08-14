@@ -1304,13 +1304,37 @@ function AppContent() {
     const initAuth = async () => {
       console.log('App: Initializing Auth...');
 
+      // 1. Hydrate immediately from the persisted local session. This is
+      //    purely local (no Web Lock, no network) so the UI never stalls
+      //    behind a slow or hung Supabase Auth call. Server validation below
+      //    still runs — it just no longer blocks first paint.
       try {
-        // Always validate with Supabase server. Do NOT trust localStorage
-        // without validation — a stale token there can leave the UI "logged in"
-        // but unable to interact because the server rejects requests.
-        // Give getSession() up to 15s: Supabase auth can be slow on cold starts
-        // or poor networks, and a premature timeout should not nuke a valid
-        // session from localStorage.
+        const raw = localStorage.getItem('patchpress-auth');
+        const parsed = raw ? JSON.parse(raw) : null;
+        const localUser = parsed?.user ?? parsed?.currentSession?.user ?? null;
+        if (localUser && mounted) {
+          setCurrentUser({
+            id: localUser.id,
+            email: localUser.email || '',
+            role: resolvedRoles.current.get(localUser.id) || localUser.user_metadata?.role || 'user',
+            name: localUser.user_metadata?.full_name || localUser.email?.split('@')[0] || 'User',
+          });
+        }
+      } catch {
+        // Corrupt/unparseable stored session — continue logged out
+      } finally {
+        if (mounted) {
+          setIsAuthLoading(false);
+        }
+      }
+
+      // 2. Validate with Supabase in the background. Do NOT trust localStorage
+      //    without validation — a stale token there can leave the UI "logged
+      //    in" but unable to interact because the server rejects requests.
+      //    Give getSession() up to 15s: Supabase auth can be slow on cold
+      //    starts or poor networks, and a timeout should not nuke a valid
+      //    session from localStorage.
+      try {
         const { data: { session }, error: sessionError } = await Promise.race([
           auth.getSession(),
           new Promise<never>((_, reject) =>
@@ -1345,39 +1369,25 @@ function AppContent() {
             setCurrentUser(null);
             setCurrentView('landing');
           } else {
-            console.warn('App: Auth validation timed out; leaving local session intact');
-            // Hydrate the user from the persisted local session so the UI
-            // stays logged in. This must be purely local (no network/DB) —
-            // the network is exactly what just timed out.
-            try {
-              const raw = localStorage.getItem('patchpress-auth');
-              const parsed = raw ? JSON.parse(raw) : null;
-              const localUser = parsed?.user ?? parsed?.currentSession?.user ?? null;
-              if (localUser) {
-                setCurrentUser({
-                  id: localUser.id,
-                  email: localUser.email || '',
-                  role: resolvedRoles.current.get(localUser.id) || localUser.user_metadata?.role || 'user',
-                  name: localUser.user_metadata?.full_name || localUser.email?.split('@')[0] || 'User',
-                });
-              }
-            } catch {
-              // Corrupt/unparseable stored session — fall through logged out
-            }
+            // Already hydrated from localStorage above — nothing more to do.
+            console.warn('App: Auth validation timed out; keeping locally hydrated session');
           }
-        }
-      } finally {
-        if (mounted) {
-          setIsAuthLoading(false);
         }
       }
     };
 
     initAuth();
 
-    const { data: authListener } = auth.onAuthStateChange(async (event, session) => {
+    const { data: authListener } = auth.onAuthStateChange((event, session) => {
       console.log('App: Auth Event:', event, 'User:', session?.user?.email);
 
+      // supabase-js can invoke this callback while holding its internal auth
+      // lock. Awaiting supabase calls from inside the callback (profile fetch
+      // in handleUserAuthenticated, whose requests call auth.getSession() to
+      // attach the token) deadlocks that lock and hangs every later
+      // getSession() — including initAuth's. Defer all work to the next tick
+      // so the lock is released first (officially recommended pattern).
+      setTimeout(async () => {
       if (!mounted) return;
 
       if (event === 'SIGNED_OUT') {
@@ -1415,6 +1425,7 @@ function AppContent() {
         setCurrentView('landing');
         setIsAuthLoading(false);
       }
+      }, 0);
     });
 
     return () => {
