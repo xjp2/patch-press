@@ -1346,6 +1346,24 @@ function AppContent() {
             setCurrentView('landing');
           } else {
             console.warn('App: Auth validation timed out; leaving local session intact');
+            // Hydrate the user from the persisted local session so the UI
+            // stays logged in. This must be purely local (no network/DB) —
+            // the network is exactly what just timed out.
+            try {
+              const raw = localStorage.getItem('patchpress-auth');
+              const parsed = raw ? JSON.parse(raw) : null;
+              const localUser = parsed?.user ?? parsed?.currentSession?.user ?? null;
+              if (localUser) {
+                setCurrentUser({
+                  id: localUser.id,
+                  email: localUser.email || '',
+                  role: resolvedRoles.current.get(localUser.id) || localUser.user_metadata?.role || 'user',
+                  name: localUser.user_metadata?.full_name || localUser.email?.split('@')[0] || 'User',
+                });
+              }
+            } catch {
+              // Corrupt/unparseable stored session — fall through logged out
+            }
           }
         }
       } finally {
