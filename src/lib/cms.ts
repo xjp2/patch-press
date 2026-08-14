@@ -17,7 +17,24 @@
  * Important: an empty DB result (e.g., zero products) is NOT treated as an error.
  */
 
-import { supabase } from './supabase';
+import { createClient } from '@supabase/supabase-js';
+
+const supabaseCms = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY,
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+    global: {
+      headers: {
+        'X-Client-Info': 'patchpress-cms',
+      },
+    },
+  }
+);
 
 // Type definitions matching the database schema
 export interface Product {
@@ -326,7 +343,7 @@ type DbResult<T> = { data: T; error: null } | { data: null; error: Error };
  */
 async function loadProductsFromDb(): Promise<DbResult<Product[]>> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseCms
       .from('products')
       .select('*')
       .order('sort_order', { ascending: true });
@@ -344,7 +361,7 @@ async function loadProductsFromDb(): Promise<DbResult<Product[]>> {
  */
 async function loadPatchesFromDb(): Promise<DbResult<Patch[]>> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseCms
       .from('patches')
       .select('*')
       .order('sort_order', { ascending: true });
@@ -362,7 +379,7 @@ async function loadPatchesFromDb(): Promise<DbResult<Patch[]>> {
  */
 async function loadSiteContentFromDb(): Promise<DbResult<SiteContent | null>> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseCms
       .from('site_content')
       .select('*')
       .eq('id', 'current')
