@@ -1,15 +1,14 @@
-// Modern Stripe Checkout with PaymentElement and AddressElement
-// PaymentIntent created on mount, shows payment form directly
+// Stripe Checkout Sessions with ui_mode: 'elements' (Payment Element + custom form)
+// See: https://docs.stripe.com/payments/quickstart-checkout-sessions
 
 import { useState, useEffect, useRef } from 'react';
 import { loadStripe } from '@stripe/stripe-js';
-import { 
-  Elements, 
+import {
+  CheckoutProvider,
+  useCheckout,
   PaymentElement,
-  AddressElement,
-  useStripe, 
-  useElements
-} from '@stripe/react-stripe-js';
+  ShippingAddressElement,
+} from '@stripe/react-stripe-js/checkout';
 import { Loader2, AlertCircle, CheckCircle, ShieldCheck } from 'lucide-react';
 import supabase from '../lib/supabase';
 import { useCurrency } from '../context/CurrencyContext';
@@ -21,102 +20,78 @@ const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 
 // Zero-decimal currencies where Stripe uses whole units instead of cents
 const isZeroDecimalCurrency = (currency: string) => ['jpy', 'krw'].includes(currency.toLowerCase());
 
-// Track in-flight PaymentIntent requests to prevent duplicates (React Strict Mode)
+// Track in-flight session requests to prevent duplicates (React Strict Mode)
 const pendingRequests = new Set<string>();
 
 interface CheckoutFormProps {
   amount: number;
   customerEmail?: string;
   orderNumber: string | null;
-  paymentIntentId?: string | null;
+  sessionId: string | null;
   onSuccess: (orderData?: { orderId: string; orderNumber: string }) => void;
   onError: (error: string) => void;
 }
 
 // Checkout Form with PaymentElement and AddressElement
-function CheckoutForm({ amount, customerEmail, orderNumber, paymentIntentId, onSuccess, onError }: CheckoutFormProps) {
+function CheckoutForm({ amount, customerEmail, orderNumber, sessionId, onSuccess, onError }: CheckoutFormProps) {
   const { formatPrice } = useCurrency();
-  const stripe = useStripe();
-  const elements = useElements();
+  const checkoutResult = useCheckout();
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
   const hasSubmitted = useRef(false);
-  
-  // Log PaymentIntent ID for debugging
-  useEffect(() => {
-    if (paymentIntentId) {
-      console.log('CheckoutForm using PaymentIntent:', paymentIntentId);
-    }
-  }, [paymentIntentId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!stripe || !elements) return;
-    
+
+    if (checkoutResult.type !== 'success') return;
+    const { checkout } = checkoutResult;
+
     // Prevent double submission
     if (hasSubmitted.current) {
       console.log('Payment already being processed, ignoring duplicate submit');
       return;
     }
     hasSubmitted.current = true;
-    
+
     setIsProcessing(true);
     setPaymentError(null);
 
     try {
-      // Submit the form elements first (required for AddressElement)
-      const { error: submitError } = await elements.submit();
-      if (submitError) {
-        throw new Error(submitError.message);
-      }
+      // Build the return URL for redirect-based payment methods (3D Secure, etc.)
+      const returnUrl = sessionId
+        ? `${window.location.origin}${window.location.pathname}?checkout_session_id=${sessionId}&checkout_return=1${window.location.hash || ''}`
+        : window.location.href;
 
-      // Confirm payment with Stripe
-      const { error, paymentIntent } = await stripe.confirmPayment({
-        elements,
-        confirmParams: {
-          return_url: window.location.origin,
-          payment_method_data: {
-            billing_details: {
-              email: customerEmail || 'guest@example.com',
-            },
-          },
-        },
-        redirect: 'if_required',
-      });
+      const confirmOptions: { returnUrl: string; email?: string } = { returnUrl };
+      if (customerEmail) confirmOptions.email = customerEmail;
+      const confirmResult = await checkout.confirm(confirmOptions);
 
-      if (error) {
-        // Payment failed
+      if (confirmResult.type === 'error' && confirmResult.error) {
+        // Payment failed immediately
+        const error = confirmResult.error;
         let errorMessage = error.message || 'Payment failed. Please try again.';
-        
-        if (error.type === 'card_error') {
-          if (error.code === 'card_declined') {
+
+        if (error.code === 'paymentFailed') {
+          if (error.paymentFailed.declineCode === 'card_declined') {
             errorMessage = 'Your card was declined. Please try a different payment method.';
-          } else if (error.code === 'insufficient_funds') {
+          } else if (error.paymentFailed.declineCode === 'insufficient_funds') {
             errorMessage = 'Insufficient funds. Please try a different payment method.';
-          } else if (error.code === 'expired_card') {
+          } else if (error.paymentFailed.declineCode === 'expired_card') {
             errorMessage = 'Your card has expired. Please try a different payment method.';
-          } else if (error.code === 'incorrect_cvc') {
+          } else if (error.paymentFailed.declineCode === 'incorrect_cvc') {
             errorMessage = 'Your card\'s security code is incorrect. Please check and try again.';
           }
         }
-        
+
         setPaymentError(errorMessage);
         onError(errorMessage);
-      } else if (paymentIntent) {
-        // Payment succeeded or requires additional action
-        if (paymentIntent.status === 'succeeded' || paymentIntent.status === 'processing') {
-          // The order is created asynchronously by the Stripe webhook. We only show the
-          // order number that was generated when the PaymentIntent was created.
-          onSuccess({ orderId: '', orderNumber: orderNumber || '' });
-        } else {
-          const errorMsg = 'Payment could not be completed. Please try again.';
-          setPaymentError(errorMsg);
-          onError(errorMsg);
-        }
+      } else if (confirmResult.type === 'success') {
+        // Synchronous success. Redirects never reach here (customer sent to returnUrl).
+        onSuccess({ orderId: '', orderNumber: orderNumber || '' });
       }
-    } catch (err: any) {
-      const errorMsg = err.message || 'An unexpected error occurred. Please try again.';
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : 'An unexpected error occurred. Please try again.';
       setPaymentError(errorMsg);
       onError(errorMsg);
       // Reset submission lock on error so user can retry
@@ -125,6 +100,28 @@ function CheckoutForm({ amount, customerEmail, orderNumber, paymentIntentId, onS
       setIsProcessing(false);
     }
   };
+
+  // Render loading/error states from the checkout SDK
+  if (checkoutResult.type === 'loading') {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="w-8 h-8 animate-spin text-pink" />
+        <span className="ml-2 text-gray-600">Loading checkout...</span>
+      </div>
+    );
+  }
+
+  if (checkoutResult.type === 'error') {
+    return (
+      <div className="bg-red-50 border-l-4 border-red-500 rounded-r-lg p-4 flex items-start gap-3">
+        <AlertCircle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
+        <div>
+          <p className="font-semibold text-red-800">Checkout Error</p>
+          <p className="text-red-700 text-sm">{checkoutResult.error.message}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -146,19 +143,8 @@ function CheckoutForm({ amount, customerEmail, orderNumber, paymentIntentId, onS
           Shipping Address
         </h3>
         <div className="border border-gray-300 rounded-lg p-4 bg-white">
-          <AddressElement 
-            options={{
-              mode: 'shipping',
-              allowedCountries: ['SG', 'MY', 'ID', 'TH', 'PH', 'VN', 'US', 'GB', 'AU', 'JP', 'KR', 'CN', 'TW', 'HK'],
-              fields: {
-                phone: 'always',
-              },
-              validation: {
-                phone: {
-                  required: 'always',
-                },
-              },
-            }}
+          <ShippingAddressElement
+            options={{ display: { name: 'full' } }}
             onReady={() => setIsReady(true)}
           />
         </div>
@@ -168,7 +154,7 @@ function CheckoutForm({ amount, customerEmail, orderNumber, paymentIntentId, onS
       <div className="space-y-2">
         <h3 className="font-semibold text-gray-900">Payment Method</h3>
         <div className="border border-gray-300 rounded-lg p-4 bg-white">
-          <PaymentElement 
+          <PaymentElement
             options={{
               layout: {
                 type: 'tabs',
@@ -210,7 +196,7 @@ function CheckoutForm({ amount, customerEmail, orderNumber, paymentIntentId, onS
       {/* Submit Button */}
       <button
         type="submit"
-        disabled={!stripe || isProcessing || !isReady}
+        disabled={checkoutResult.type !== 'success' || isProcessing || !isReady}
         className="w-full bg-pink text-white py-4 rounded-xl font-semibold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-pink/90 transition-colors shadow-lg shadow-pink/25"
       >
         {isProcessing ? (
@@ -235,9 +221,7 @@ function CheckoutForm({ amount, customerEmail, orderNumber, paymentIntentId, onS
   );
 }
 
-// Generate idempotency key from ALL parameters that affect the PaymentIntent.
-// Stripe rejects if the same key is ever used with different parameters,
-// so we must hash EVERYTHING: cart, currency, user_id, email.
+// Generate idempotency key from ALL parameters that affect the Checkout Session.
 function generateIdempotencyKey(
   cartItems: any[],
   currency: string,
@@ -265,33 +249,31 @@ function hashString(str: string): string {
 
 function getStorageKey(userId: string, cartItems: any[]): string {
   const cartHash = hashString(cartItems.map(i => i.productId).sort().join(','));
-  return `stripe_pi_${userId}_${cartHash}`;
+  return `stripe_cs_${userId}_${cartHash}`;
 }
 
 // Main Checkout Component
 interface StripeCheckoutProps {
   amount: number;
-  userId?: string;
   customerEmail?: string;
   cartItems?: any[];
   onSuccess: (orderData?: { orderId: string; orderNumber: string }) => void;
   onError: (error: string) => void;
 }
 
-export function StripeCheckout({ 
-  amount, 
-  userId: _userId,
+export function StripeCheckout({
+  amount,
   customerEmail,
   cartItems = [],
-  onSuccess, 
-  onError 
+  onSuccess,
+  onError
 }: StripeCheckoutProps) {
   const { currency, convertPrice } = useCurrency();
   const { trackBeginCheckout, trackPurchase } = useAnalytics();
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null);
   const [paymentTotal, setPaymentTotal] = useState<number | null>(null);
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
   const [orderNumber, setOrderNumber] = useState<string | null>(null);
@@ -311,12 +293,12 @@ export function StripeCheckout({
     }
   }, [pendingOrderId]);
 
-  // Create PaymentIntent with duplicate prevention
+  // Create Checkout Session with duplicate prevention
   useEffect(() => {
     let isCancelled = false;
     let requestKey = '';
-    
-    const createPaymentIntent = async () => {
+
+    const createCheckoutSession = async () => {
       try {
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
         if (!supabaseUrl) {
@@ -324,7 +306,7 @@ export function StripeCheckout({
         }
 
         // Use the existing session first; only refresh if none exists.
-        let { data: sessionData } = await supabase.auth.getSession();
+        const { data: sessionData } = await supabase.auth.getSession();
         let session = sessionData?.session;
 
         if (!session) {
@@ -337,29 +319,29 @@ export function StripeCheckout({
 
         console.log('StripeCheckout session:', { hasSession: !!session, userId: session?.user?.id });
         if (!session) throw new Error('AUTH_REQUIRED');
-        
+
         // Use the ACTUAL user ID from session (not the prop which might be stale/undefined)
         const actualUserId = session.user.id;
-        
-        // Check sessionStorage for existing PaymentIntent (prevents duplicates on remount)
+
+        // Check sessionStorage for existing Checkout Session (prevents duplicates on remount)
         const storageKey = getStorageKey(actualUserId, cartItems);
         const expectedStripeAmount = isZeroDecimalCurrency(currency)
           ? Math.round(convertPrice(amount))
           : Math.round(convertPrice(amount) * 100);
-        const existingPI = sessionStorage.getItem(storageKey);
-        
-        if (existingPI) {
+        const existingCS = sessionStorage.getItem(storageKey);
+
+        if (existingCS) {
           try {
-            const parsed = JSON.parse(existingPI);
+            const parsed = JSON.parse(existingCS);
             // Check if it's less than 30 minutes old and same Stripe amount
             const isRecent = (Date.now() - parsed.timestamp) < 30 * 60 * 1000;
             const sameAmount = parsed.amount === expectedStripeAmount;
-            
+
             if (isRecent && sameAmount && parsed.clientSecret) {
-              console.log('Reusing PaymentIntent from sessionStorage:', parsed.paymentIntentId);
+              console.log('Reusing Checkout Session from sessionStorage:', parsed.sessionId);
               if (!isCancelled) {
                 setClientSecret(parsed.clientSecret);
-                setPaymentIntentId(parsed.paymentIntentId);
+                setSessionId(parsed.sessionId);
                 setPaymentTotal(parsed.paymentTotal ?? null);
                 setPendingOrderId(parsed.pendingOrderId ?? null);
                 setOrderNumber(parsed.orderNumber ?? null);
@@ -367,12 +349,12 @@ export function StripeCheckout({
               }
               return;
             }
-          } catch (e) {
+          } catch {
             // Invalid stored data, continue to create new
             sessionStorage.removeItem(storageKey);
           }
         }
-        
+
         // Generate idempotency key that changes if ANY parameter changes
         const idempotencyKey = generateIdempotencyKey(
           cartItems,
@@ -380,12 +362,12 @@ export function StripeCheckout({
           actualUserId,
           session.user.email || ''
         );
-        
+
         // Prevent concurrent requests for same user+cart (React Strict Mode double-mount)
         const cartHash = hashString(cartItems.map(i => i.productId).sort().join(','));
         requestKey = `${actualUserId}:${cartHash}`;
         if (pendingRequests.has(requestKey)) {
-          console.log('PaymentIntent request already in flight, waiting...');
+          console.log('Checkout Session request already in flight, waiting...');
           // Wait for existing request to complete (poll sessionStorage)
           let attempts = 0;
           while (pendingRequests.has(requestKey) && attempts < 50) {
@@ -397,7 +379,7 @@ export function StripeCheckout({
               const parsed = JSON.parse(stored);
               if (!isCancelled) {
                 setClientSecret(parsed.clientSecret);
-                setPaymentIntentId(parsed.paymentIntentId);
+                setSessionId(parsed.sessionId);
                 setPaymentTotal(parsed.paymentTotal ?? null);
                 setPendingOrderId(parsed.pendingOrderId ?? null);
                 setOrderNumber(parsed.orderNumber ?? null);
@@ -409,11 +391,14 @@ export function StripeCheckout({
           // If we got here, the other request failed or timed out
           console.log('Previous request seems to have failed, continuing...');
         }
-        
+
         // Mark request as in-flight
         pendingRequests.add(requestKey);
-        console.log('Starting PaymentIntent creation, requestKey:', requestKey);
-        
+        console.log('Starting Checkout Session creation, requestKey:', requestKey);
+
+        // Build return URL for redirect-based payment methods
+        const returnUrl = `${window.location.origin}${window.location.pathname}?checkout_session_id={CHECKOUT_SESSION_ID}&checkout_return=1${window.location.hash || ''}`;
+
         // Call edge function directly with fetch to ensure Authorization header is set
         const response = await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-payment-intent`,
@@ -440,31 +425,32 @@ export function StripeCheckout({
               })),
               currency,
               customer_email: session.user.email,
+              return_url: returnUrl,
               idempotency_key: idempotencyKey,
             }),
           }
         );
-        
+
         if (!response.ok) {
           const errorText = await response.text();
           console.error('Edge function error:', response.status, errorText);
           throw new Error(`HTTP ${response.status}: ${errorText}`);
         }
-        
+
         const data = await response.json();
-        
-        console.log('Payment intent created:', data);
-        
+
+        console.log('Checkout session created:', data);
+
         if (!data?.clientSecret) {
           console.error('No client secret in response:', data);
-          throw new Error('Failed to initialize payment: No client secret returned');
+          throw new Error('Failed to initialize checkout: No client secret returned');
         }
-        
+
         // Store in sessionStorage to prevent duplicates on remount
         if (!data.reused) {
           sessionStorage.setItem(storageKey, JSON.stringify({
             clientSecret: data.clientSecret,
-            paymentIntentId: data.paymentIntentId,
+            sessionId: data.sessionId,
             pendingOrderId: data.pendingOrderId,
             orderNumber: data.orderNumber,
             amount: data.stripeAmount,
@@ -472,18 +458,18 @@ export function StripeCheckout({
             timestamp: Date.now(),
           }));
         }
-        
+
         if (!isCancelled) {
           setClientSecret(data.clientSecret);
-          setPaymentIntentId(data.paymentIntentId);
+          setSessionId(data.sessionId);
           setPaymentTotal(data.amount ?? null);
           setPendingOrderId(data.pendingOrderId ?? null);
           setOrderNumber(data.orderNumber ?? null);
         }
-      } catch (err: any) {
-        console.error('Payment intent error:', err);
+      } catch (err: unknown) {
+        console.error('Checkout session error:', err);
         if (!isCancelled) {
-          let errorMsg = err?.message || 'Failed to initialize payment';
+          let errorMsg = err instanceof Error ? err.message : 'Failed to initialize checkout';
           const raw = String(errorMsg).toLowerCase();
           if (raw.includes('failed to fetch') || raw.includes('networkerror') || raw.includes('typeerror')) {
             errorMsg = 'Could not reach the payment server. Please check your internet connection and try again.';
@@ -505,8 +491,8 @@ export function StripeCheckout({
       }
     };
 
-    createPaymentIntent();
-    
+    createCheckoutSession();
+
     // Cleanup function to prevent state updates after unmount
     return () => {
       isCancelled = true;
@@ -531,13 +517,13 @@ export function StripeCheckout({
     }));
     trackBeginCheckout(analyticsItems, paymentTotal ?? amount, currency);
   }, [clientSecret, cartItems, amount, paymentTotal, currency, trackBeginCheckout]);
-  
+
   // Clear sessionStorage on successful payment and track purchase
   const handleSuccess = async (orderData?: { orderId: string; orderNumber: string }) => {
     // Get actual user ID from session (not prop)
     const { data: sessionData } = await supabase.auth.getSession();
     const actualUserId = sessionData.session?.user?.id;
-    
+
     if (actualUserId && cartItems.length > 0) {
       const storageKey = getStorageKey(actualUserId, cartItems);
       sessionStorage.removeItem(storageKey);
@@ -562,7 +548,7 @@ export function StripeCheckout({
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="w-8 h-8 animate-spin text-pink" />
-        <span className="ml-2 text-gray-600">Initializing payment...</span>
+        <span className="ml-2 text-gray-600">Initializing checkout...</span>
       </div>
     );
   }
@@ -573,9 +559,9 @@ export function StripeCheckout({
         <AlertCircle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
         <div>
           <p className="font-semibold text-red-800">Error</p>
-          <p className="text-red-700 text-sm">{error || 'Failed to initialize payment'}</p>
-          <button 
-            onClick={handleRetry} 
+          <p className="text-red-700 text-sm">{error || 'Failed to initialize checkout'}</p>
+          <button
+            onClick={handleRetry}
             className="mt-2 text-sm text-pink hover:underline"
           >
             Retry
@@ -585,31 +571,32 @@ export function StripeCheckout({
     );
   }
 
-  // Show Payment Form directly
+  // Show Checkout Elements form directly
   return (
-    <Elements 
+    <CheckoutProvider
       stripe={stripePromise}
-      options={{ 
+      options={{
         clientSecret,
-        appearance: {
-          theme: 'stripe',
-          variables: {
-            colorPrimary: '#ec4899',
-            borderRadius: '8px',
+        elementsOptions: {
+          appearance: {
+            theme: 'stripe',
+            variables: {
+              colorPrimary: '#ec4899',
+              borderRadius: '8px',
+            },
           },
         },
-        loader: 'auto',
       }}
     >
       <CheckoutForm
         amount={paymentTotal ?? amount}
         customerEmail={customerEmail}
         orderNumber={orderNumber}
-        paymentIntentId={paymentIntentId}
+        sessionId={sessionId}
         onSuccess={handleSuccess}
         onError={onError}
       />
-    </Elements>
+    </CheckoutProvider>
   );
 }
 

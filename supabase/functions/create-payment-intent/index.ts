@@ -55,13 +55,6 @@ function toStripeAmount(currency: string, amount: number): number {
   return Math.round(amount * 100);
 }
 
-function fromStripeAmount(currency: string, amount: number): number {
-  if (ZERO_DECIMAL_CURRENCIES.has(currency.toLowerCase())) {
-    return amount;
-  }
-  return amount / 100;
-}
-
 function generateOrderNumber(): string {
   const timestamp = Date.now().toString(36).toUpperCase();
   const random = Math.random().toString(36).substring(2, 5).toUpperCase();
@@ -130,7 +123,7 @@ serve(async (req) => {
     const user = userData.user;
 
     const body = await req.json();
-    const { cartItems, currency = 'sgd', customer_email, shipping, idempotency_key } = body;
+    const { cartItems, currency = 'sgd', customer_email, shipping, return_url } = body;
 
     // c. Validate cartItems
     if (!Array.isArray(cartItems) || cartItems.length === 0) {
@@ -268,7 +261,7 @@ serve(async (req) => {
       );
     }
 
-    // f. Calculate total in SGD (base currency), convert to target, then Stripe units
+    // f. Calculate totals in SGD (base currency), convert to target, then Stripe units
     let totalSgd = 0;
     for (const item of validatedItems) {
       const product = productMap.get(item.productId)!;
@@ -279,47 +272,45 @@ serve(async (req) => {
 
     const targetCurrency = currency.toLowerCase();
     const exchangeRate = await fetchExchangeRate(targetCurrency);
-    const convertedTotal = totalSgd * exchangeRate;
-    const stripeAmount = toStripeAmount(targetCurrency, convertedTotal);
 
-    // g. Reuse existing PaymentIntent if user has a pending order from last 5 minutes
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-    const { data: existingPendingOrders } = await supabaseAdmin
-      .from('pending_orders')
-      .select('id, order_number, payment_intent_id, total_amount, status, updated_at')
-      .eq('user_id', user.id)
-      .eq('status', 'pending_payment')
-      .not('payment_intent_id', 'is', null)
-      .gte('updated_at', fiveMinutesAgo)
-      .order('updated_at', { ascending: false })
-      .limit(1);
+    // g. Build line items in target currency (per-unit, DB-trusted prices)
+    const lineItems: any[] = [];
+    for (const item of validatedItems) {
+      const product = productMap.get(item.productId)!;
+      const patchPrice = [...item.frontPatches, ...item.backPatches]
+        .reduce((sum: number, pid: string) => sum + (patchMap.get(pid)?.price ?? 0), 0);
+      const unitPriceSgd = product.base_price + patchPrice;
+      const unitAmountTarget = toStripeAmount(targetCurrency, unitPriceSgd * exchangeRate);
 
-    const existingPending = existingPendingOrders?.[0];
-    if (existingPending?.payment_intent_id) {
-      try {
-        const existingPI = await stripe.paymentIntents.retrieve(existingPending.payment_intent_id);
-        if (existingPI.status === 'requires_payment_method' && existingPI.currency === targetCurrency) {
-          console.log('Reusing existing PaymentIntent:', existingPI.id);
-          return new Response(
-            JSON.stringify({
-              clientSecret: existingPI.client_secret,
-              paymentIntentId: existingPI.id,
-              pendingOrderId: existingPending.id,
-              orderNumber: existingPending.order_number,
-              amount: existingPending.total_amount ?? totalSgd,
-              stripeAmount: existingPI.amount,
-              currency: existingPI.currency,
-              reused: true,
-            }),
-            { status: 200, headers: responseHeaders(req) }
-          );
-        }
-      } catch (e) {
-        console.log('Existing PI invalid, creating new one');
+      if (unitAmountTarget <= 0) {
+        continue;
       }
+
+      const allPatchNames = [...item.frontPatches, ...item.backPatches]
+        .map((pid) => patchMap.get(pid)?.name)
+        .filter(Boolean);
+
+      lineItems.push({
+        price_data: {
+          currency: targetCurrency,
+          unit_amount: unitAmountTarget,
+          product_data: {
+            name: product.name || 'Product',
+            description: allPatchNames.length > 0 ? `Patches: ${allPatchNames.join(', ')}` : undefined,
+          },
+        },
+        quantity: item.quantity,
+      });
     }
 
-    // h. Create pending order record before creating the PaymentIntent
+    if (lineItems.length === 0) {
+      return new Response(
+        JSON.stringify({ error: 'INVALID_CART', message: 'Could not build line items from cart' }),
+        { status: 400, headers: responseHeaders(req) }
+      );
+    }
+
+    // h. Create pending order record before creating the Checkout Session
     const orderNumber = generateOrderNumber();
     const shippingAddress = mapShippingAddress(shipping);
     const customerName = body.customer_name || shipping?.name || '';
@@ -351,53 +342,53 @@ serve(async (req) => {
 
     const pendingOrderId = pendingOrder.id;
 
-    // i. Create new PaymentIntent
+    // i. Create Checkout Session with ui_mode: 'elements'
     const metadata: Record<string, string> = {
       user_id: user.id,
       pending_order_id: pendingOrderId,
       order_number: orderNumber,
     };
-    if (!idempotency_key) {
-      metadata.created_at = new Date().toISOString();
-    }
 
-    const paymentIntentParams: any = {
-      amount: stripeAmount,
+    const sessionPayload: any = {
+      mode: 'payment',
+      ui_mode: 'elements',
       currency: targetCurrency,
-      automatic_payment_methods: { enabled: true },
+      line_items: lineItems,
+      client_reference_id: orderNumber,
+      customer_email: customer_email || undefined,
+      invoice_creation: { enabled: true },
+      payment_intent_data: {
+        metadata,
+        receipt_email: customer_email || undefined,
+      },
       metadata,
+      shipping_address_collection: {
+        allowed_countries: ['SG', 'MY', 'ID', 'TH', 'PH', 'VN', 'US', 'GB', 'AU', 'JP', 'KR', 'CN', 'TW', 'HK'],
+      },
+      return_url: return_url || undefined,
     };
 
-    if (customer_email) paymentIntentParams.receipt_email = customer_email;
-    if (shipping) paymentIntentParams.shipping = shipping;
+    const session = await stripe.checkout.sessions.create(sessionPayload);
 
-    const createOptions: any = {};
-    if (idempotency_key) {
-      createOptions.idempotencyKey = idempotency_key;
-    }
-
-    const paymentIntent = await stripe.paymentIntents.create(paymentIntentParams, createOptions);
-
-    // Link the PaymentIntent to the pending order
-    const { error: updatePendingError } = await supabaseAdmin
-      .from('pending_orders')
-      .update({ payment_intent_id: paymentIntent.id, updated_at: new Date().toISOString() })
-      .eq('id', pendingOrderId);
-
-    if (updatePendingError) {
-      console.error('Failed to update pending order with PaymentIntent ID:', updatePendingError);
+    if (!session.client_secret) {
+      console.error('Checkout Session created without client_secret:', session.id);
+      return new Response(
+        JSON.stringify({ error: 'SESSION_CREATE_FAILED', message: 'Failed to create checkout session' }),
+        { status: 500, headers: responseHeaders(req) }
+      );
     }
 
     // j. Return response
     return new Response(
       JSON.stringify({
-        clientSecret: paymentIntent.client_secret,
-        paymentIntentId: paymentIntent.id,
+        clientSecret: session.client_secret,
+        sessionId: session.id,
+        paymentIntentId: session.payment_intent,
         pendingOrderId,
         orderNumber,
         amount: totalSgd,
-        stripeAmount: paymentIntent.amount,
-        currency: paymentIntent.currency,
+        stripeAmount: session.amount_total,
+        currency: session.currency,
         reused: false,
       }),
       { status: 200, headers: responseHeaders(req) }

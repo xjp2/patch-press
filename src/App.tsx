@@ -297,6 +297,58 @@ function CartDrawer({ currentUser, setShowAuth, setAuthView }: CartDrawerProps) 
     setCheckoutState('error');
   };
 
+  // Handle redirect return from Stripe Checkout (3D Secure / bank redirects)
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const sessionId = url.searchParams.get('checkout_session_id');
+    const isReturn = url.searchParams.get('checkout_return') === '1';
+
+    if (!sessionId || !isReturn) return;
+
+    // Clean the query params so we don't re-run on refresh
+    url.searchParams.delete('checkout_session_id');
+    url.searchParams.delete('checkout_return');
+    window.history.replaceState({}, '', url.toString());
+
+    let cancelled = false;
+
+    const checkSession = async () => {
+      try {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        if (!supabaseUrl) return;
+
+        const res = await fetch(
+          `${supabaseUrl}/functions/v1/checkout-session-status?session_id=${encodeURIComponent(sessionId)}`
+        );
+        if (!res.ok) throw new Error('Failed to check session status');
+        const data = await res.json();
+
+        if (cancelled) return;
+
+        if (data.paymentStatus === 'paid' && data.orderNumber) {
+          setOrderSummary({ items: [...items], totalPrice });
+          setOrderNumber(data.orderNumber);
+          setShowOrderConfirmation(true);
+          setCheckoutState('success');
+          clearCart();
+        } else if (data.paymentStatus === 'unpaid') {
+          setCheckoutError('Payment was not completed. Please try again.');
+          setIsCartOpen(true);
+          setShowCheckout(true);
+        }
+      } catch (err) {
+        console.error('Error checking return session:', err);
+      }
+    };
+
+    checkSession();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Check inventory before proceeding to checkout
   const [inventoryError, setInventoryError] = useState<string | null>(null);
   const [isCheckingInventory, setIsCheckingInventory] = useState(false);
@@ -405,7 +457,6 @@ function CartDrawer({ currentUser, setShowAuth, setAuthView }: CartDrawerProps) 
               {/* Payment Step with AddressElement */}
               <StripeCheckout
                 amount={totalPrice}
-                userId={currentUser?.id}
                 customerEmail={currentUser?.email}
                 cartItems={items}
                 onSuccess={handleCheckoutSuccess}
