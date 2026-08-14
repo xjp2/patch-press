@@ -840,7 +840,7 @@ function Navbar({ navbar, currentUser, isAuthLoading, totalItems, onCartClick, o
               <option value="JPY">JPY (¥)</option>
               <option value="KRW">KRW (₩)</option>
               </select>
-              <span className="text-[10px] text-ink/40 mt-0.5">Converted at current rates</span>
+              <span className="text-[10px] text-ink/40 mt-0.5">You'll be charged in this currency</span>
             </div>
 
             {/* Auth Loading */}
@@ -969,6 +969,7 @@ function Navbar({ navbar, currentUser, isAuthLoading, totalItems, onCartClick, o
                 <option value="JPY">JPY (¥)</option>
                 <option value="KRW">KRW (₩)</option>
               </select>
+              <p className="text-[10px] text-ink/40 mt-1">You'll be charged in this currency</p>
             </div>
 
             {/* Mobile Auth */}

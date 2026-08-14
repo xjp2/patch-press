@@ -48,6 +48,11 @@ async function stripeApiFetch(path: string, body: any): Promise<any> {
 
 const ZERO_DECIMAL_CURRENCIES = new Set(['jpy', 'krw']);
 
+// FX buffer applied to non-SGD charges: covers Stripe's settlement currency
+// conversion fee (~1-2%) so the conversion cost is carried by the displayed
+// foreign-currency price rather than the merchant margin.
+const FX_BUFFER = 1.02;
+
 // Presentment currencies the storefront selector offers; all are
 // Stripe-supported charge currencies. Anything else falls back to SGD.
 const SUPPORTED_CHARGE_CURRENCIES = new Set(['sgd', 'usd', 'eur', 'gbp', 'jpy', 'krw']);
@@ -353,7 +358,12 @@ serve(async (req) => {
       const patchPrice = [...item.frontPatches, ...item.backPatches]
         .reduce((sum: number, pid: string) => sum + (patchMap.get(pid)?.price ?? 0), 0);
       const unitPriceSgd = product.base_price + patchPrice;
-      const unitAmount = toStripeAmount(targetCurrency, unitPriceSgd * exchangeRate);
+      // FX buffer applies only to non-SGD charges (exchangeRate is 1 for SGD,
+      // so guard on currency, not the rate).
+      const unitAmount = toStripeAmount(
+        targetCurrency,
+        unitPriceSgd * exchangeRate * (targetCurrency === 'sgd' ? 1 : FX_BUFFER)
+      );
 
       if (unitAmount <= 0) {
         continue;

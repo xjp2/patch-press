@@ -213,7 +213,11 @@ function CheckoutForm({ amount, chargeCurrency, orderNumber, onSuccess, onError 
           </>
         )}
       </button>
-      <p className="text-[10px] text-gray-400 text-center mt-2">Converted using current exchange rates</p>
+      <p className="text-[10px] text-gray-400 text-center mt-2">
+        {chargeCurrency.toLowerCase() === 'sgd'
+          ? "You'll be charged in SGD."
+          : `You'll be charged in ${chargeCurrency.toUpperCase()} — converted from SGD at current rates, incl. a small currency conversion margin.`}
+      </p>
 
       {/* Security Badge */}
       <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
