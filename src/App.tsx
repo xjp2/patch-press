@@ -367,7 +367,11 @@ function CartDrawer({ currentUser, setShowAuth, setAuthView }: CartDrawerProps) 
         quantity: item.quantity,
       }));
       
-      const { insufficient, available } = await db.inventory.checkAvailability(inventoryItems);
+      const checkPromise = db.inventory.checkAvailability(inventoryItems);
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Inventory check timed out')), 10_000)
+      );
+      const { insufficient, available } = await Promise.race([checkPromise, timeoutPromise]);
       
       if (!available) {
         const errorMessages = insufficient.map(item => 

@@ -28,6 +28,21 @@ export const supabase = createClient(supabaseUrl || 'https://placeholder.supabas
   },
 });
 
+// Public client for reads that do not require an authenticated session.
+// Using a non-persisting client avoids session restore hangs on first load.
+export const supabasePublic = createClient(supabaseUrl || 'https://placeholder.supabase.co', supabaseAnonKey || 'placeholder', {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
+    detectSessionInUrl: false,
+  },
+  global: {
+    headers: {
+      'X-Client-Info': 'patchpress-public',
+    },
+  },
+});
+
 // ──────────────── Auth helpers ────────────────
 export const auth = {
   signUp: async (email: string, password: string, name: string) => {
@@ -349,7 +364,7 @@ export const db = {
       if (items.length === 0) return { insufficient, available: true };
 
       const productIds = [...new Set(items.map(i => i.productId))];
-      const { data: products, error: productsError } = await supabase
+      const { data: products, error: productsError } = await supabasePublic
         .from('products')
         .select('id, name, quantity')
         .in('id', productIds);
@@ -372,7 +387,7 @@ export const db = {
       const patchIds = Object.keys(patchCounts);
       const patchMap = new Map<string, any>();
       if (patchIds.length > 0) {
-        const { data: patches, error: patchesError } = await supabase
+        const { data: patches, error: patchesError } = await supabasePublic
           .from('patches')
           .select('id, name, quantity')
           .in('id', patchIds);
