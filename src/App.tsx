@@ -326,7 +326,13 @@ function CartDrawer({ currentUser, setShowAuth, setAuthView }: CartDrawerProps) 
         if (cancelled) return;
 
         if (data.paymentStatus === 'paid' && data.orderNumber) {
-          setOrderSummary({ items: [...items], totalPrice });
+          // Use the amount Stripe actually charged; fall back to cart total
+          const paidTotal = data.amountTotal
+            ? data.currency && ['jpy', 'krw'].includes(data.currency.toLowerCase())
+              ? data.amountTotal
+              : data.amountTotal / 100
+            : totalPrice;
+          setOrderSummary({ items: [...items], totalPrice: paidTotal });
           setOrderNumber(data.orderNumber);
           setShowOrderConfirmation(true);
           setCheckoutState('success');

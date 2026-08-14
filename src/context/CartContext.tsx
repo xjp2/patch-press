@@ -477,18 +477,31 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setItems([]);
     lastSyncedItems.current = '[]';
     
-    if (currentUser) {
-      localStorage.removeItem(USER_CART_KEY);
-      try {
-        const { db } = await import('../lib/supabase');
-        await db.cart.clear(currentUser.id);
-      } catch (err) {
-        console.error('🛒 Cart: Failed to clear cloud cart:', err);
+    // Always use the live Supabase session to decide whether to clear the cloud cart.
+    // React state (currentUser) can be stale or null during checkout, leaving cart rows behind.
+    try {
+      const { auth } = await import('../lib/supabase');
+      const { data: { session } } = await auth.getSession();
+      const userId = session?.user?.id;
+      
+      if (userId) {
+        localStorage.removeItem(USER_CART_KEY);
+        try {
+          const { db } = await import('../lib/supabase');
+          await db.cart.clear(userId);
+          console.log('🛒 Cart: Cleared cloud cart for user:', userId);
+        } catch (err) {
+          console.error('🛒 Cart: Failed to clear cloud cart:', err);
+        }
+      } else {
+        localStorage.removeItem(GUEST_CART_KEY);
       }
-    } else {
+    } catch (err) {
+      console.error('🛒 Cart: Failed to get session while clearing cart:', err);
       localStorage.removeItem(GUEST_CART_KEY);
+      localStorage.removeItem(USER_CART_KEY);
     }
-  }, [currentUser]);
+  }, []);
 
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
   const totalPrice = items.reduce((sum, item) => sum + item.totalPrice * item.quantity, 0);
