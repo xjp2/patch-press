@@ -1121,6 +1121,7 @@ function AppContent() {
   // ============================================
   const [isDataLoading, setIsDataLoading] = useState(true);
   const [dataLoadError, setDataLoadError] = useState(false);
+  const [dataErrorDismissed, setDataErrorDismissed] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -1236,6 +1237,7 @@ function AppContent() {
   // Retry loading CMS data after a failure
   const handleRetryLoad = useCallback(async () => {
     setDataLoadError(false);
+    setDataErrorDismissed(false);
     setIsDataLoading(true);
     try {
       await refreshCmsData();
@@ -1589,8 +1591,13 @@ function AppContent() {
       </a>
 
       {/* Non-blocking data-load error banner */}
-      {dataLoadError && (
-        <div className="fixed top-0 left-0 right-0 z-[70] bg-craft-rose/90 text-white px-4 py-2 text-sm flex items-center justify-center gap-3">
+      {dataLoadError && !dataErrorDismissed && (
+        <div
+          className="fixed left-0 right-0 z-[39] bg-craft-rose/90 text-white px-4 py-2 text-sm flex items-center justify-center gap-3"
+          style={{
+            top: `${(siteContent.navbar?.height || 64) + (siteContent.navbar?.isFloating ? 12 : 0)}px`
+          }}
+        >
           <span>We couldn't load the latest content from the server.</span>
           <button
             onClick={handleRetryLoad}
@@ -1598,6 +1605,13 @@ function AppContent() {
             className="font-semibold underline underline-offset-2 disabled:opacity-60"
           >
             {isDataLoading ? 'Retrying...' : 'Retry'}
+          </button>
+          <button
+            onClick={() => setDataErrorDismissed(true)}
+            className="ml-2 font-semibold hover:text-white/80"
+            aria-label="Dismiss error banner"
+          >
+            ✕
           </button>
         </div>
       )}
