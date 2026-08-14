@@ -1,11 +1,26 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import Stripe from 'https://esm.sh/stripe@22.5.0?target=deno';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
-  apiVersion: '2026-03-25.dahlia',
-  httpClient: Stripe.createFetchHttpClient(),
-});
+const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY') || '';
+
+async function stripeApiFetch(path: string, body: any): Promise<any> {
+  const res = await fetch(`https://api.stripe.com/v1${path}`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${STRIPE_SECRET_KEY}`,
+      'Content-Type': 'application/json',
+      'Stripe-Version': '2026-03-25.dahlia',
+    },
+    body: JSON.stringify(body),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const message = data?.error?.message || `Stripe API error ${res.status}`;
+    throw new Error(message);
+  }
+  return data;
+}
 
 const ZERO_DECIMAL_CURRENCIES = new Set(['jpy', 'krw']);
 
@@ -371,7 +386,7 @@ serve(async (req) => {
       return_url: return_url || undefined,
     };
 
-    const session = await stripe.checkout.sessions.create(sessionPayload);
+    const session = await stripeApiFetch('/checkout/sessions', sessionPayload);
 
     if (!session.client_secret) {
       console.error('Checkout Session created without client_secret:', session.id);
