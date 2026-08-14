@@ -38,6 +38,18 @@ export interface PlacementZone {
   points?: { x: number; y: number }[];
 }
 
+/** Quantities at or below this show a "selling out" badge; 0 is sold out. */
+export const LOW_STOCK_THRESHOLD = 2;
+
+export type StockState = 'in_stock' | 'low' | 'sold_out';
+
+export function getStockState(quantity: number | null | undefined): StockState {
+  const q = quantity ?? 0;
+  if (q <= 0) return 'sold_out';
+  if (q <= LOW_STOCK_THRESHOLD) return 'low';
+  return 'in_stock';
+}
+
 /**
  * Compute clipPath + centering transform from a placement zone.
  * Percentages are relative to the element bounding box.

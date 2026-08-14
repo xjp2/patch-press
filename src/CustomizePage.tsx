@@ -17,7 +17,7 @@ import type { FlyingPatch } from './components/PatchFlight';
 import type { Product, Patch, SiteContent } from './AdminPanel';
 import { useCart } from './context/CartContext';
 import { useCurrency } from './context/CurrencyContext';
-import { getClipAndCenter, fixImagePath, getResizedImageUrl } from './lib/utils';
+import { getClipAndCenter, fixImagePath, getResizedImageUrl, getStockState } from './lib/utils';
 import { CroppedThumbnail } from './components/CroppedThumbnail';
 
 // Helper for Point in Polygon (Ray Casting)
@@ -187,6 +187,12 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
     const allPatchesPrice = frontPatchesPrice + backPatchesPrice;
     const totalPrice = selectedProduct.basePrice + allPatchesPrice;
 
+    // Designs containing sold-out items cannot be added to the cart (an item
+    // may sell out while the customer is still designing).
+    const hasSoldOutItems =
+        getStockState(selectedProduct.quantity) === 'sold_out' ||
+        [...frontPatches, ...backPatches].some(p => getStockState(p.quantity) === 'sold_out');
+
     // --- Actions ---
 
     const handleZoomIn = () => setZoom(prev => Math.min(prev + 0.25, 3));
@@ -196,6 +202,7 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
 
 
     const addPatch = (patch: Patch, clickX?: number, clickY?: number) => {
+        if (getStockState(patch.quantity) === 'sold_out') return; // Sold-out patches cannot be placed
         playPop();
         const img = productImageRef.current;
         if (!img) return;
@@ -292,6 +299,7 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
     };
     
     const handleAddToCart = () => {
+        if (hasSoldOutItems) return; // Sold-out items must not reach the cart
         playDing();
         // Create cart item from current design with full patch placement data
         const cartItem = {
@@ -649,26 +657,49 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                         ))}
                                     </div>
                                     <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-[300px] sm:max-h-[400px] overflow-y-auto p-1">
-                                        {filteredPatches.length > 0 ? filteredPatches.map((patch) => (
+                                        {filteredPatches.length > 0 ? filteredPatches.map((patch) => {
+                                            const patchStock = getStockState(patch.quantity);
+                                            const patchSoldOut = patchStock === 'sold_out';
+                                            return (
                                             <motion.button
                                                 key={patch.id}
+                                                disabled={patchSoldOut}
                                                 onClick={(e) => {
+                                                    if (patchSoldOut) return;
                                                     const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
                                                     addPatch(patch, rect.left + rect.width / 2, rect.top + rect.height / 2);
                                                 }}
-                                                className="bg-cardstock rounded-xl p-2 hover:bg-craft-mint/20 text-center"
-                                                whileHover={{ scale: 1.08 }}
-                                                whileTap={{ scale: 0.88 }}
+                                                className={`relative bg-cardstock rounded-xl p-2 text-center ${patchSoldOut ? 'cursor-not-allowed' : 'hover:bg-craft-mint/20'}`}
+                                                whileHover={patchSoldOut ? {} : { scale: 1.08 }}
+                                                whileTap={patchSoldOut ? {} : { scale: 0.88 }}
                                                 transition={{ type: 'spring', stiffness: 400, damping: 17 }}
                                             >
                                                 <img src={getResizedImageUrl(patch.image, 200)} alt={patch.name} className="w-full aspect-square object-contain mb-1" loading="lazy" decoding="async" style={(() => {
                                                     const s = getClipAndCenter(patch.contentZone);
-                                                    return { clipPath: s.clipPath, transform: s.transform };
+                                                    return {
+                                                        clipPath: s.clipPath,
+                                                        transform: s.transform,
+                                                        filter: patchSoldOut ? 'grayscale(1)' : undefined,
+                                                        opacity: patchSoldOut ? 0.5 : 1,
+                                                    };
                                                 })()} />
                                                 <p className="text-[10px] font-semibold text-ink truncate">{patch.name}</p>
                                                 <p className="text-[10px] text-craft-mint">{formatPrice(patch.price)}</p>
+                                                {patchStock === 'low' && (
+                                                    <span className="absolute top-1 left-1 z-10 bg-amber-100 text-amber-800 border border-amber-300 text-[9px] font-bold px-1.5 py-0.5 rounded-full shadow-sm">
+                                                        {patch.quantity} left
+                                                    </span>
+                                                )}
+                                                {patchSoldOut && (
+                                                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                                        <span className="rotate-[-12deg] border-2 border-craft-pink text-craft-pink bg-white/85 font-heading font-bold text-[9px] px-2 py-0.5 rounded tracking-widest shadow-sm">
+                                                            SOLD OUT
+                                                        </span>
+                                                    </div>
+                                                )}
                                             </motion.button>
-                                        )) : (
+                                            );
+                                        }) : (
                                             <div className="col-span-3 py-8 text-center text-ink/40">
                                                 <Search className="w-10 h-10 mx-auto mb-2 opacity-40" />
                                                 <p className="font-semibold text-sm">No patches found</p>
@@ -1126,7 +1157,18 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                     </div>
 
                                     {/* Buttons */}
-                                    <button onClick={handleAddToCart} className="btn-primary w-full flex items-center justify-center gap-2 hover:scale-105 active:scale-95 transition-transform animate-pulse text-sm py-2.5"><ShoppingCart className="w-4 h-4" /> Add to Cart</button>
+                                    <button
+                                        onClick={handleAddToCart}
+                                        disabled={hasSoldOutItems}
+                                        className="btn-primary w-full flex items-center justify-center gap-2 hover:scale-105 active:scale-95 transition-transform animate-pulse text-sm py-2.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:animate-none disabled:hover:scale-100"
+                                    >
+                                        <ShoppingCart className="w-4 h-4" /> Add to Cart
+                                    </button>
+                                    {hasSoldOutItems && (
+                                        <p className="text-xs text-craft-pink text-center font-semibold">
+                                            An item in this design is sold out — remove it to continue.
+                                        </p>
+                                    )}
                                     <div className="flex gap-2">
                                         <button onClick={() => setCurrentStep('design')} className="flex-1 btn-secondary flex items-center justify-center gap-1 hover:scale-105 transition-transform text-xs py-2"><RotateCcw className="w-3 h-3" /> Edit Design</button>
                                     </div>

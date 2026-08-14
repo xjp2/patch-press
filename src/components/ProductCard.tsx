@@ -3,7 +3,7 @@ import { motion, useMotionValue, useSpring, useTransform } from 'framer-motion';
 import { Sparkles } from 'lucide-react';
 import type { Product } from '../AdminPanel';
 import { useCurrency } from '../context/CurrencyContext';
-import { getResizedImageUrl } from '../lib/utils';
+import { getResizedImageUrl, getStockState } from '../lib/utils';
 
 interface ProductCardProps {
   product: Product;
@@ -14,6 +14,9 @@ interface ProductCardProps {
 
 export function ProductCard({ product, isSelected, onClick, index }: ProductCardProps) {
   const { formatPrice } = useCurrency();
+  const stockState = getStockState(product.quantity);
+  const soldOut = stockState === 'sold_out';
+  const lowStock = stockState === 'low';
   const cardRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const measureImgRef = useRef<HTMLImageElement>(null);
@@ -147,7 +150,7 @@ export function ProductCard({ product, isSelected, onClick, index }: ProductCard
   });
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!cardRef.current || isSelected) return;
+    if (!cardRef.current || isSelected || soldOut) return;
     const rect = cardRef.current.getBoundingClientRect();
     const x = (e.clientX - rect.left) / rect.width - 0.5;
     const y = (e.clientY - rect.top) / rect.height - 0.5;
@@ -163,7 +166,7 @@ export function ProductCard({ product, isSelected, onClick, index }: ProductCard
   return (
     <motion.div
       ref={cardRef}
-      onClick={onClick}
+      onClick={soldOut ? undefined : onClick}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
       initial={{ opacity: 0, y: 40, scale: 0.9 }}
@@ -174,22 +177,26 @@ export function ProductCard({ product, isSelected, onClick, index }: ProductCard
         damping: 24,
         delay: index * 0.06,
       }}
-      whileHover={!isSelected ? { scale: 1.04, z: 20 } : {}}
-      whileTap={{ scale: 0.96 }}
+      whileHover={!isSelected && !soldOut ? { scale: 1.04, z: 20 } : {}}
+      whileTap={soldOut ? {} : { scale: 0.96 }}
       style={{
         rotateX,
         rotateY,
         transformStyle: 'preserve-3d',
         perspective: 600,
       }}
-      className={`relative bg-cardstock rounded-2xl p-4 cursor-pointer transition-shadow duration-300 ${
-        isSelected
-          ? 'ring-2 ring-craft-mint shadow-paper'
-          : 'shadow-soft hover:shadow-[0_8px_30px_rgba(0,0,0,0.08)]'
+      className={`relative bg-cardstock rounded-2xl p-4 transition-shadow duration-300 ${
+        soldOut
+          ? 'cursor-not-allowed shadow-soft'
+          : `cursor-pointer ${
+              isSelected
+                ? 'ring-2 ring-craft-mint shadow-paper'
+                : 'shadow-soft hover:shadow-[0_8px_30px_rgba(0,0,0,0.08)]'
+            }`
       }`}
     >
       {/* Hover sparkle */}
-      {!isSelected && (
+      {!isSelected && !soldOut && (
         <motion.div
           initial={{ scale: 0, opacity: 0 }}
           whileHover={{ scale: 1, opacity: 1 }}
@@ -204,7 +211,11 @@ export function ProductCard({ product, isSelected, onClick, index }: ProductCard
       <motion.div
         ref={wrapperRef}
         className="relative w-full h-24 mb-3 overflow-hidden"
-        style={{ transform: 'translateZ(30px)' }}
+        style={{
+          transform: 'translateZ(30px)',
+          filter: soldOut ? 'grayscale(1)' : undefined,
+          opacity: soldOut ? 0.5 : 1,
+        }}
       >
         {/* Hidden image for measurement */}
         <img
@@ -230,6 +241,22 @@ export function ProductCard({ product, isSelected, onClick, index }: ProductCard
           {formatPrice(product.basePrice)}
         </motion.p>
       </div>
+
+      {/* Low-stock badge */}
+      {lowStock && (
+        <span className="absolute top-2 left-2 z-20 bg-amber-100 text-amber-800 border border-amber-300 text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm">
+          Selling out · {product.quantity} left
+        </span>
+      )}
+
+      {/* Sold-out stamp */}
+      {soldOut && (
+        <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
+          <span className="rotate-[-12deg] border-[2.5px] border-craft-pink text-craft-pink bg-white/85 font-heading font-bold text-sm px-4 py-1.5 rounded-md tracking-widest shadow-paper">
+            SOLD OUT
+          </span>
+        </div>
+      )}
     </motion.div>
   );
 }
