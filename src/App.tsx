@@ -1297,35 +1297,19 @@ function AppContent() {
 
     const initAuth = async () => {
       console.log('App: Initializing Auth...');
-      
-      // STEP 1: Try to get session from localStorage instantly (< 50ms)
+
       try {
-        const cachedSession = localStorage.getItem('patchpress-auth');
-        if (cachedSession) {
-          const parsed = JSON.parse(cachedSession);
-          const session = parsed?.session;
-          if (session?.user && mounted) {
-            console.log('App: Found cached session, showing user instantly');
-            // Show user immediately without waiting for network
-            await handleUserAuthenticated(session.user, true);
-          }
-        }
-      } catch (e) {
-        console.warn('App: Failed to read cached session:', e);
-      }
-      
-      // STEP 2: Validate session with server (may take 1-3s)
-      try {
-        const { data: { session }, error: sessionError } = await auth.getSession();
-        
-        if (sessionError) {
-          console.error('App: Session validation error:', sessionError);
-          if (mounted) {
-            setCurrentUser(null);
-            setCurrentView('landing');
-          }
-          return;
-        }
+        // Always validate with Supabase server. Do NOT trust localStorage
+        // without validation — a stale token there can leave the UI "logged in"
+        // but unable to interact because the server rejects requests.
+        const { data: { session }, error: sessionError } = await Promise.race([
+          auth.getSession(),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Auth session check timed out')), 5000)
+          ),
+        ]);
+
+        if (sessionError) throw sessionError;
 
         if (mounted) {
           if (session?.user) {
@@ -1333,14 +1317,18 @@ function AppContent() {
             await handleUserAuthenticated(session.user, false);
           } else {
             console.log('App: No valid session on server.');
+            localStorage.removeItem('patchpress-auth');
+            resolvedRoles.current.clear();
             setCurrentUser(null);
             setCurrentView('landing');
           }
         }
       } catch (err) {
         console.error('App: Auth validation error:', err);
-        // Keep cached user if validation fails (offline mode)
-        if (!currentUser && mounted) {
+        if (mounted) {
+          // Clear stale local session data on any auth error/timeout
+          localStorage.removeItem('patchpress-auth');
+          resolvedRoles.current.clear();
           setCurrentUser(null);
           setCurrentView('landing');
         }
@@ -1356,28 +1344,42 @@ function AppContent() {
     const { data: authListener } = auth.onAuthStateChange(async (event, session) => {
       console.log('App: Auth Event:', event, 'User:', session?.user?.email);
 
-      if (mounted) {
-        if (session?.user) {
-          try {
-            await handleUserAuthenticated(session.user, false);
-            
-            // Check if user was trying to checkout before login
-            const pendingCheckout = localStorage.getItem('pending_checkout');
-            if (pendingCheckout === 'true' && event === 'SIGNED_IN') {
-              localStorage.removeItem('pending_checkout');
-              // Open cart and show checkout
-              setIsCartOpen(true);
-            }
-          } catch (err) {
-            console.error('App: Error in auth state change handler:', err);
-          } finally {
-            setIsAuthLoading(false);
+      if (!mounted) return;
+
+      if (event === 'SIGNED_OUT') {
+        localStorage.removeItem('patchpress-auth');
+        resolvedRoles.current.clear();
+        setCurrentUser(null);
+        setCurrentView('landing');
+        setIsAuthLoading(false);
+        return;
+      }
+
+      if (session?.user) {
+        try {
+          await handleUserAuthenticated(session.user, false);
+
+          // Check if user was trying to checkout before login
+          const pendingCheckout = localStorage.getItem('pending_checkout');
+          if (pendingCheckout === 'true' && event === 'SIGNED_IN') {
+            localStorage.removeItem('pending_checkout');
+            setIsCartOpen(true);
           }
-        } else {
+        } catch (err) {
+          console.error('App: Error in auth state change handler:', err);
+          localStorage.removeItem('patchpress-auth');
+          resolvedRoles.current.clear();
           setCurrentUser(null);
           setCurrentView('landing');
+        } finally {
           setIsAuthLoading(false);
         }
+      } else {
+        localStorage.removeItem('patchpress-auth');
+        resolvedRoles.current.clear();
+        setCurrentUser(null);
+        setCurrentView('landing');
+        setIsAuthLoading(false);
       }
     });
 
