@@ -86,10 +86,12 @@ const initialProducts: Product[] = [
 ];
 
 // Cart Item Component with expandable details
-function CartItemCard({ item, updateQuantity, removeItem }: { 
+function CartItemCard({ item, updateQuantity, removeItem, products, patches }: { 
   item: import('./context/CartContext').CartItem; 
   updateQuantity: (id: string, qty: number) => void;
   removeItem: (id: string) => void;
+  products: Product[];
+  patches: Patch[];
 }) {
   const { formatPrice } = useCurrency();
   const [expanded, setExpanded] = useState(false);
@@ -99,6 +101,24 @@ function CartItemCard({ item, updateQuantity, removeItem }: {
   // Handle legacy cart items that only have patches array
   const legacyPatches = (item as any).patches || [];
   const totalPatches = frontPatches.length + backPatches.length + legacyPatches.length;
+
+  // Max sellable quantity for this line: limited by product stock and by
+  // patch stock (a design using a patch N times consumes N units per line).
+  const maxQuantity = useMemo(() => {
+    const product = products.find((p) => p.id === item.productId);
+    let max = product ? product.quantity : Number.POSITIVE_INFINITY;
+    const patchCounts: Record<string, number> = {};
+    for (const p of [...frontPatches, ...backPatches, ...legacyPatches]) {
+      if (p?.id) patchCounts[p.id] = (patchCounts[p.id] || 0) + 1;
+    }
+    for (const [pid, count] of Object.entries(patchCounts)) {
+      const patch = patches.find((pa) => pa.id === pid);
+      if (patch && count > 0) {
+        max = Math.min(max, Math.floor(patch.quantity / count));
+      }
+    }
+    return max;
+  }, [products, patches, item, frontPatches, backPatches, legacyPatches]);
   const patchPrice = frontPatches.reduce((sum: number, p: any) => sum + (p.price || 0), 0) + 
                      backPatches.reduce((sum: number, p: any) => sum + (p.price || 0), 0) +
                      legacyPatches.reduce((sum: number, p: any) => sum + (p.price || 0), 0);
@@ -231,11 +251,17 @@ function CartItemCard({ item, updateQuantity, removeItem }: {
           </button>
           <span className="w-8 text-center font-medium text-sm">{item.quantity}</span>
           <button
-            onClick={() => updateQuantity(item.id, item.quantity + 1)}
-            className="p-1 hover:bg-cardstock rounded-full bg-cardstock"
+            onClick={() => updateQuantity(item.id, Math.min(item.quantity + 1, maxQuantity))}
+            disabled={item.quantity >= maxQuantity}
+            className="p-1 hover:bg-cardstock rounded-full bg-cardstock disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Plus className="w-4 h-4" />
           </button>
+          {maxQuantity !== Number.POSITIVE_INFINITY && item.quantity >= maxQuantity && (
+            <span className={`text-[10px] font-semibold ${maxQuantity <= 0 ? 'text-craft-pink' : 'text-amber-600'}`}>
+              {maxQuantity <= 0 ? 'Sold out' : `Only ${maxQuantity} available`}
+            </span>
+          )}
         </div>
         <span className="font-bold">{formatPrice(item.totalPrice * item.quantity)}</span>
       </div>
@@ -248,9 +274,11 @@ interface CartDrawerProps {
   currentUser: UserType | null;
   setShowAuth: (show: boolean) => void;
   setAuthView: (view: AuthView) => void;
+  products: Product[];
+  patches: Patch[];
 }
 
-function CartDrawer({ currentUser, setShowAuth, setAuthView }: CartDrawerProps) {
+function CartDrawer({ currentUser, setShowAuth, setAuthView, products, patches }: CartDrawerProps) {
   const { items, isCartOpen, setIsCartOpen, totalPrice, totalItems, updateQuantity, removeItem, clearCart } = useCart();
   const { formatPrice } = useCurrency();
   const [showCheckout, setShowCheckout] = useState(false);
@@ -487,6 +515,8 @@ function CartDrawer({ currentUser, setShowAuth, setAuthView }: CartDrawerProps) 
                     item={item} 
                     updateQuantity={updateQuantity}
                     removeItem={removeItem}
+                    products={products}
+                    patches={patches}
                   />
                 ))}
               </div>
@@ -1691,6 +1721,8 @@ function AppContent() {
         currentUser={currentUser}
         setShowAuth={setShowAuth}
         setAuthView={setAuthView}
+        products={products}
+        patches={patches}
       />
 
       <UserOrdersModal

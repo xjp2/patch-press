@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useMemo } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -17,7 +17,7 @@ import type { FlyingPatch } from './components/PatchFlight';
 import type { Product, Patch, SiteContent } from './AdminPanel';
 import { useCart } from './context/CartContext';
 import { useCurrency } from './context/CurrencyContext';
-import { getClipAndCenter, fixImagePath, getResizedImageUrl, getStockState } from './lib/utils';
+import { getClipAndCenter, fixImagePath, getResizedImageUrl, getStockState, LOW_STOCK_THRESHOLD } from './lib/utils';
 import { CroppedThumbnail } from './components/CroppedThumbnail';
 
 // Helper for Point in Polygon (Ray Casting)
@@ -187,6 +187,16 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
     const allPatchesPrice = frontPatchesPrice + backPatchesPrice;
     const totalPrice = selectedProduct.basePrice + allPatchesPrice;
 
+    // How many times each patch is already placed in this design (front + back).
+    // Placing a patch consumes one unit of its stock for this design.
+    const placedPatchCounts = useMemo(() => {
+        const counts: Record<string, number> = {};
+        for (const p of [...frontPatches, ...backPatches]) {
+            counts[p.id] = (counts[p.id] || 0) + 1;
+        }
+        return counts;
+    }, [frontPatches, backPatches]);
+
     // Designs containing sold-out items cannot be added to the cart (an item
     // may sell out while the customer is still designing).
     const hasSoldOutItems =
@@ -202,7 +212,8 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
 
 
     const addPatch = (patch: Patch, clickX?: number, clickY?: number) => {
-        if (getStockState(patch.quantity) === 'sold_out') return; // Sold-out patches cannot be placed
+        // Cannot place more of a patch than its available stock
+        if (patch.quantity - (placedPatchCounts[patch.id] || 0) <= 0) return;
         playPop();
         const img = productImageRef.current;
         if (!img) return;
@@ -658,8 +669,10 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                     </div>
                                     <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-[300px] sm:max-h-[400px] overflow-y-auto p-1">
                                         {filteredPatches.length > 0 ? filteredPatches.map((patch) => {
-                                            const patchStock = getStockState(patch.quantity);
-                                            const patchSoldOut = patchStock === 'sold_out';
+                                            // Remaining stock after what is already placed in this design
+                                            const remaining = patch.quantity - (placedPatchCounts[patch.id] || 0);
+                                            const patchSoldOut = remaining <= 0;
+                                            const patchLow = !patchSoldOut && remaining <= LOW_STOCK_THRESHOLD;
                                             return (
                                             <motion.button
                                                 key={patch.id}
@@ -685,9 +698,9 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                                 })()} />
                                                 <p className="text-[10px] font-semibold text-ink truncate">{patch.name}</p>
                                                 <p className="text-[10px] text-craft-mint">{formatPrice(patch.price)}</p>
-                                                {patchStock === 'low' && (
+                                                {patchLow && (
                                                     <span className="absolute top-1 left-1 z-10 bg-amber-100 text-amber-800 border border-amber-300 text-[9px] font-bold px-1.5 py-0.5 rounded-full shadow-sm">
-                                                        {patch.quantity} left
+                                                        {remaining} left
                                                     </span>
                                                 )}
                                                 {patchSoldOut && (
