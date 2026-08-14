@@ -1395,9 +1395,22 @@ function AppContent() {
   }, [isAuthLoading, currentUser]);
 
   const handleLogout = async () => {
-    await auth.signOut();
-    setCurrentUser(null);
-    setCurrentView('landing');
+    try {
+      const { error } = await auth.signOut();
+      if (error) {
+        console.error('App: signOut returned error:', error);
+      }
+    } catch (err) {
+      console.error('App: signOut threw:', err);
+    } finally {
+      // Always clear local session state even if the network call fails,
+      // so the user is not trapped as "logged in" on this device.
+      localStorage.removeItem('patchpress-auth');
+      resolvedRoles.current.clear();
+      setCurrentUser(null);
+      setCurrentView('landing');
+      window.location.reload();
+    }
   };
 
   // Refresh CMS data after admin updates (force refresh from Supabase)

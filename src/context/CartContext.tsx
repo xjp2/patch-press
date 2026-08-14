@@ -157,7 +157,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       mounted = false;
-      authSubscriptionRef.current?.subscription?.unsubscribe();
+      const subscription =
+        authSubscriptionRef.current?.data?.subscription ||
+        authSubscriptionRef.current?.subscription;
+      subscription?.unsubscribe?.();
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   
