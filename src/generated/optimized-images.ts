@@ -62,4 +62,4 @@ export const optimizedImageMappings: Record<string, string> = {
   "/pouch-beige.png": "/pouch-beige.avif",
   "/tote-bag.png": "/tote-bag.avif"
 };
-export const optimizedImageGeneratedAt = '2026-08-14T10:32:21.474Z';
+export const optimizedImageGeneratedAt = '2026-08-14T11:27:18.173Z';

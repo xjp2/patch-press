@@ -261,7 +261,7 @@ serve(async (req) => {
       );
     }
 
-    // f. Calculate totals in SGD (base currency), convert to target, then Stripe units
+    // f. Calculate totals in SGD (base/merchant currency)
     let totalSgd = 0;
     for (const item of validatedItems) {
       const product = productMap.get(item.productId)!;
@@ -270,19 +270,20 @@ serve(async (req) => {
       totalSgd += (product.base_price + patchPrice) * item.quantity;
     }
 
-    const targetCurrency = currency.toLowerCase();
-    const exchangeRate = await fetchExchangeRate(targetCurrency);
+    // Merchant settlement currency is SGD. Stripe Adaptive Pricing will let
+    // eligible international customers pay in their local currency when supported.
+    const targetCurrency = 'sgd';
 
-    // g. Build line items in target currency (per-unit, DB-trusted prices)
+    // g. Build line items in SGD (per-unit, DB-trusted prices)
     const lineItems: any[] = [];
     for (const item of validatedItems) {
       const product = productMap.get(item.productId)!;
       const patchPrice = [...item.frontPatches, ...item.backPatches]
         .reduce((sum: number, pid: string) => sum + (patchMap.get(pid)?.price ?? 0), 0);
       const unitPriceSgd = product.base_price + patchPrice;
-      const unitAmountTarget = toStripeAmount(targetCurrency, unitPriceSgd * exchangeRate);
+      const unitAmountSgd = toStripeAmount(targetCurrency, unitPriceSgd);
 
-      if (unitAmountTarget <= 0) {
+      if (unitAmountSgd <= 0) {
         continue;
       }
 
@@ -293,7 +294,7 @@ serve(async (req) => {
       lineItems.push({
         price_data: {
           currency: targetCurrency,
-          unit_amount: unitAmountTarget,
+          unit_amount: unitAmountSgd,
           product_data: {
             name: product.name || 'Product',
             description: allPatchNames.length > 0 ? `Patches: ${allPatchNames.join(', ')}` : undefined,
@@ -362,6 +363,7 @@ serve(async (req) => {
         receipt_email: customer_email || undefined,
       },
       metadata,
+      adaptive_pricing: { allowed: true },
       shipping_address_collection: {
         allowed_countries: ['SG', 'MY', 'ID', 'TH', 'PH', 'VN', 'US', 'GB', 'AU', 'JP', 'KR', 'CN', 'TW', 'HK'],
       },

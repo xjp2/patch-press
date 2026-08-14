@@ -33,8 +33,11 @@ interface CheckoutFormProps {
 }
 
 // Checkout Form with PaymentElement and AddressElement
+function formatSgd(amount: number): string {
+  return new Intl.NumberFormat('en-SG', { style: 'currency', currency: 'SGD' }).format(amount);
+}
+
 function CheckoutForm({ amount, customerEmail, orderNumber, sessionId, onSuccess, onError }: CheckoutFormProps) {
-  const { formatPrice } = useCurrency();
   const checkoutResult = useCheckout();
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
@@ -204,7 +207,7 @@ function CheckoutForm({ amount, customerEmail, orderNumber, sessionId, onSuccess
         ) : (
           <>
             <CheckCircle className="w-5 h-5" />
-            Pay {formatPrice(amount)}
+            Pay {formatSgd(amount)}
           </>
         )}
       </button>
@@ -268,7 +271,7 @@ export function StripeCheckout({
   onSuccess,
   onError
 }: StripeCheckoutProps) {
-  const { currency, convertPrice } = useCurrency();
+  const { baseCurrency } = useCurrency();
   const { trackBeginCheckout, trackPurchase } = useAnalytics();
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -325,9 +328,10 @@ export function StripeCheckout({
 
         // Check sessionStorage for existing Checkout Session (prevents duplicates on remount)
         const storageKey = getStorageKey(actualUserId, cartItems);
-        const expectedStripeAmount = isZeroDecimalCurrency(currency)
-          ? Math.round(convertPrice(amount))
-          : Math.round(convertPrice(amount) * 100);
+        // The Checkout Session is always created in the merchant base currency (SGD).
+        const expectedStripeAmount = isZeroDecimalCurrency(baseCurrency)
+          ? Math.round(amount)
+          : Math.round(amount * 100);
         const existingCS = sessionStorage.getItem(storageKey);
 
         if (existingCS) {
@@ -358,7 +362,7 @@ export function StripeCheckout({
         // Generate idempotency key that changes if ANY parameter changes
         const idempotencyKey = generateIdempotencyKey(
           cartItems,
-          currency,
+          baseCurrency,
           actualUserId,
           session.user.email || ''
         );
@@ -423,7 +427,7 @@ export function StripeCheckout({
                 frontPatches: item.frontPatches || [],
                 backPatches: item.backPatches || [],
               })),
-              currency,
+              currency: baseCurrency,
               customer_email: session.user.email,
               return_url: returnUrl,
               idempotency_key: idempotencyKey,
@@ -513,10 +517,10 @@ export function StripeCheckout({
       name: item.productName,
       price: item.totalPrice,
       quantity: item.quantity || 1,
-      currency,
+      currency: baseCurrency,
     }));
-    trackBeginCheckout(analyticsItems, paymentTotal ?? amount, currency);
-  }, [clientSecret, cartItems, amount, paymentTotal, currency, trackBeginCheckout]);
+    trackBeginCheckout(analyticsItems, paymentTotal ?? amount, baseCurrency);
+  }, [clientSecret, cartItems, amount, paymentTotal, baseCurrency, trackBeginCheckout]);
 
   // Clear sessionStorage on successful payment and track purchase
   const handleSuccess = async (orderData?: { orderId: string; orderNumber: string }) => {
@@ -536,9 +540,9 @@ export function StripeCheckout({
         name: item.productName,
         price: item.totalPrice,
         quantity: item.quantity || 1,
-        currency,
+        currency: baseCurrency,
       }));
-      trackPurchase(orderData.orderNumber, analyticsItems, paymentTotal ?? amount, currency);
+      trackPurchase(orderData.orderNumber, analyticsItems, paymentTotal ?? amount, baseCurrency);
     }
 
     onSuccess(orderData);
