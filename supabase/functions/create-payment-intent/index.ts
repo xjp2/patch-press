@@ -363,7 +363,7 @@ serve(async (req) => {
         receipt_email: customer_email || undefined,
       },
       metadata,
-      adaptive_pricing: { allowed: true },
+      adaptive_pricing: { enabled: true },
       shipping_address_collection: {
         allowed_countries: ['SG', 'MY', 'ID', 'TH', 'PH', 'VN', 'US', 'GB', 'AU', 'JP', 'KR', 'CN', 'TW', 'HK'],
       },
