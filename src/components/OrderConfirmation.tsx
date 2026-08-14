@@ -271,7 +271,7 @@ export function OrderConfirmation({
               <div>
                 <p className="font-bold text-gray-900">Total</p>
                 <p className="text-[10px] text-gray-400">
-                  Including all taxes & shipping
+                  Including shipping
                 </p>
               </div>
               <span className="text-xl font-bold text-craft-mint">
