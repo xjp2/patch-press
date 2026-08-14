@@ -62,7 +62,12 @@ function CheckoutForm({ amount, orderNumber, onSuccess, onError }: CheckoutFormP
       // Confirm the payment with Stripe Checkout Elements.
       // The return_url and customer_email are configured server-side when the
       // Checkout Session is created, so we must NOT pass them to confirm().
-      const confirmResult = await checkout.confirm();
+      // redirect: 'if_required' keeps card payments inline (no full-page
+      // redirect to return_url on success) — only redirect-based payment
+      // methods (3DS, bank transfers, PayNow, etc.) leave the page. The
+      // default 'always' redirected after every successful payment, causing
+      // a full reload that re-ran auth init and could leave users stuck.
+      const confirmResult = await checkout.confirm({ redirect: 'if_required' });
 
       if (confirmResult.type === 'error' && confirmResult.error) {
         // Payment failed immediately
