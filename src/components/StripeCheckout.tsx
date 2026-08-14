@@ -25,7 +25,6 @@ const pendingRequests = new Set<string>();
 
 interface CheckoutFormProps {
   amount: number;
-  customerEmail?: string;
   orderNumber: string | null;
   onSuccess: (orderData?: { orderId: string; orderNumber: string }) => void;
   onError: (error: string) => void;
@@ -36,7 +35,7 @@ function formatSgd(amount: number): string {
   return new Intl.NumberFormat('en-SG', { style: 'currency', currency: 'SGD' }).format(amount);
 }
 
-function CheckoutForm({ amount, customerEmail, orderNumber, onSuccess, onError }: CheckoutFormProps) {
+function CheckoutForm({ amount, orderNumber, onSuccess, onError }: CheckoutFormProps) {
   const checkoutResult = useCheckout();
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
@@ -61,11 +60,9 @@ function CheckoutForm({ amount, customerEmail, orderNumber, onSuccess, onError }
 
     try {
       // Confirm the payment with Stripe Checkout Elements.
-      // The return_url is configured server-side when the Checkout Session is created,
-      // so we must NOT pass returnUrl here — doing so throws an Elements error.
-      const confirmOptions: { email?: string } = {};
-      if (customerEmail) confirmOptions.email = customerEmail;
-      const confirmResult = await checkout.confirm(confirmOptions);
+      // The return_url and customer_email are configured server-side when the
+      // Checkout Session is created, so we must NOT pass them to confirm().
+      const confirmResult = await checkout.confirm();
 
       if (confirmResult.type === 'error' && confirmResult.error) {
         // Payment failed immediately
@@ -256,7 +253,6 @@ function getStorageKey(userId: string, cartItems: any[]): string {
 // Main Checkout Component
 interface StripeCheckoutProps {
   amount: number;
-  customerEmail?: string;
   cartItems?: any[];
   onSuccess: (orderData?: { orderId: string; orderNumber: string }) => void;
   onError: (error: string) => void;
@@ -264,7 +260,6 @@ interface StripeCheckoutProps {
 
 export function StripeCheckout({
   amount,
-  customerEmail,
   cartItems = [],
   onSuccess,
   onError
@@ -588,7 +583,6 @@ export function StripeCheckout({
     >
       <CheckoutForm
         amount={paymentTotal ?? amount}
-        customerEmail={customerEmail}
         orderNumber={orderNumber}
         onSuccess={handleSuccess}
         onError={onError}

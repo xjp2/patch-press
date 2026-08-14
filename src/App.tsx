@@ -461,7 +461,6 @@ function CartDrawer({ currentUser, setShowAuth, setAuthView }: CartDrawerProps) 
               {/* Payment Step with AddressElement */}
               <StripeCheckout
                 amount={totalPrice}
-                customerEmail={currentUser?.email}
                 cartItems={items}
                 onSuccess={handleCheckoutSuccess}
                 onError={handleCheckoutError}
