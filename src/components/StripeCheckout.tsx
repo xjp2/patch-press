@@ -17,25 +17,27 @@ import { useAnalytics } from '../hooks/useAnalytics';
 // Initialize Stripe
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '');
 
-// Zero-decimal currencies where Stripe uses whole units instead of cents
-const isZeroDecimalCurrency = (currency: string) => ['jpy', 'krw'].includes(currency.toLowerCase());
-
 // Track in-flight session requests to prevent duplicates (React Strict Mode)
 const pendingRequests = new Set<string>();
 
 interface CheckoutFormProps {
   amount: number;
+  chargeCurrency: string;
   orderNumber: string | null;
   onSuccess: (orderData?: { orderId: string; orderNumber: string }) => void;
   onError: (error: string) => void;
 }
 
 // Checkout Form with PaymentElement and AddressElement
-function formatSgd(amount: number): string {
-  return new Intl.NumberFormat('en-SG', { style: 'currency', currency: 'SGD' }).format(amount);
+function formatCharge(amount: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: currency.toUpperCase() }).format(amount);
+  } catch {
+    return `${currency.toUpperCase()} ${amount.toFixed(2)}`;
+  }
 }
 
-function CheckoutForm({ amount, orderNumber, onSuccess, onError }: CheckoutFormProps) {
+function CheckoutForm({ amount, chargeCurrency, orderNumber, onSuccess, onError }: CheckoutFormProps) {
   const checkoutResult = useCheckout();
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
@@ -207,7 +209,7 @@ function CheckoutForm({ amount, orderNumber, onSuccess, onError }: CheckoutFormP
         ) : (
           <>
             <CheckCircle className="w-5 h-5" />
-            Pay {formatSgd(amount)}
+            Pay {formatCharge(amount, chargeCurrency)}
           </>
         )}
       </button>
@@ -269,12 +271,13 @@ export function StripeCheckout({
   onSuccess,
   onError
 }: StripeCheckoutProps) {
-  const { baseCurrency } = useCurrency();
+  const { baseCurrency, currency: displayCurrency, toStripeAmount: toDisplayStripeAmount } = useCurrency();
   const { trackBeginCheckout, trackPurchase } = useAnalytics();
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [paymentTotal, setPaymentTotal] = useState<number | null>(null);
+  const [paymentCurrency, setPaymentCurrency] = useState<string>(displayCurrency);
   const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
   const [orderNumber, setOrderNumber] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
@@ -325,24 +328,25 @@ export function StripeCheckout({
 
         // Check sessionStorage for existing Checkout Session (prevents duplicates on remount)
         const storageKey = getStorageKey(actualUserId, cartItems);
-        // The Checkout Session is always created in the merchant base currency (SGD).
-        const expectedStripeAmount = isZeroDecimalCurrency(baseCurrency)
-          ? Math.round(amount)
-          : Math.round(amount * 100);
+        // The Checkout Session is created in the customer's display currency,
+        // so the expected amount is the base-currency total converted to it.
+        const expectedStripeAmount = toDisplayStripeAmount(amount);
         const existingCS = sessionStorage.getItem(storageKey);
 
         if (existingCS) {
           try {
             const parsed = JSON.parse(existingCS);
-            // Check if it's less than 30 minutes old and same Stripe amount
+            // Check if it's less than 30 minutes old, same Stripe amount, same currency
             const isRecent = (Date.now() - parsed.timestamp) < 30 * 60 * 1000;
             const sameAmount = parsed.amount === expectedStripeAmount;
+            const sameCurrency = (parsed.currency || baseCurrency) === displayCurrency;
 
-            if (isRecent && sameAmount && parsed.clientSecret) {
+            if (isRecent && sameAmount && sameCurrency && parsed.clientSecret) {
               console.log('Reusing Checkout Session from sessionStorage:', parsed.sessionId);
               if (!isCancelled) {
                 setClientSecret(parsed.clientSecret);
                 setPaymentTotal(parsed.paymentTotal ?? null);
+                setPaymentCurrency(parsed.currency || displayCurrency);
                 setPendingOrderId(parsed.pendingOrderId ?? null);
                 setOrderNumber(parsed.orderNumber ?? null);
                 setIsLoading(false);
@@ -358,7 +362,7 @@ export function StripeCheckout({
         // Generate idempotency key that changes if ANY parameter changes
         const idempotencyKey = generateIdempotencyKey(
           cartItems,
-          baseCurrency,
+          displayCurrency,
           actualUserId,
           session.user.email || ''
         );
@@ -380,6 +384,7 @@ export function StripeCheckout({
               if (!isCancelled) {
                 setClientSecret(parsed.clientSecret);
                 setPaymentTotal(parsed.paymentTotal ?? null);
+                setPaymentCurrency(parsed.currency || displayCurrency);
                 setPendingOrderId(parsed.pendingOrderId ?? null);
                 setOrderNumber(parsed.orderNumber ?? null);
                 setIsLoading(false);
@@ -422,7 +427,7 @@ export function StripeCheckout({
                 frontPatches: item.frontPatches || [],
                 backPatches: item.backPatches || [],
               })),
-              currency: baseCurrency,
+              currency: displayCurrency,
               customer_email: session.user.email,
               return_url: returnUrl,
               idempotency_key: idempotencyKey,
@@ -454,6 +459,7 @@ export function StripeCheckout({
             orderNumber: data.orderNumber,
             amount: data.stripeAmount,
             paymentTotal: data.amount,
+            currency: data.currency,
             timestamp: Date.now(),
           }));
         }
@@ -461,6 +467,7 @@ export function StripeCheckout({
         if (!isCancelled) {
           setClientSecret(data.clientSecret);
           setPaymentTotal(data.amount ?? null);
+          setPaymentCurrency(data.currency || displayCurrency);
           setPendingOrderId(data.pendingOrderId ?? null);
           setOrderNumber(data.orderNumber ?? null);
         }
@@ -513,7 +520,7 @@ export function StripeCheckout({
       quantity: item.quantity || 1,
       currency: baseCurrency,
     }));
-    trackBeginCheckout(analyticsItems, paymentTotal ?? amount, baseCurrency);
+    trackBeginCheckout(analyticsItems, amount, baseCurrency);
   }, [clientSecret, cartItems, amount, paymentTotal, baseCurrency, trackBeginCheckout]);
 
   // Clear sessionStorage on successful payment and track purchase
@@ -536,7 +543,7 @@ export function StripeCheckout({
         quantity: item.quantity || 1,
         currency: baseCurrency,
       }));
-      trackPurchase(orderData.orderNumber, analyticsItems, paymentTotal ?? amount, baseCurrency);
+      trackPurchase(orderData.orderNumber, analyticsItems, amount, baseCurrency);
     }
 
     onSuccess(orderData);
@@ -588,6 +595,7 @@ export function StripeCheckout({
     >
       <CheckoutForm
         amount={paymentTotal ?? amount}
+        chargeCurrency={paymentCurrency}
         orderNumber={orderNumber}
         onSuccess={handleSuccess}
         onError={onError}

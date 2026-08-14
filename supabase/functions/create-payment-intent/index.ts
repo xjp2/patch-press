@@ -48,6 +48,10 @@ async function stripeApiFetch(path: string, body: any): Promise<any> {
 
 const ZERO_DECIMAL_CURRENCIES = new Set(['jpy', 'krw']);
 
+// Presentment currencies the storefront selector offers; all are
+// Stripe-supported charge currencies. Anything else falls back to SGD.
+const SUPPORTED_CHARGE_CURRENCIES = new Set(['sgd', 'usd', 'eur', 'gbp', 'jpy', 'krw']);
+
 function getCorsHeaders(req: Request): HeadersInit {
   const origin = req.headers.get('origin') || '';
   const allowedOrigins = [
@@ -93,6 +97,13 @@ function toStripeAmount(currency: string, amount: number): number {
     return Math.round(amount);
   }
   return Math.round(amount * 100);
+}
+
+function fromStripeAmount(currency: string, amount: number): number {
+  if (ZERO_DECIMAL_CURRENCIES.has(currency.toLowerCase())) {
+    return amount;
+  }
+  return amount / 100;
 }
 
 function generateOrderNumber(): string {
@@ -164,6 +175,13 @@ serve(async (req) => {
 
     const body = await req.json();
     const { cartItems, currency = 'sgd', customer_email, shipping, return_url } = body;
+
+    // Charge in the customer-selected display currency (display = charge).
+    // Unsupported values fall back to the SGD settlement currency.
+    const requestedCurrency = String(currency || 'sgd').toLowerCase();
+    const selectableCurrency = SUPPORTED_CHARGE_CURRENCIES.has(requestedCurrency)
+      ? requestedCurrency
+      : 'sgd';
 
     // c. Validate cartItems
     if (!Array.isArray(cartItems) || cartItems.length === 0) {
@@ -310,22 +328,37 @@ serve(async (req) => {
       totalSgd += (product.base_price + patchPrice) * item.quantity;
     }
 
-    // Merchant settlement currency is SGD. Stripe Adaptive Pricing will let
-    // eligible international customers pay in their local currency when supported.
-    const targetCurrency = 'sgd';
+    // Charge in the customer's selected currency so the price displayed is
+    // exactly the price charged (Stripe recommends always displaying the
+    // Checkout Session's own amount and currency). Prices are converted from
+    // the DB-trusted SGD base. If the exchange rate is unavailable, fall back
+    // to charging SGD so checkout keeps working.
+    let targetCurrency = selectableCurrency;
+    let exchangeRate = 1;
+    if (targetCurrency !== 'sgd') {
+      try {
+        exchangeRate = await fetchExchangeRate(targetCurrency);
+      } catch {
+        console.warn('Exchange rate unavailable, falling back to SGD charge');
+        targetCurrency = 'sgd';
+        exchangeRate = 1;
+      }
+    }
 
-    // g. Build line items in SGD (per-unit, DB-trusted prices)
+    // g. Build line items in the charge currency (per-unit, DB-trusted prices)
     const lineItems: any[] = [];
+    let totalChargedMinor = 0;
     for (const item of validatedItems) {
       const product = productMap.get(item.productId)!;
       const patchPrice = [...item.frontPatches, ...item.backPatches]
         .reduce((sum: number, pid: string) => sum + (patchMap.get(pid)?.price ?? 0), 0);
       const unitPriceSgd = product.base_price + patchPrice;
-      const unitAmountSgd = toStripeAmount(targetCurrency, unitPriceSgd);
+      const unitAmount = toStripeAmount(targetCurrency, unitPriceSgd * exchangeRate);
 
-      if (unitAmountSgd <= 0) {
+      if (unitAmount <= 0) {
         continue;
       }
+      totalChargedMinor += unitAmount * item.quantity;
 
       const allPatchNames = [...item.frontPatches, ...item.backPatches]
         .map((pid) => patchMap.get(pid)?.name)
@@ -334,7 +367,7 @@ serve(async (req) => {
       lineItems.push({
         price_data: {
           currency: targetCurrency,
-          unit_amount: unitAmountSgd,
+          unit_amount: unitAmount,
           product_data: {
             name: product.name || 'Product',
             description: allPatchNames.length > 0 ? `Patches: ${allPatchNames.join(', ')}` : undefined,
@@ -364,6 +397,9 @@ serve(async (req) => {
         customer_email: customer_email || '',
         customer_name: customerName,
         items: cartItems,
+        // total_amount stays in the SGD base currency; `currency` is the
+        // charge currency. The webhook derives the implied exchange rate from
+        // the actual Stripe-charged amount vs this SGD total.
         total_amount: totalSgd,
         currency: targetCurrency,
         shipping_address: shippingAddress,
@@ -403,7 +439,9 @@ serve(async (req) => {
         receipt_email: customer_email || undefined,
       },
       metadata,
-      adaptive_pricing: { enabled: true },
+      // Adaptive Pricing only applies when charging the settlement currency;
+      // when the customer already picked their currency, honor it as-is.
+      ...(targetCurrency === 'sgd' ? { adaptive_pricing: { enabled: true } } : {}),
       shipping_address_collection: {
         allowed_countries: ['SG', 'MY', 'ID', 'TH', 'PH', 'VN', 'US', 'GB', 'AU', 'JP', 'KR', 'CN', 'TW', 'HK'],
       },
@@ -438,9 +476,11 @@ serve(async (req) => {
         paymentIntentId: session.payment_intent,
         pendingOrderId,
         orderNumber,
-        amount: totalSgd,
+        // Amount and currency the customer will actually be charged — the
+        // frontend must display these, not its own conversion.
+        amount: fromStripeAmount(targetCurrency, totalChargedMinor),
         stripeAmount: session.amount_total,
-        currency: session.currency,
+        currency: targetCurrency,
         reused: false,
       }),
       { status: 200, headers: responseHeaders(req) }
