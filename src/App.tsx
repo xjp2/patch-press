@@ -1308,10 +1308,13 @@ function AppContent() {
         // Always validate with Supabase server. Do NOT trust localStorage
         // without validation — a stale token there can leave the UI "logged in"
         // but unable to interact because the server rejects requests.
+        // Give getSession() up to 15s: Supabase auth can be slow on cold starts
+        // or poor networks, and a premature timeout should not nuke a valid
+        // session from localStorage.
         const { data: { session }, error: sessionError } = await Promise.race([
           auth.getSession(),
           new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('Auth session check timed out')), 5000)
+            setTimeout(() => reject(new Error('Auth session check timed out')), 15_000)
           ),
         ]);
 
@@ -1332,11 +1335,18 @@ function AppContent() {
       } catch (err) {
         console.error('App: Auth validation error:', err);
         if (mounted) {
-          // Clear stale local session data on any auth error/timeout
-          localStorage.removeItem('patchpress-auth');
-          resolvedRoles.current.clear();
-          setCurrentUser(null);
-          setCurrentView('landing');
+          // Only clear stored session on an actual auth failure. A slow/timeout
+          // response should not evict a valid session; otherwise the user gets
+          // randomly logged out and the UI freezes.
+          const isTimeout = (err as Error)?.message === 'Auth session check timed out';
+          if (!isTimeout) {
+            localStorage.removeItem('patchpress-auth');
+            resolvedRoles.current.clear();
+            setCurrentUser(null);
+            setCurrentView('landing');
+          } else {
+            console.warn('App: Auth validation timed out; leaving local session intact');
+          }
         }
       } finally {
         if (mounted) {

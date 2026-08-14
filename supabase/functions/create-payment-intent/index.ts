@@ -420,6 +420,16 @@ serve(async (req) => {
       );
     }
 
+    // Store the Checkout Session ID on the pending order so the webhook can
+    // reliably look it up even if PaymentIntent metadata is missing.
+    await supabaseAdmin
+      .from('pending_orders')
+      .update({
+        checkout_session_id: session.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', pendingOrderId);
+
     // j. Return response
     return new Response(
       JSON.stringify({

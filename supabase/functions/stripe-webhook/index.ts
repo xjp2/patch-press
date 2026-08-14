@@ -5,7 +5,9 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
   apiVersion: '2026-03-25.dahlia',
   httpClient: Stripe.createFetchHttpClient(),
-  cryptoProvider: new Stripe.SubtleCryptoProvider(),
+  // Stripe on Deno/esm defaults to the global Web Crypto API; do not pass
+  // a custom cryptoProvider here because Stripe.SubtleCryptoProvider is
+  // not exported in this build and crashes the function on boot.
 });
 
 const webhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET') || '';
@@ -170,6 +172,12 @@ serve(async (req) => {
 
     // Handle the event
     switch (event.type) {
+      case 'checkout.session.completed': {
+        const session = event.data.object as Stripe.Checkout.Session;
+        await handleCheckoutSessionCompleted(session);
+        break;
+      }
+
       case 'payment_intent.succeeded': {
         const paymentIntent = event.data.object as Stripe.PaymentIntent;
         await handlePaymentIntentSucceeded(paymentIntent);
@@ -199,13 +207,88 @@ serve(async (req) => {
   }
 });
 
+async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
+  console.log('Checkout session completed:', session.id);
+
+  const metadata = session.metadata || {};
+  const pendingOrderId = metadata.pending_order_id;
+
+  // Find pending order by checkout_session_id first, then by pending_order_id
+  let pendingOrder: any = null;
+  if (session.id) {
+    const { data, error } = await supabaseAdmin
+      .from('pending_orders')
+      .select('*')
+      .eq('checkout_session_id', session.id)
+      .maybeSingle();
+    if (error) {
+      console.error('Error fetching pending order by checkout_session_id:', error);
+    }
+    pendingOrder = data;
+  }
+
+  if (!pendingOrder && pendingOrderId) {
+    const { data, error } = await supabaseAdmin
+      .from('pending_orders')
+      .select('*')
+      .eq('id', pendingOrderId)
+      .maybeSingle();
+    if (error) {
+      console.error('Error fetching pending order by id:', error);
+    }
+    pendingOrder = data;
+  }
+
+  if (!pendingOrder) {
+    console.warn('No pending order found for checkout session:', session.id);
+    return;
+  }
+
+  if (pendingOrder.status === 'completed') {
+    console.log('Pending order already completed, idempotent skip:', pendingOrder.id);
+    return;
+  }
+
+  const paymentIntent = typeof session.payment_intent === 'string'
+    ? null
+    : session.payment_intent;
+
+  if (!paymentIntent) {
+    console.warn('Checkout session completed without expanded payment intent:', session.id);
+    return;
+  }
+
+  // Ensure the pending order has the payment_intent_id for future lookups
+  if (!pendingOrder.payment_intent_id && paymentIntent.id) {
+    await supabaseAdmin
+      .from('pending_orders')
+      .update({
+        payment_intent_id: paymentIntent.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', pendingOrder.id);
+  }
+
+  // Reuse the existing fulfillment path with a PaymentIntent-shaped object
+  const piLike: any = {
+    id: paymentIntent.id,
+    currency: paymentIntent.currency || session.currency,
+    amount: paymentIntent.amount || session.amount_total,
+    metadata: { ...metadata, pending_order_id: pendingOrder.id },
+    receipt_email: session.customer_details?.email || paymentIntent.receipt_email || '',
+    shipping: session.shipping_details || paymentIntent.shipping,
+  };
+
+  await handlePaymentIntentSucceeded(piLike as Stripe.PaymentIntent);
+}
+
 async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent) {
   console.log('Payment succeeded:', paymentIntent.id);
 
   const metadata = paymentIntent.metadata || {};
   const pendingOrderId = metadata.pending_order_id;
 
-  // Find pending order by id or by payment_intent_id
+  // Find pending order by id, payment_intent_id, or checkout_session_id
   let pendingOrder: any = null;
   if (pendingOrderId) {
     const { data, error } = await supabaseAdmin
@@ -229,6 +312,18 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
       .maybeSingle();
     if (error) {
       console.error('Error fetching pending order by payment_intent_id:', error);
+    }
+    pendingOrder = data;
+  }
+
+  if (!pendingOrder && metadata.checkout_session_id) {
+    const { data, error } = await supabaseAdmin
+      .from('pending_orders')
+      .select('*')
+      .eq('checkout_session_id', metadata.checkout_session_id)
+      .maybeSingle();
+    if (error) {
+      console.error('Error fetching pending order by checkout_session_id:', error);
     }
     pendingOrder = data;
   }
