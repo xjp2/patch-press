@@ -3,12 +3,12 @@
  * 
  * Loads content in priority order:
  * 1. Supabase Database (source of truth), with retry + timeout
- * 2. In-memory stale cache (only within the same session after a real DB error)
+ * 2. Static build-time JSON files (last-resort fallback when DB is unreachable)
+ * 3. In-memory stale cache (only within the same session after a real DB error)
  * 
- * Static build-time JSON files are intentionally NOT used as a runtime fallback.
- * They shadow live CMS edits because Vercel only rebuilds them on git push, so
- * a customer who refreshes after an admin save could see stale products/patches
- * or missing content (e.g. /cms/patches.json 404).
+ * Static files are exported at build time (npm run export-cms). They may be stale
+ * compared to live DB edits, so they are only used when the DB is unreachable.
+ * When the DB succeeds, its data replaces any stale static content in memory.
  * 
  * When forceRefresh=true (admin updates), the in-memory cache is bypassed and
  * a fresh DB request is made. Public customer traffic uses the cache to avoid
@@ -79,7 +79,7 @@ export interface SiteContent {
     step1Title: string;
     step1Subtitle?: string;
     step2PanelTitle?: string;
-    step3Title?: string;
+    step3Title: string;
     step3Subtitle?: string;
     howToDesignSteps?: string[];
   };
@@ -94,6 +94,8 @@ interface CacheEntry<T> {
 // In-memory cache with TTL so users always see recent data without hammering the DB
 const cache = new Map<string, CacheEntry<unknown>>();
 const DEFAULT_CACHE_TTL = 60 * 1000; // 1 minute
+const DB_TIMEOUT_MS = 15_000; // 15 seconds (was 8s; slow networks/VPNs need more headroom)
+const STATIC_CMS_BASE = '/cms/';
 
 function getCached<T>(key: string, ttl = DEFAULT_CACHE_TTL): T | undefined {
   const entry = cache.get(key);
@@ -143,10 +145,32 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 2, baseDelay = 800):
 }
 
 /**
- * Load site content from Supabase DB only.
- * Stale build-time static files are intentionally NOT used as fallback, because
- * they shadow live CMS edits. Only the in-memory session cache is allowed to
- * soften a transient DB failure.
+ * Fetch a static JSON file with a short timeout. Returns null on failure.
+ */
+async function fetchStaticJson<T>(filename: string): Promise<T | null> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5_000);
+    const res = await fetch(`${STATIC_CMS_BASE}${filename}`, {
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (!res.ok) {
+      console.warn(`Static CMS file not available: ${filename} (${res.status})`);
+      return null;
+    }
+    const data = await res.json();
+    console.log(`✅ Loaded static fallback: ${filename}`);
+    return data as T;
+  } catch (err) {
+    console.warn(`⚠️ Failed to load static fallback ${filename}:`, err);
+    return null;
+  }
+}
+
+/**
+ * Load site content from Supabase DB first, then static JSON fallback.
  */
 export async function loadSiteContent(forceRefresh = false): Promise<{ data: SiteContent | null; fromFallback: boolean }> {
   const cacheKey = 'db:site_content';
@@ -158,7 +182,7 @@ export async function loadSiteContent(forceRefresh = false): Promise<{ data: Sit
 
   try {
     const dbResult = await withRetry(
-      () => withTimeout(loadSiteContentFromDb(), 8000, 'loadSiteContentFromDb'),
+      () => withTimeout(loadSiteContentFromDb(), DB_TIMEOUT_MS, 'loadSiteContentFromDb'),
       2,
       800
     );
@@ -185,13 +209,20 @@ export async function loadSiteContent(forceRefresh = false): Promise<{ data: Sit
       return { data: stale, fromFallback: true };
     }
 
+    // Last-resort fallback to build-time static JSON
+    const staticData = await fetchStaticJson<SiteContent>('site-content.json');
+    if (staticData) {
+      console.warn('⚠️ Using build-time static site content fallback');
+      setCached(cacheKey, staticData);
+      return { data: staticData, fromFallback: true };
+    }
+
     return { data: null, fromFallback: true };
   }
 }
 
 /**
- * Load products from Supabase DB only.
- * See loadSiteContent for fallback policy.
+ * Load products from Supabase DB first, then static JSON fallback.
  */
 export async function loadProducts(forceRefresh = false): Promise<{ data: Product[]; fromFallback: boolean }> {
   const cacheKey = 'db:products';
@@ -203,7 +234,7 @@ export async function loadProducts(forceRefresh = false): Promise<{ data: Produc
 
   try {
     const dbResult = await withRetry(
-      () => withTimeout(loadProductsFromDb(), 8000, 'loadProductsFromDb'),
+      () => withTimeout(loadProductsFromDb(), DB_TIMEOUT_MS, 'loadProductsFromDb'),
       2,
       800
     );
@@ -224,13 +255,19 @@ export async function loadProducts(forceRefresh = false): Promise<{ data: Produc
       return { data: stale, fromFallback: true };
     }
 
+    const staticData = await fetchStaticJson<Product[]>('products.json');
+    if (staticData && staticData.length > 0) {
+      console.warn('⚠️ Using build-time static products fallback');
+      setCached(cacheKey, staticData);
+      return { data: staticData, fromFallback: true };
+    }
+
     return { data: [], fromFallback: true };
   }
 }
 
 /**
- * Load patches from Supabase DB only.
- * See loadSiteContent for fallback policy.
+ * Load patches from Supabase DB first, then static JSON fallback.
  */
 export async function loadPatches(forceRefresh = false): Promise<{ data: Patch[]; fromFallback: boolean }> {
   const cacheKey = 'db:patches';
@@ -242,7 +279,7 @@ export async function loadPatches(forceRefresh = false): Promise<{ data: Patch[]
 
   try {
     const dbResult = await withRetry(
-      () => withTimeout(loadPatchesFromDb(), 8000, 'loadPatchesFromDb'),
+      () => withTimeout(loadPatchesFromDb(), DB_TIMEOUT_MS, 'loadPatchesFromDb'),
       2,
       800
     );
@@ -261,6 +298,13 @@ export async function loadPatches(forceRefresh = false): Promise<{ data: Patch[]
     if (stale !== undefined && stale.length > 0) {
       console.warn('⚠️ Using stale cached patches');
       return { data: stale, fromFallback: true };
+    }
+
+    const staticData = await fetchStaticJson<Patch[]>('patches.json');
+    if (staticData && staticData.length > 0) {
+      console.warn('⚠️ Using build-time static patches fallback');
+      setCached(cacheKey, staticData);
+      return { data: staticData, fromFallback: true };
     }
 
     return { data: [], fromFallback: true };
@@ -336,7 +380,7 @@ async function loadSiteContentFromDb(): Promise<DbResult<SiteContent | null>> {
  * Preload all static CMS data
  * @param forceRefresh - Set to true after admin updates to bypass CDN cache
  * @returns Object with the loaded content and a flag indicating whether any
- *          of the data came from a fallback source (stale cache, Storage, or static files)
+ *          of the data came from a fallback source (stale cache or static files)
  */
 export async function preloadCmsData(forceRefresh = false): Promise<{
   siteContent: SiteContent | null;
