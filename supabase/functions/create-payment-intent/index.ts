@@ -3,15 +3,39 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY') || '';
 
+function toFormEncoded(obj: any, prefix = ''): string[] {
+  const pairs: string[] = [];
+  for (const key in obj) {
+    const value = obj[key];
+    if (value === undefined || value === null) continue;
+    const newKey = prefix ? `${prefix}[${key}]` : key;
+    if (Array.isArray(value)) {
+      value.forEach((item, index) => {
+        if (typeof item === 'object' && item !== null) {
+          pairs.push(...toFormEncoded(item, `${newKey}[${index}]`));
+        } else {
+          pairs.push(`${encodeURIComponent(`${newKey}[${index}]`)}=${encodeURIComponent(String(item))}`);
+        }
+      });
+    } else if (typeof value === 'object' && value !== null) {
+      pairs.push(...toFormEncoded(value, newKey));
+    } else {
+      pairs.push(`${encodeURIComponent(newKey)}=${encodeURIComponent(String(value))}`);
+    }
+  }
+  return pairs;
+}
+
 async function stripeApiFetch(path: string, body: any): Promise<any> {
+  const formBody = toFormEncoded(body).join('&');
   const res = await fetch(`https://api.stripe.com/v1${path}`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${STRIPE_SECRET_KEY}`,
-      'Content-Type': 'application/json',
+      'Content-Type': 'application/x-www-form-urlencoded',
       'Stripe-Version': '2026-03-25.dahlia',
     },
-    body: JSON.stringify(body),
+    body: formBody,
   });
 
   const data = await res.json().catch(() => ({}));
