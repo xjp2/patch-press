@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { X, User, Eye, EyeOff, Apple } from 'lucide-react';
+import { X, User, Eye, EyeOff, Apple, Loader2 } from 'lucide-react';
 import { auth } from './lib/supabase';
 
 export type AuthView = 'login' | 'register' | 'forgot' | 'reset';
@@ -38,6 +38,7 @@ export function AuthModal({ showAuth, setShowAuth, authView, setAuthView, initia
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading) return;
     setAuthError('');
     setIsLoading(true);
 
@@ -62,6 +63,7 @@ export function AuthModal({ showAuth, setShowAuth, authView, setAuthView, initia
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading || successMessage) return;
     setAuthError('');
     setIsLoading(true);
 
@@ -89,6 +91,7 @@ export function AuthModal({ showAuth, setShowAuth, authView, setAuthView, initia
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading || successMessage) return;
     setAuthError('');
     setIsLoading(true);
 
@@ -114,6 +117,7 @@ export function AuthModal({ showAuth, setShowAuth, authView, setAuthView, initia
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoading || successMessage) return;
     setAuthError('');
 
     if (authPassword.length < 6) {
@@ -203,7 +207,7 @@ export function AuthModal({ showAuth, setShowAuth, authView, setAuthView, initia
               disabled={isLoading}
               className="w-full flex items-center justify-center gap-3 bg-black text-white py-3 rounded-xl hover:bg-gray-800 transition-colors disabled:opacity-50 mb-4"
             >
-              <Apple className="w-5 h-5" />
+              {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Apple className="w-5 h-5" />}
               Continue with Apple
             </button>
 
@@ -287,9 +291,10 @@ export function AuthModal({ showAuth, setShowAuth, authView, setAuthView, initia
 
           <button
             type="submit"
-            className="w-full btn-primary py-3 disabled:opacity-50"
-            disabled={isLoading}
+            className="w-full btn-primary py-3 disabled:opacity-50 flex items-center justify-center gap-2"
+            disabled={isLoading || !!successMessage}
           >
+            {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
             {isLoading ? 'Please wait...' : authView === 'login' ? 'Sign In' : authView === 'register' ? 'Create Account' : authView === 'reset' ? 'Update Password' : 'Send Reset Link'}
           </button>
         </form>
