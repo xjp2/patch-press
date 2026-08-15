@@ -1043,6 +1043,7 @@ function AppContent() {
 
   const [showAuth, setShowAuth] = useState(false);
   const [authView, setAuthView] = useState<AuthView>('login');
+  const [authInitialError, setAuthInitialError] = useState('');
 
   type AppAdminTab = 'products' | 'patches' | 'orders' | 'inventory' | 'pages' | 'global' | 'tests';
   const [adminTab, setAdminTab] = useState<AppAdminTab>('products');
@@ -1470,6 +1471,22 @@ function AppContent() {
       }, 0);
     });
 
+    // Deep-link landing from password-reset emails. The PASSWORD_RECOVERY
+    // event above can race with initAuth, and gotrue appends an #error hash
+    // for expired/used links — handle both deterministically from the URL.
+    if (window.location.pathname === '/reset-password') {
+      const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      if (hashParams.get('error')) {
+        setAuthInitialError('This reset link is invalid or has expired. Please request a new one below.');
+        setAuthView('forgot');
+        setShowAuth(true);
+        window.history.replaceState({}, '', '/');
+      } else {
+        setAuthView('reset');
+        setShowAuth(true);
+      }
+    }
+
     return () => {
       mounted = false;
       authListener.subscription.unsubscribe();
@@ -1726,6 +1743,7 @@ function AppContent() {
         setShowAuth={setShowAuth}
         authView={authView}
         setAuthView={setAuthView}
+        initialError={authInitialError}
       />
 
       <CartDrawer 

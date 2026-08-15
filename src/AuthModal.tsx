@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { X, User, Eye, EyeOff, Apple } from 'lucide-react';
 import { auth } from './lib/supabase';
 
@@ -16,9 +16,11 @@ interface AuthModalProps {
   setShowAuth: (show: boolean) => void;
   authView: AuthView;
   setAuthView: (view: AuthView) => void;
+  /** Error seeded by App when the modal is opened from a deep link (e.g. expired reset link). */
+  initialError?: string;
 }
 
-export function AuthModal({ showAuth, setShowAuth, authView, setAuthView }: AuthModalProps) {
+export function AuthModal({ showAuth, setShowAuth, authView, setAuthView, initialError }: AuthModalProps) {
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [authConfirmPassword, setAuthConfirmPassword] = useState('');
@@ -27,6 +29,12 @@ export function AuthModal({ showAuth, setShowAuth, authView, setAuthView }: Auth
   const [authError, setAuthError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+
+  // Clear stale errors when switching views, then seed any deep-link error.
+  useEffect(() => { setAuthError(''); }, [authView]);
+  useEffect(() => {
+    if (showAuth && initialError) setAuthError(initialError);
+  }, [showAuth, initialError]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
