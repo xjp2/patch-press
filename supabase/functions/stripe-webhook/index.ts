@@ -20,6 +20,111 @@ const supabaseAdmin = createClient(
 
 const ZERO_DECIMAL_CURRENCIES = new Set(['jpy', 'krw']);
 
+const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || '';
+const ORDER_EMAIL_FROM = 'Patchuu <noreply@contact.patchuu.shop>';
+
+function formatMoney(currency: string, amount: number): string {
+  const zeroDecimal = ZERO_DECIMAL_CURRENCIES.has(currency.toLowerCase());
+  return `${currency.toUpperCase()} ${zeroDecimal ? Math.round(amount).toLocaleString() : amount.toFixed(2)}`;
+}
+
+function escapeHtml(s: any): string {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c] as string));
+}
+
+function buildOrderEmailHtml(order: any): string {
+  const items: any[] = Array.isArray(order.items) ? order.items : [];
+  const shipping = order.shipping_address || {};
+  const itemRows = items.map((item: any) => {
+    const patchNames = (item.patches || []).filter(Boolean).map(escapeHtml).join(', ');
+    return `
+      <tr>
+        <td style="padding:12px 0;border-bottom:1px solid #eee;">
+          <div style="font-weight:600;color:#333;">${escapeHtml(item.name)}</div>
+          ${patchNames ? `<div style="font-size:13px;color:#777;margin-top:4px;">Patches: ${patchNames}</div>` : ''}
+        </td>
+        <td style="padding:12px 0;border-bottom:1px solid #eee;text-align:center;color:#555;">${item.qty}</td>
+        <td style="padding:12px 0;border-bottom:1px solid #eee;text-align:right;color:#333;">${formatMoney(order.currency, Number(item.price))}</td>
+      </tr>`;
+  }).join('');
+
+  const addressLines = [
+    shipping.name,
+    shipping.address_line1,
+    shipping.address_line2,
+    [shipping.city, shipping.state, shipping.postal_code].filter(Boolean).join(' '),
+    shipping.country,
+  ].filter(Boolean).map(escapeHtml).join('<br>');
+
+  return `<!DOCTYPE html>
+<html><body style="margin:0;padding:0;background:#f7f5f0;font-family:Arial,Helvetica,sans-serif;">
+  <div style="max-width:560px;margin:0 auto;padding:32px 16px;">
+    <div style="background:#ffffff;border-radius:16px;padding:32px;border:1px solid #eee;">
+      <h1 style="margin:0 0 8px;font-size:22px;color:#2f7d5f;">Thank you for your order!</h1>
+      <p style="margin:0 0 24px;color:#666;font-size:14px;">
+        Hi ${escapeHtml(order.customer_name || 'there')}, we've received your payment and we're getting your order ready.
+      </p>
+      <div style="background:#f0f7f3;border-radius:10px;padding:12px 16px;margin-bottom:24px;">
+        <span style="font-size:13px;color:#666;">Order number</span><br>
+        <span style="font-size:16px;font-weight:700;color:#2f7d5f;">${escapeHtml(order.order_number)}</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:14px;">
+        <tr style="color:#999;font-size:12px;text-transform:uppercase;">
+          <td style="padding-bottom:8px;">Item</td>
+          <td style="padding-bottom:8px;text-align:center;">Qty</td>
+          <td style="padding-bottom:8px;text-align:right;">Price</td>
+        </tr>
+        ${itemRows}
+        <tr>
+          <td colspan="2" style="padding-top:14px;font-weight:700;color:#333;">Total</td>
+          <td style="padding-top:14px;text-align:right;font-weight:700;color:#333;">${formatMoney(order.currency, Number(order.total_amount))}</td>
+        </tr>
+      </table>
+      ${addressLines ? `
+      <h2 style="font-size:15px;color:#333;margin:28px 0 8px;">Shipping to</h2>
+      <p style="margin:0;color:#666;font-size:14px;line-height:1.5;">${addressLines}</p>` : ''}
+      <p style="margin:28px 0 0;color:#999;font-size:12px;">
+        We'll email you again when your order ships. If anything looks wrong, just reply to this email.
+      </p>
+    </div>
+    <p style="text-align:center;color:#bbb;font-size:12px;margin-top:16px;">Patchuu — Patch &amp; Press · https://patchuu.shop</p>
+  </div>
+</body></html>`;
+}
+
+async function sendOrderConfirmationEmail(order: any) {
+  if (!RESEND_API_KEY) {
+    console.warn('RESEND_API_KEY not set; skipping order confirmation email');
+    return;
+  }
+  if (!order.customer_email) {
+    console.warn('Order has no customer email; skipping confirmation:', order.id);
+    return;
+  }
+
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: ORDER_EMAIL_FROM,
+      to: [order.customer_email],
+      subject: `Order confirmed — ${order.order_number}`,
+      html: buildOrderEmailHtml(order),
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Resend API ${res.status}: ${text}`);
+  }
+  console.log('Order confirmation email sent to', order.customer_email);
+}
+
 function getCorsHeaders(req: Request): HeadersInit {
   const origin = req.headers.get('origin') || '';
   const allowedOrigins = [
@@ -346,7 +451,7 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
   // Check for an existing order record for this PaymentIntent
   const { data: existingOrders } = await supabaseAdmin
     .from('orders')
-    .select('id, status, total_amount')
+    .select('*')
     .eq('payment_intent_id', paymentIntent.id)
     .order('created_at', { ascending: false })
     .limit(1);
@@ -472,8 +577,11 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
     return;
   }
 
-  // Mark order as paid and pending order as completed
-  await supabaseAdmin
+  // Mark order as paid and pending order as completed. The conditional update
+  // doubles as an idempotency gate: concurrent/duplicate webhook deliveries
+  // serialize on the row lock, so only the one that flips status to 'paid'
+  // gets rows back — and only that one sends the confirmation email.
+  const { data: paidRows } = await supabaseAdmin
     .from('orders')
     .update({
       status: 'paid',
@@ -481,7 +589,10 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
       paid_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
-    .eq('id', order.id);
+    .eq('id', order.id)
+    .neq('status', 'paid')
+    .select('id');
+  const justMarkedPaid = (paidRows?.length || 0) > 0;
 
   await supabaseAdmin
     .from('pending_orders')
@@ -495,6 +606,15 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
   // Clear the user's cart
   if (pendingOrder.user_id) {
     await supabaseAdmin.from('cart_items').delete().eq('user_id', pendingOrder.user_id);
+  }
+
+  // Send the order confirmation email (best-effort — never fail the webhook over email)
+  if (justMarkedPaid) {
+    try {
+      await sendOrderConfirmationEmail({ ...order, order_number: pendingOrder.order_number });
+    } catch (emailErr) {
+      console.error('Failed to send order confirmation email:', emailErr);
+    }
   }
 
   console.log('Order fulfilled:', order.id, 'Order #:', pendingOrder.order_number);
