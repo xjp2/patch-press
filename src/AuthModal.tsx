@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { X, User, Eye, EyeOff, Apple } from 'lucide-react';
 import { auth } from './lib/supabase';
 
-export type AuthView = 'login' | 'register' | 'forgot';
+export type AuthView = 'login' | 'register' | 'forgot' | 'reset';
 
 export interface UserType {
   id: string;
@@ -21,6 +21,7 @@ interface AuthModalProps {
 export function AuthModal({ showAuth, setShowAuth, authView, setAuthView }: AuthModalProps) {
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
+  const [authConfirmPassword, setAuthConfirmPassword] = useState('');
   const [authName, setAuthName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [authError, setAuthError] = useState('');
@@ -103,6 +104,42 @@ export function AuthModal({ showAuth, setShowAuth, authView, setAuthView }: Auth
     }
   };
 
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+
+    if (authPassword.length < 6) {
+      setAuthError('Password must be at least 6 characters.');
+      return;
+    }
+    if (authPassword !== authConfirmPassword) {
+      setAuthError('Passwords do not match.');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const { error } = await auth.updatePassword(authPassword);
+
+      if (error) {
+        setAuthError(error.message);
+      } else {
+        setSuccessMessage('Password updated! You are now signed in.');
+        setTimeout(() => {
+          setShowAuth(false);
+          setAuthView('login');
+          setSuccessMessage('');
+          setAuthPassword('');
+          setAuthConfirmPassword('');
+        }, 2500);
+      }
+    } catch (err) {
+      setAuthError('An unexpected error occurred. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleAppleSignIn = async () => {
     setAuthError('');
     setIsLoading(true);
@@ -138,7 +175,7 @@ export function AuthModal({ showAuth, setShowAuth, authView, setAuthView }: Auth
             <User className="w-8 h-8 text-craft-mint" />
           </div>
           <h2 className="font-heading text-2xl font-bold">
-            {authView === 'login' ? 'Welcome Back' : authView === 'register' ? 'Create Account' : 'Reset Password'}
+            {authView === 'login' ? 'Welcome Back' : authView === 'register' ? 'Create Account' : authView === 'reset' ? 'Set New Password' : 'Reset Password'}
           </h2>
         </div>
 
@@ -173,7 +210,7 @@ export function AuthModal({ showAuth, setShowAuth, authView, setAuthView }: Auth
           </>
         )}
 
-        <form onSubmit={authView === 'login' ? handleLogin : authView === 'register' ? handleRegister : handleForgotPassword} className="space-y-4">
+        <form onSubmit={authView === 'login' ? handleLogin : authView === 'register' ? handleRegister : authView === 'reset' ? handleResetPassword : handleForgotPassword} className="space-y-4">
           {authView === 'register' && (
             <div>
               <label className="block text-sm font-semibold mb-2">Name</label>
@@ -188,6 +225,7 @@ export function AuthModal({ showAuth, setShowAuth, authView, setAuthView }: Auth
             </div>
           )}
 
+          {authView !== 'reset' && (
           <div>
             <label className="block text-sm font-semibold mb-2">Email</label>
             <input
@@ -199,10 +237,11 @@ export function AuthModal({ showAuth, setShowAuth, authView, setAuthView }: Auth
               required
             />
           </div>
+          )}
 
           {authView !== 'forgot' && (
             <div>
-              <label className="block text-sm font-semibold mb-2">Password</label>
+              <label className="block text-sm font-semibold mb-2">{authView === 'reset' ? 'New Password' : 'Password'}</label>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
@@ -224,12 +263,26 @@ export function AuthModal({ showAuth, setShowAuth, authView, setAuthView }: Auth
             </div>
           )}
 
+          {authView === 'reset' && (
+            <div>
+              <label className="block text-sm font-semibold mb-2">Confirm New Password</label>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={authConfirmPassword}
+                onChange={(e) => setAuthConfirmPassword(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border border-ink/10 focus:border-craft-mint focus:ring-2 focus:ring-craft-mint/20 outline-none bg-paper-ruled text-ink placeholder:text-ink/40"
+                placeholder="••••••••"
+                required
+              />
+            </div>
+          )}
+
           <button
             type="submit"
             className="w-full btn-primary py-3 disabled:opacity-50"
             disabled={isLoading}
           >
-            {isLoading ? 'Please wait...' : authView === 'login' ? 'Sign In' : authView === 'register' ? 'Create Account' : 'Send Reset Link'}
+            {isLoading ? 'Please wait...' : authView === 'login' ? 'Sign In' : authView === 'register' ? 'Create Account' : authView === 'reset' ? 'Update Password' : 'Send Reset Link'}
           </button>
         </form>
 
@@ -241,9 +294,9 @@ export function AuthModal({ showAuth, setShowAuth, authView, setAuthView }: Auth
             </>
           ) : authView === 'register' ? (
             <p className="text-ink-muted">Already have an account? <button onClick={() => setAuthView('login')} className="text-craft-mint font-semibold">Sign in</button></p>
-          ) : (
+          ) : authView === 'forgot' ? (
             <p className="text-ink-muted">Remember your password? <button onClick={() => setAuthView('login')} className="text-craft-mint font-semibold">Sign in</button></p>
-          )}
+          ) : null}
         </div>
 
         <div className="mt-4 p-3 bg-paper-ruled rounded-xl text-xs text-ink-muted">

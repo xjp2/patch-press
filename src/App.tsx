@@ -1421,6 +1421,17 @@ function AppContent() {
       setTimeout(async () => {
       if (!mounted) return;
 
+      if (event === 'PASSWORD_RECOVERY') {
+        // User arrived via a password-reset email link. Show the
+        // set-new-password form; USER_UPDATED after a successful update
+        // will run the normal signed-in flow.
+        window.history.replaceState({}, '', '/');
+        setAuthView('reset');
+        setShowAuth(true);
+        setIsAuthLoading(false);
+        return;
+      }
+
       if (event === 'SIGNED_OUT') {
         localStorage.removeItem('patchpress-auth');
         resolvedRoles.current.clear();

@@ -48,7 +48,10 @@ export const auth = {
   signUp: async (email: string, password: string, name: string) => {
     const { data, error } = await supabase.auth.signUp({
       email, password,
-      options: { data: { full_name: name } },
+      options: {
+        data: { full_name: name },
+        emailRedirectTo: window.location.origin,
+      },
     });
     return { data, error };
   },
@@ -109,6 +112,10 @@ export const auth = {
     const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/reset-password`,
     });
+    return { data, error };
+  },
+  updatePassword: async (newPassword: string) => {
+    const { data, error } = await supabase.auth.updateUser({ password: newPassword });
     return { data, error };
   },
 };
