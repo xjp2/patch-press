@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { X, User, Eye, EyeOff, Apple, Loader2 } from 'lucide-react';
 import { auth } from './lib/supabase';
 
@@ -174,14 +175,28 @@ export function AuthModal({ showAuth, setShowAuth, authView, setAuthView, initia
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-cardstock rounded-3xl p-8 w-full max-w-md mx-4 relative text-ink">
+      <motion.div
+        layout
+        initial={{ opacity: 0, scale: 0.95, y: 12 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ duration: 0.2, ease: 'easeOut' }}
+        className="bg-cardstock rounded-3xl p-8 w-full max-w-md mx-4 relative text-ink overflow-hidden"
+      >
         <button
           type="button"
           onClick={() => setShowAuth(false)}
-          className="absolute top-4 right-4 p-2 hover:bg-paper-ruled rounded-full"
+          className="absolute top-4 right-4 p-2 hover:bg-paper-ruled rounded-full z-10"
         >
           <X className="w-5 h-5" />
         </button>
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={authView}
+            initial={{ opacity: 0, x: 24 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -24 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
+          >
         <div className="text-center mb-6">
           <div className="w-16 h-16 bg-craft-mint/20 rounded-full flex items-center justify-center mx-auto mb-4">
             <User className="w-8 h-8 text-craft-mint" />
@@ -311,12 +326,14 @@ export function AuthModal({ showAuth, setShowAuth, authView, setAuthView, initia
             <p className="text-ink-muted">Remember your password? <button onClick={() => setAuthView('login')} className="text-craft-mint font-semibold">Sign in</button></p>
           ) : null}
         </div>
+          </motion.div>
+        </AnimatePresence>
 
         <div className="mt-4 p-3 bg-paper-ruled rounded-xl text-xs text-ink-muted">
           <p className="font-semibold mb-1 text-ink/70">Need help?</p>
           <p>Contact your site administrator for access.</p>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

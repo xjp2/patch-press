@@ -1048,6 +1048,10 @@ function AppContent() {
   // so a recovery flow can keep the set-new-password modal open.
   const authViewRef = useRef<AuthView>('login');
   useEffect(() => { authViewRef.current = authView; }, [authView]);
+  // True only in the tab that actually opened a password-reset link.
+  // supabase-js broadcasts PASSWORD_RECOVERY to every open tab via
+  // localStorage sync; other tabs must not pop the reset modal.
+  const isRecoveryTabRef = useRef(false);
 
   type AppAdminTab = 'products' | 'patches' | 'orders' | 'inventory' | 'pages' | 'global' | 'tests';
   const [adminTab, setAdminTab] = useState<AppAdminTab>('products');
@@ -1292,6 +1296,12 @@ function AppContent() {
   useEffect(() => {
     let mounted = true;
 
+    // Capture before supabase-js strips the URL fragment during session
+    // detection. Pathname survives; the hash may not.
+    isRecoveryTabRef.current =
+      window.location.pathname === '/reset-password' ||
+      new URLSearchParams(window.location.hash.replace(/^#/, '')).get('type') === 'recovery';
+
     const handleUserAuthenticated = async (user: any, isInstant = false) => {
       // Re-use previously resolved role for this user to avoid DB calls on every token refresh
       let userRole = resolvedRoles.current.get(user.id) || user.user_metadata?.role as 'user' | 'admin' | undefined;
@@ -1428,8 +1438,8 @@ function AppContent() {
       setTimeout(async () => {
       if (!mounted) return;
 
-      if (event === 'PASSWORD_RECOVERY') {
-        // User arrived via a password-reset email link. Show the
+      if (event === 'PASSWORD_RECOVERY' && isRecoveryTabRef.current) {
+        // This is the tab that opened the reset link — show the
         // set-new-password form; USER_UPDATED after a successful update
         // will run the normal signed-in flow.
         window.history.replaceState({}, '', '/');
@@ -1438,6 +1448,8 @@ function AppContent() {
         setIsAuthLoading(false);
         return;
       }
+      // PASSWORD_RECOVERY in any other tab came from cross-tab session
+      // sync — fall through and adopt the session silently, no modal.
 
       if (event === 'SIGNED_OUT') {
         localStorage.removeItem('patchpress-auth');
