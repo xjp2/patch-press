@@ -1044,6 +1044,10 @@ function AppContent() {
   const [showAuth, setShowAuth] = useState(false);
   const [authView, setAuthView] = useState<AuthView>('login');
   const [authInitialError, setAuthInitialError] = useState('');
+  // Mirror of authView readable from the once-registered auth listener below,
+  // so a recovery flow can keep the set-new-password modal open.
+  const authViewRef = useRef<AuthView>('login');
+  useEffect(() => { authViewRef.current = authView; }, [authView]);
 
   type AppAdminTab = 'products' | 'patches' | 'orders' | 'inventory' | 'pages' | 'global' | 'tests';
   const [adminTab, setAdminTab] = useState<AppAdminTab>('products');
@@ -1328,7 +1332,9 @@ function AppContent() {
       
       if (mounted) {
         setCurrentUser(baseUser);
-        setShowAuth(false);
+        // Don't close the modal while the user is setting a new password
+        // after arriving from a reset email.
+        if (authViewRef.current !== 'reset') setShowAuth(false);
         setIsAuthLoading(false);
       }
     };
