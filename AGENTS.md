@@ -13,7 +13,7 @@
 - A shopping cart with guest/localStorage and logged-in/cloud sync, including cart merge on login
 - Multi-currency support via live exchange rates, with Stripe-powered checkout and shipping address collection
 - An admin panel (`AdminPanel`) for managing products, patches, orders, inventory, and site content
-- Supabase Auth with email/password and Apple Sign-In
+- Supabase Auth with email/password
 
 The app is a **client-side SPA with no React Router** — view switching is done via local state (`AppView` type in `src/App.tsx`).
 
@@ -48,7 +48,7 @@ The app is a **client-side SPA with no React Router** — view switching is done
 │   ├── main.tsx                 # React DOM entry (StrictMode); preloads image map
 │   ├── index.css                # Tailwind directives + global paper/stationery theme styles
 │   ├── App.css                  # Component-scoped / legacy styles
-│   ├── AuthModal.tsx            # Login / signup / password reset / Apple Sign-In modal
+│   ├── AuthModal.tsx            # Login / signup / password reset modal
 │   ├── AdminPanel.tsx           # Admin CMS dashboard + shared TypeScript interfaces
 │   ├── LandingPage.tsx          # CMS-driven landing page renderer
 │   ├── CustomizePage.tsx        # Product design tool (drag-and-drop patches, heat-press sequence)
@@ -264,7 +264,7 @@ After admin changes, call `clearCmsCache()` and dispatch `window.dispatchEvent(n
 - `profiles` table extends `auth.users` with `role` (`user` | `admin`) and `full_name`
 - Role is fetched after sign-in and cached in `user.user_metadata` for instant availability; legacy sessions without metadata fall back to a DB fetch
 - Admin UI is conditionally rendered based on `currentUser.role === 'admin'`
-- Apple Sign-In is available on the login tab only
+- Sign-in is email/password only (the Apple Sign-In button was removed from the modal; `auth.signInWithApple` remains in `lib/supabase.ts` but is unused)
 
 ---
 

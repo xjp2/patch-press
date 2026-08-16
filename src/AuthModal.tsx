@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, User, Eye, EyeOff, Apple, Loader2 } from 'lucide-react';
+import { X, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { auth } from './lib/supabase';
 
 export type AuthView = 'login' | 'register' | 'forgot' | 'reset';
@@ -153,24 +153,6 @@ export function AuthModal({ showAuth, setShowAuth, authView, setAuthView, initia
     }
   };
 
-  const handleAppleSignIn = async () => {
-    setAuthError('');
-    setIsLoading(true);
-
-    try {
-      const { error } = await auth.signInWithApple();
-
-      if (error) {
-        setAuthError(error.message);
-      }
-      // OAuth redirect will handle the rest
-    } catch (err) {
-      setAuthError('An unexpected error occurred. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   if (!showAuth) return null;
 
   return (
@@ -198,9 +180,7 @@ export function AuthModal({ showAuth, setShowAuth, authView, setAuthView, initia
             transition={{ duration: 0.18, ease: 'easeOut' }}
           >
         <div className="text-center mb-6">
-          <div className="w-16 h-16 bg-craft-mint/20 rounded-full flex items-center justify-center mx-auto mb-4">
-            <User className="w-8 h-8 text-craft-mint" />
-          </div>
+          <img src="/hero/patchuubg.png" alt="Patchuu" className="h-12 w-auto mx-auto mb-4" draggable={false} />
           <h2 className="font-heading text-2xl font-bold">
             {authView === 'login' ? 'Welcome Back' : authView === 'register' ? 'Create Account' : authView === 'reset' ? 'Set New Password' : 'Reset Password'}
           </h2>
@@ -212,29 +192,6 @@ export function AuthModal({ showAuth, setShowAuth, authView, setAuthView, initia
 
         {successMessage && (
           <div className="bg-green-50 text-green-600 p-3 rounded-xl mb-4 text-sm">{successMessage}</div>
-        )}
-
-        {/* Apple Sign In - Only show on login */}
-        {authView === 'login' && (
-          <>
-            <button
-              onClick={handleAppleSignIn}
-              disabled={isLoading}
-              className="w-full flex items-center justify-center gap-3 bg-black text-white py-3 rounded-xl hover:bg-gray-800 transition-colors disabled:opacity-50 mb-4"
-            >
-              {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Apple className="w-5 h-5" />}
-              Continue with Apple
-            </button>
-
-            <div className="relative my-6">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-ink/10"></div>
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-cardstock text-ink-muted">Or continue with email</span>
-              </div>
-            </div>
-          </>
         )}
 
         <form onSubmit={authView === 'login' ? handleLogin : authView === 'register' ? handleRegister : authView === 'reset' ? handleResetPassword : handleForgotPassword} className="space-y-4">
@@ -328,11 +285,6 @@ export function AuthModal({ showAuth, setShowAuth, authView, setAuthView, initia
         </div>
           </motion.div>
         </AnimatePresence>
-
-        <div className="mt-4 p-3 bg-paper-ruled rounded-xl text-xs text-ink-muted">
-          <p className="font-semibold mb-1 text-ink/70">Need help?</p>
-          <p>Contact your site administrator for access.</p>
-        </div>
       </motion.div>
     </div>
   );
