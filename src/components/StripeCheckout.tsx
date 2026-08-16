@@ -90,6 +90,10 @@ function CheckoutForm({ amount, chargeCurrency, orderNumber, onSuccess, onError 
 
         setPaymentError(errorMessage);
         onError(errorMessage);
+        // Release the submission lock so the customer can fix their details
+        // and retry — only the catch path reset this before, which left the
+        // Pay button dead after a normal card decline.
+        hasSubmitted.current = false;
       } else if (confirmResult.type === 'success') {
         // Synchronous success. Redirect-based payment methods never reach here
         // because the customer is sent to the server-configured return URL.
