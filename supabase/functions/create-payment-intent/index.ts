@@ -71,7 +71,7 @@ const ALLOWED_SHIPPING_COUNTRIES = new Set([
 // International abroad). Keep in sync with src/lib/shipping.ts on the client.
 const SHIPPING_ZONES: Array<{ countries: string[]; rateSgd: number; label: string }> = [
   { countries: ['SG'], rateSgd: 3.9, label: 'Singapore — Tracked Letterbox' },
-  { countries: ['MY'], rateSgd: 9.9, label: 'Malaysia — Tracked International' },
+  { countries: ['MY', 'ID', 'TH', 'PH', 'VN'], rateSgd: 9.9, label: 'Southeast Asia — Tracked International' },
   { countries: ['*'], rateSgd: 21.9, label: 'International — Tracked' },
 ];
 

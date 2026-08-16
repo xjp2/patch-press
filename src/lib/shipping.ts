@@ -52,10 +52,10 @@ export const SHIPPING_ZONES: ShippingZone[] = [
     estimate: '2–3 working days',
   },
   {
-    countries: ['MY'],
+    countries: ['MY', 'ID', 'TH', 'PH', 'VN'],
     rateSgd: 9.9,
-    label: 'Malaysia — Tracked International',
-    estimate: '5–11 working days',
+    label: 'Southeast Asia — Tracked International',
+    estimate: '5–12 working days',
   },
   {
     countries: ['*'],

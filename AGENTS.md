@@ -245,7 +245,7 @@ After admin changes, call `clearCmsCache()` and dispatch `window.dispatchEvent(n
 - `formatPrice()` uses `Intl.NumberFormat` for display
 
 ### Shipping Fees (`src/lib/shipping.ts`)
-- Flat per-order shipping by destination zone, defined in SGD base: **SG S$3.90** (SingPost Tracked Letterbox), **MY S$9.90** (booked via EasyParcel, cost ~S$6), **rest of supported countries S$21.90** (SingPost Speedpost Saver, counter-only retail product — not bookable on ezy2ship)
+- Flat per-order shipping by destination zone, defined in SGD base: **SG S$3.90** (SingPost Tracked Letterbox), **Southeast Asia (MY, ID, TH, PH, VN) S$9.90** (booked via EasyParcel, MY cost ~S$6 — verify quotes per country on first orders), **rest of supported countries S$21.90** (SingPost Speedpost Saver, counter-only retail product — not bookable on ezy2ship)
 - Supported destination countries are listed in `SHIPPING_COUNTRIES` (SG, MY, ID, TH, PH, VN, HK, TW, CN, JP, KR, AU, GB, US)
 - The customer picks the destination country in the cart drawer **before** the Stripe form mounts; the Checkout Session's `shipping_address_collection.allowed_countries` is locked to that single country so the charged fee always matches the final address
 - The edge function (`create-payment-intent`) recomputes the fee server-side from `shipping_country` — it carries its own copy of the zone table (keep it in sync with `src/lib/shipping.ts`) and never trusts a client-sent amount
