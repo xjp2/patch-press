@@ -206,7 +206,7 @@ The app uses a single `AppView` state in `App.tsx`:
 ```ts
 type AppView = 'landing' | 'customize' | 'order-detail' | 'admin' | 'privacy' | 'terms' | 'refund' | 'shipping';
 ```
-The `Navbar` and `main` content switch based on this state. URL hash changes are not used for routing.
+The `Navbar` and `main` content switch based on this state. URL hash changes are not used for routing. Two exceptions map URL paths into state at mount: `/reset-password` opens the auth modal's set-new-password view, and `/privacy`, `/terms`, `/refund`, `/shipping` open the matching policy view (used by email footer links).
 
 ### CMS Data Loading Strategy (`src/lib/cms.ts`)
 Product/patch/site content is loaded with freshness as the top priority. Stale or missing
@@ -250,6 +250,7 @@ After admin changes, call `clearCmsCache()` and dispatch `window.dispatchEvent(n
 4. `PaymentElement` and `AddressElement` collect card and shipping details
 5. On success, the order is created in the DB immediately, inventory is deducted, and the cart is cleared
 6. The Stripe webhook (`stripe-webhook`) validates the amount (±$0.01 tolerance) and marks the order as `paid`
+7. The webhook then sends a branded order-confirmation email via Resend (`RESEND_API_KEY` edge-function secret, sender `Patchuu <noreply@contact.patchuu.shop>`). Template lives in `buildOrderEmailHtml` in `supabase/functions/stripe-webhook/index.ts`; social links are read from `site_content.footer` at send time (icons appear only when real URLs are set in the admin panel). Sending is gated on the DB update that flips the order to `paid`, so duplicate webhook deliveries cannot double-send.
 
 ### Inventory Management (`src/lib/supabase.ts`)
 - `inventory.checkAvailability` — checks stock before checkout
