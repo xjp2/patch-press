@@ -1036,7 +1036,16 @@ function Navbar({ navbar, currentUser, isAuthLoading, totalItems, onCartClick, o
 
 // Main App Content
 function AppContent() {
-  const [currentView, setCurrentView] = useState<AppView>('landing');
+  const [currentView, setCurrentView] = useState<AppView>(() => {
+    // Deep links into policy pages (used by email footers, shared links)
+    const policyPaths: Record<string, AppView> = {
+      '/privacy': 'privacy',
+      '/terms': 'terms',
+      '/refund': 'refund',
+      '/shipping': 'shipping',
+    };
+    return policyPaths[window.location.pathname] || 'landing';
+  });
   const [currentUser, setCurrentUser] = useState<UserType | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true); // Track auth initialization
 

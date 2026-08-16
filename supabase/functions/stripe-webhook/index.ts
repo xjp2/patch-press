@@ -34,19 +34,52 @@ function escapeHtml(s: any): string {
   }[c] as string));
 }
 
-function buildOrderEmailHtml(order: any): string {
+const SITE_URL = 'https://patchuu.shop';
+const LOGO_URL = `${SITE_URL}/hero/patchuubg.png`;
+
+function absoluteImageUrl(u: any): string {
+  if (!u || typeof u !== 'string') return '';
+  if (u.startsWith('http')) return u;
+  return `${SITE_URL}${u.startsWith('/') ? '' : '/'}${u}`;
+}
+
+async function getSocialLinks(): Promise<{ label: string; url: string }[]> {
+  try {
+    const { data } = await supabaseAdmin
+      .from('site_content')
+      .select('footer')
+      .eq('id', 'current')
+      .single();
+    const f = data?.footer || {};
+    return [
+      { label: 'Instagram', url: f.instagramUrl },
+      { label: 'Facebook', url: f.facebookUrl },
+      { label: 'X', url: f.twitterUrl },
+    ].filter((l) => typeof l.url === 'string' && l.url.startsWith('http'));
+  } catch {
+    return [];
+  }
+}
+
+function buildOrderEmailHtml(order: any, socialLinks: { label: string; url: string }[]): string {
   const items: any[] = Array.isArray(order.items) ? order.items : [];
   const shipping = order.shipping_address || {};
   const itemRows = items.map((item: any) => {
     const patchNames = (item.patches || []).filter(Boolean).map(escapeHtml).join(', ');
+    const thumb = absoluteImageUrl(item.productImage);
     return `
       <tr>
         <td style="padding:12px 0;border-bottom:1px solid #eee;">
-          <div style="font-weight:600;color:#333;">${escapeHtml(item.name)}</div>
-          ${patchNames ? `<div style="font-size:13px;color:#777;margin-top:4px;">Patches: ${patchNames}</div>` : ''}
+          <table style="border-collapse:collapse;"><tr>
+            ${thumb ? `<td style="padding-right:12px;vertical-align:middle;"><img src="${escapeHtml(thumb)}" width="56" height="56" alt="" style="display:block;width:56px;height:56px;object-fit:contain;border-radius:10px;background:#f7f5f0;"></td>` : ''}
+            <td style="vertical-align:middle;">
+              <div style="font-weight:600;color:#333;">${escapeHtml(item.name)}</div>
+              ${patchNames ? `<div style="font-size:13px;color:#777;margin-top:4px;">Patches: ${patchNames}</div>` : ''}
+            </td>
+          </tr></table>
         </td>
-        <td style="padding:12px 0;border-bottom:1px solid #eee;text-align:center;color:#555;">${item.qty}</td>
-        <td style="padding:12px 0;border-bottom:1px solid #eee;text-align:right;color:#333;">${formatMoney(order.currency, Number(item.price))}</td>
+        <td style="padding:12px 0;border-bottom:1px solid #eee;text-align:center;color:#555;vertical-align:middle;">${item.qty}</td>
+        <td style="padding:12px 0;border-bottom:1px solid #eee;text-align:right;color:#333;vertical-align:middle;">${formatMoney(order.currency, Number(item.price))}</td>
       </tr>`;
   }).join('');
 
@@ -58,15 +91,30 @@ function buildOrderEmailHtml(order: any): string {
     shipping.country,
   ].filter(Boolean).map(escapeHtml).join('<br>');
 
+  const footerLinks = [
+    { label: 'Shop', url: SITE_URL },
+    { label: 'Terms of Service', url: `${SITE_URL}/terms` },
+    { label: 'Refund Policy', url: `${SITE_URL}/refund` },
+    { label: 'Privacy Policy', url: `${SITE_URL}/privacy` },
+    { label: 'Shipping Policy', url: `${SITE_URL}/shipping` },
+  ].map((l) => `<a href="${l.url}" style="color:#2f7d5f;text-decoration:none;font-size:12px;">${l.label}</a>`).join('<span style="color:#ddd;padding:0 6px;">·</span>');
+
+  const socialRow = socialLinks.length > 0
+    ? `<div style="margin-top:14px;">${socialLinks.map((s) => `<a href="${escapeHtml(s.url)}" style="display:inline-block;background:#f0f7f3;color:#2f7d5f;font-size:12px;font-weight:600;text-decoration:none;padding:6px 14px;border-radius:999px;margin:0 4px;">${s.label}</a>`).join('')}</div>`
+    : '';
+
   return `<!DOCTYPE html>
 <html><body style="margin:0;padding:0;background:#f7f5f0;font-family:Arial,Helvetica,sans-serif;">
   <div style="max-width:560px;margin:0 auto;padding:32px 16px;">
+    <div style="text-align:center;margin-bottom:20px;">
+      <img src="${LOGO_URL}" width="170" alt="Patchuu" style="display:inline-block;width:170px;height:auto;">
+    </div>
     <div style="background:#ffffff;border-radius:16px;padding:32px;border:1px solid #eee;">
-      <h1 style="margin:0 0 8px;font-size:22px;color:#2f7d5f;">Thank you for your order!</h1>
-      <p style="margin:0 0 24px;color:#666;font-size:14px;">
+      <h1 style="margin:0 0 8px;font-size:22px;color:#2f7d5f;text-align:center;">Thank you for your order!</h1>
+      <p style="margin:0 0 24px;color:#666;font-size:14px;text-align:center;">
         Hi ${escapeHtml(order.customer_name || 'there')}, we've received your payment and we're getting your order ready.
       </p>
-      <div style="background:#f0f7f3;border-radius:10px;padding:12px 16px;margin-bottom:24px;">
+      <div style="background:#f0f7f3;border-radius:10px;padding:12px 16px;margin-bottom:24px;text-align:center;">
         <span style="font-size:13px;color:#666;">Order number</span><br>
         <span style="font-size:16px;font-weight:700;color:#2f7d5f;">${escapeHtml(order.order_number)}</span>
       </div>
@@ -85,11 +133,15 @@ function buildOrderEmailHtml(order: any): string {
       ${addressLines ? `
       <h2 style="font-size:15px;color:#333;margin:28px 0 8px;">Shipping to</h2>
       <p style="margin:0;color:#666;font-size:14px;line-height:1.5;">${addressLines}</p>` : ''}
-      <p style="margin:28px 0 0;color:#999;font-size:12px;">
-        We'll email you again when your order ships. If anything looks wrong, just reply to this email.
+      <p style="margin:28px 0 0;color:#999;font-size:12px;text-align:center;">
+        If anything looks wrong with your order, just reply to this email.
       </p>
     </div>
-    <p style="text-align:center;color:#bbb;font-size:12px;margin-top:16px;">Patchuu — Patch &amp; Press · https://patchuu.shop</p>
+    <div style="text-align:center;margin-top:20px;">
+      <div>${footerLinks}</div>
+      ${socialRow}
+      <p style="color:#bbb;font-size:12px;margin-top:14px;">© ${new Date().getFullYear()} Patchuu. Made with love in Seoul.</p>
+    </div>
   </div>
 </body></html>`;
 }
@@ -104,6 +156,8 @@ async function sendOrderConfirmationEmail(order: any) {
     return;
   }
 
+  const socialLinks = await getSocialLinks();
+
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -114,7 +168,7 @@ async function sendOrderConfirmationEmail(order: any) {
       from: ORDER_EMAIL_FROM,
       to: [order.customer_email],
       subject: `Order confirmed — ${order.order_number}`,
-      html: buildOrderEmailHtml(order),
+      html: buildOrderEmailHtml(order, socialLinks),
     }),
   });
 
