@@ -235,13 +235,14 @@ function generateIdempotencyKey(
   cartItems: any[],
   currency: string,
   userId: string = '',
-  customerEmail: string = ''
+  customerEmail: string = '',
+  shippingCountry: string = ''
 ): string {
   const cartHash = cartItems
     .map(item => `${item.productId}-${item.quantity}-${item.totalPrice}`)
     .sort()
     .join('|');
-  const raw = `${currency}|${userId || 'guest'}|${customerEmail || ''}|${cartHash}`;
+  const raw = `${currency}|${userId || 'guest'}|${customerEmail || ''}|${shippingCountry}|${cartHash}`;
   return `pp-${hashString(raw)}`;
 }
 
@@ -256,15 +257,16 @@ function hashString(str: string): string {
   return Math.abs(hash).toString(36);
 }
 
-function getStorageKey(userId: string, cartItems: any[]): string {
+function getStorageKey(userId: string, cartItems: any[], shippingCountry: string = ''): string {
   const cartHash = hashString(cartItems.map(i => i.productId).sort().join(','));
-  return `stripe_cs_${userId}_${cartHash}`;
+  return `stripe_cs_${userId}_${shippingCountry}_${cartHash}`;
 }
 
 // Main Checkout Component
 interface StripeCheckoutProps {
   amount: number;
   cartItems?: any[];
+  shippingCountry: string;
   onSuccess: (orderData?: { orderId: string; orderNumber: string }) => void;
   onError: (error: string) => void;
 }
@@ -272,6 +274,7 @@ interface StripeCheckoutProps {
 export function StripeCheckout({
   amount,
   cartItems = [],
+  shippingCountry,
   onSuccess,
   onError
 }: StripeCheckoutProps) {
@@ -331,7 +334,7 @@ export function StripeCheckout({
         const actualUserId = session.user.id;
 
         // Check sessionStorage for existing Checkout Session (prevents duplicates on remount)
-        const storageKey = getStorageKey(actualUserId, cartItems);
+        const storageKey = getStorageKey(actualUserId, cartItems, shippingCountry);
         // The Checkout Session is created in the customer's display currency,
         // so the expected amount is the base-currency total converted to it.
         const expectedStripeAmount = toDisplayStripeAmount(amount);
@@ -368,7 +371,8 @@ export function StripeCheckout({
           cartItems,
           displayCurrency,
           actualUserId,
-          session.user.email || ''
+          session.user.email || '',
+          shippingCountry
         );
 
         // Prevent concurrent requests for same user+cart (React Strict Mode double-mount)
@@ -433,6 +437,7 @@ export function StripeCheckout({
               })),
               currency: displayCurrency,
               customer_email: session.user.email,
+              shipping_country: shippingCountry,
               return_url: returnUrl,
               idempotency_key: idempotencyKey,
             }),
@@ -534,7 +539,7 @@ export function StripeCheckout({
     const actualUserId = sessionData.session?.user?.id;
 
     if (actualUserId && cartItems.length > 0) {
-      const storageKey = getStorageKey(actualUserId, cartItems);
+      const storageKey = getStorageKey(actualUserId, cartItems, shippingCountry);
       sessionStorage.removeItem(storageKey);
     }
 

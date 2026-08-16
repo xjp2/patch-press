@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { LogOut, Settings, User, ShoppingCart, X, Plus, Minus, Trash2, ChevronDown, ChevronUp, Package, Loader2, Menu } from 'lucide-react';
+import { LogOut, Settings, User, ShoppingCart, X, Plus, Minus, Trash2, ChevronDown, ChevronUp, Package, Loader2, Menu, Truck } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import './App.css';
 import { AuthModal } from './AuthModal';
@@ -27,6 +27,7 @@ import { PrivacyPolicyPage } from './components/PrivacyPolicyPage';
 import { TermsOfServicePage } from './components/TermsOfServicePage';
 import { RefundPolicyPage } from './components/RefundPolicyPage';
 import { ShippingPolicyPage } from './components/ShippingPolicyPage';
+import { SHIPPING_COUNTRIES, DEFAULT_SHIPPING_COUNTRY, getShippingZone, getShippingRateSgd } from './lib/shipping';
 
 type AppView = 'landing' | 'customize' | 'order-detail' | 'admin' | 'privacy' | 'terms' | 'refund' | 'shipping';
 
@@ -287,7 +288,12 @@ function CartDrawer({ currentUser, setShowAuth, setAuthView, products, patches }
   const [showOrderConfirmation, setShowOrderConfirmation] = useState(false);
   const [orderNumber, setOrderNumber] = useState('');
   const [orderSummary, setOrderSummary] = useState<{items: typeof items, totalPrice: number} | null>(null);
+  const [shippingCountry, setShippingCountry] = useState(DEFAULT_SHIPPING_COUNTRY);
   const clearCartTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const shippingZone = getShippingZone(shippingCountry);
+  const shippingRateSgd = getShippingRateSgd(shippingCountry);
+  const grandTotalSgd = totalPrice + shippingRateSgd;
 
   useEffect(() => {
     return () => {
@@ -298,8 +304,8 @@ function CartDrawer({ currentUser, setShowAuth, setAuthView, products, patches }
   const handleCheckoutSuccess = async (orderData?: { orderId: string; orderNumber: string }) => {
     setCheckoutState('success');
     
-    // Capture order summary BEFORE clearing cart
-    setOrderSummary({ items: [...items], totalPrice });
+    // Capture order summary BEFORE clearing cart (total includes shipping)
+    setOrderSummary({ items: [...items], totalPrice: grandTotalSgd });
     
     // Use order number from created order, or generate fallback
     const displayOrderNum = orderData?.orderNumber || `ORD-${Date.now().toString(36).toUpperCase().slice(-6)}`;
@@ -359,7 +365,7 @@ function CartDrawer({ currentUser, setShowAuth, setAuthView, products, patches }
             ? data.currency && ['jpy', 'krw'].includes(data.currency.toLowerCase())
               ? data.amountTotal
               : data.amountTotal / 100
-            : totalPrice;
+            : grandTotalSgd;
           setOrderSummary({ items: [...items], totalPrice: paidTotal });
           setOrderNumber(data.orderNumber);
           setShowOrderConfirmation(true);
@@ -449,6 +455,7 @@ function CartDrawer({ currentUser, setShowAuth, setAuthView, products, patches }
           placementZone: i.placementZone
         }))}
         totalAmount={orderSummary.totalPrice}
+        deliveryEstimate={shippingZone.estimate}
         onContinueShopping={handleCloseOrderConfirmation}
       />
     );
@@ -492,10 +499,50 @@ function CartDrawer({ currentUser, setShowAuth, setAuthView, products, patches }
                 </div>
               )}
 
+              {/* Shipping Destination + Order Summary */}
+              <div className="space-y-2">
+                <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                  <Truck className="w-4 h-4 text-craft-mint" />
+                  Shipping Destination
+                </h3>
+                <select
+                  value={shippingCountry}
+                  onChange={(e) => setShippingCountry(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-pink/40"
+                >
+                  {SHIPPING_COUNTRIES.map((c) => (
+                    <option key={c.code} value={c.code}>{c.name}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500">{shippingZone.label} · {shippingZone.estimate}</p>
+              </div>
+
+              <div className="bg-gray-50 rounded-xl p-4 space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Subtotal</span>
+                  <span className="font-medium">{formatPrice(totalPrice)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Shipping</span>
+                  <span className="font-medium">{formatPrice(shippingRateSgd)}</span>
+                </div>
+                <div className="flex justify-between border-t border-gray-200 pt-2">
+                  <span className="font-bold text-gray-900">Total</span>
+                  <span className="font-bold text-gray-900">{formatPrice(grandTotalSgd)}</span>
+                </div>
+                {shippingCountry !== 'SG' && (
+                  <p className="text-[10px] text-gray-400 pt-1">
+                    International orders may be subject to customs duties or import taxes, payable by the recipient on delivery.
+                  </p>
+                )}
+              </div>
+
               {/* Payment Step with AddressElement */}
               <StripeCheckout
-                amount={totalPrice}
+                key={shippingCountry}
+                amount={grandTotalSgd}
                 cartItems={items}
+                shippingCountry={shippingCountry}
                 onSuccess={handleCheckoutSuccess}
                 onError={handleCheckoutError}
               />
@@ -1670,7 +1717,7 @@ function AppContent() {
         ? 'Refund Policy'
         : currentView === 'shipping'
         ? 'Shipping Policy'
-        : siteContent.global.logoText || 'Patch & Press';
+        : siteContent.global.logoText || 'Patchuu';
     trackPageView(pageTitle);
   }, [currentView, siteContent.global.logoText, trackPageView]);
 
@@ -1690,7 +1737,7 @@ function AppContent() {
         ? 'Refund Policy'
         : currentView === 'shipping'
         ? 'Shipping Policy'
-        : siteContent.global.logoText || 'Patch & Press',
+        : siteContent.global.logoText || 'Patchuu',
     description:
       currentView === 'landing'
         ? siteContent.footer?.tagline || undefined
@@ -1871,25 +1918,29 @@ function AppContent() {
         {currentView === 'privacy' && (
           <PrivacyPolicyPage 
             onBack={() => setCurrentView('landing')}
-            brandName={siteContent.global?.logoText || 'Patch & Press'}
+            brandName={siteContent.global?.logoText || 'Patchuu'}
+            contactEmail="contact@patchuu.shop"
           />
         )}
         {currentView === 'terms' && (
           <TermsOfServicePage 
             onBack={() => setCurrentView('landing')}
-            brandName={siteContent.global?.logoText || 'Patch & Press'}
+            brandName={siteContent.global?.logoText || 'Patchuu'}
+            contactEmail="contact@patchuu.shop"
           />
         )}
         {currentView === 'refund' && (
           <RefundPolicyPage 
             onBack={() => setCurrentView('landing')}
-            brandName={siteContent.global?.logoText || 'Patch & Press'}
+            brandName={siteContent.global?.logoText || 'Patchuu'}
+            contactEmail="contact@patchuu.shop"
           />
         )}
         {currentView === 'shipping' && (
           <ShippingPolicyPage 
             onBack={() => setCurrentView('landing')}
-            brandName={siteContent.global?.logoText || 'Patch & Press'}
+            brandName={siteContent.global?.logoText || 'Patchuu'}
+            contactEmail="contact@patchuu.shop"
           />
         )}
       </main>

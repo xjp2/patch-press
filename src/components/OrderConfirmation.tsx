@@ -38,6 +38,7 @@ interface OrderConfirmationProps {
   customerEmail: string;
   items: OrderItem[];
   totalAmount: number;
+  deliveryEstimate?: string;
   shippingAddress?: ShippingAddress;
   onContinueShopping: () => void;
 }
@@ -47,6 +48,7 @@ export function OrderConfirmation({
   customerEmail,
   items,
   totalAmount,
+  deliveryEstimate = '5-7 business days',
   shippingAddress,
   onContinueShopping,
 }: OrderConfirmationProps) {
@@ -262,7 +264,7 @@ export function OrderConfirmation({
                 <p className="text-xs font-semibold text-blue-900">
                   Estimated Delivery
                 </p>
-                <p className="text-xs text-blue-700">5-7 business days</p>
+                <p className="text-xs text-blue-700">{deliveryEstimate}</p>
               </div>
             </div>
 

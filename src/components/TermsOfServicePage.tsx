@@ -6,7 +6,7 @@ interface TermsOfServicePageProps {
   contactEmail?: string;
 }
 
-export function TermsOfServicePage({ onBack, brandName = 'Patch & Press', contactEmail = 'legal@patchpress.com' }: TermsOfServicePageProps) {
+export function TermsOfServicePage({ onBack, brandName = 'Patchuu', contactEmail = 'contact@patchuu.shop' }: TermsOfServicePageProps) {
   const lastUpdated = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
   return (
@@ -145,8 +145,8 @@ export function TermsOfServicePage({ onBack, brandName = 'Patch & Press', contac
           <section className="mb-10">
             <h2 className="text-2xl font-bold text-ink mb-4">10. Governing Law</h2>
             <p className="text-ink/60 leading-relaxed">
-              These Terms shall be governed by and construed in accordance with the laws of the jurisdiction 
-              where {brandName} is established, without regard to its conflict of law provisions.
+              These Terms shall be governed by and construed in accordance with the laws of 
+              Singapore, where {brandName} is based, without regard to its conflict of law provisions.
             </p>
           </section>
 

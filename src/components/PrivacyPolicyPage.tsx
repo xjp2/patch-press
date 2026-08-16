@@ -6,7 +6,7 @@ interface PrivacyPolicyPageProps {
   contactEmail?: string;
 }
 
-export function PrivacyPolicyPage({ onBack, brandName = 'Patch & Press', contactEmail = 'privacy@patchpress.com' }: PrivacyPolicyPageProps) {
+export function PrivacyPolicyPage({ onBack, brandName = 'Patchuu', contactEmail = 'contact@patchuu.shop' }: PrivacyPolicyPageProps) {
   const lastUpdated = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
   return (

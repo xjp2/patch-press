@@ -64,6 +64,8 @@ async function getSocialLinks(): Promise<{ label: string; url: string }[]> {
 function buildOrderEmailHtml(order: any, socialLinks: { label: string; url: string }[]): string {
   const items: any[] = Array.isArray(order.items) ? order.items : [];
   const shipping = order.shipping_address || {};
+  const shippingFee = Number(order.shipping_fee || 0);
+  const itemsSubtotal = Number(order.total_amount) - shippingFee;
   const itemRows = items.map((item: any) => {
     const patchNames = (item.patches || []).filter(Boolean).map(escapeHtml).join(', ');
     const thumb = absoluteImageUrl(item.productImage);
@@ -125,6 +127,15 @@ function buildOrderEmailHtml(order: any, socialLinks: { label: string; url: stri
           <td style="padding-bottom:8px;text-align:right;">Price</td>
         </tr>
         ${itemRows}
+        ${shippingFee > 0 ? `
+        <tr>
+          <td colspan="2" style="padding-top:14px;color:#555;">Subtotal</td>
+          <td style="padding-top:14px;text-align:right;color:#555;">${formatMoney(order.currency, itemsSubtotal)}</td>
+        </tr>
+        <tr>
+          <td colspan="2" style="color:#555;">Shipping</td>
+          <td style="text-align:right;color:#555;">${formatMoney(order.currency, shippingFee)}</td>
+        </tr>` : ''}
         <tr>
           <td colspan="2" style="padding-top:14px;font-weight:700;color:#333;">Total</td>
           <td style="padding-top:14px;text-align:right;font-weight:700;color:#333;">${formatMoney(order.currency, Number(order.total_amount))}</td>
@@ -140,7 +151,7 @@ function buildOrderEmailHtml(order: any, socialLinks: { label: string; url: stri
     <div style="text-align:center;margin-top:20px;">
       <div>${footerLinks}</div>
       ${socialRow}
-      <p style="color:#bbb;font-size:12px;margin-top:14px;">© ${new Date().getFullYear()} Patchuu. Made with love in Seoul.</p>
+      <p style="color:#bbb;font-size:12px;margin-top:14px;">© ${new Date().getFullYear()} Patchuu. Made with love in Singapore.</p>
     </div>
   </div>
 </body></html>`;
@@ -549,6 +560,7 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
         items: orderItemsJson,
         total_amount: stripeAmount,
         currency,
+        shipping_fee: convertToCurrency(Number(pendingOrder.shipping_fee || 0), currency, exchangeRate),
         shipping_address: shippingAddress,
         shipping_country: shippingAddress?.country || '',
         user_id: pendingOrder.user_id,

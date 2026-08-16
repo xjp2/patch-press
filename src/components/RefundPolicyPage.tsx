@@ -6,7 +6,7 @@ interface RefundPolicyPageProps {
   contactEmail?: string;
 }
 
-export function RefundPolicyPage({ onBack, brandName = 'Patch & Press', contactEmail = 'support@patchpress.com' }: RefundPolicyPageProps) {
+export function RefundPolicyPage({ onBack, brandName = 'Patchuu', contactEmail = 'contact@patchuu.shop' }: RefundPolicyPageProps) {
   const lastUpdated = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
   return (

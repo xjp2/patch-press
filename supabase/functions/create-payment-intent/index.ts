@@ -57,6 +57,32 @@ const FX_BUFFER = 1.02;
 // Stripe-supported charge currencies. Anything else falls back to SGD.
 const SUPPORTED_CHARGE_CURRENCIES = new Set(['sgd', 'usd', 'eur', 'gbp', 'jpy', 'krw']);
 
+// Countries the store ships to. The Checkout Session's
+// shipping_address_collection is locked to the single destination country the
+// customer picked at checkout, so the charged shipping fee always matches the
+// final address.
+const ALLOWED_SHIPPING_COUNTRIES = new Set([
+  'SG', 'MY', 'ID', 'TH', 'PH', 'VN', 'HK', 'TW', 'CN', 'JP', 'KR', 'AU', 'GB', 'US',
+]);
+
+// Flat shipping zones in SGD (merchant base currency). First match wins;
+// '*' is the rest-of-world fallback. Based on SingPost counter rates for a
+// ~0.5 kg small packet (Tracked Letterbox domestic / Speedpost Saver
+// International abroad). Keep in sync with src/lib/shipping.ts on the client.
+const SHIPPING_ZONES: Array<{ countries: string[]; rateSgd: number; label: string }> = [
+  { countries: ['SG'], rateSgd: 3.9, label: 'Singapore — Tracked Letterbox' },
+  { countries: ['MY'], rateSgd: 9.9, label: 'Malaysia — Tracked International' },
+  { countries: ['*'], rateSgd: 21.9, label: 'International — Tracked' },
+];
+
+function getShippingZone(countryCode: string) {
+  const code = (countryCode || '').toUpperCase();
+  for (const zone of SHIPPING_ZONES) {
+    if (zone.countries.includes(code)) return zone;
+  }
+  return SHIPPING_ZONES[SHIPPING_ZONES.length - 1];
+}
+
 function getCorsHeaders(req: Request): HeadersInit {
   const origin = req.headers.get('origin') || '';
   const allowedOrigins = [
@@ -180,6 +206,19 @@ serve(async (req) => {
 
     const body = await req.json();
     const { cartItems, currency = 'sgd', customer_email, shipping, return_url } = body;
+
+    // Destination country picked at checkout; determines the shipping fee.
+    // Required so the fee can be computed server-side before the Stripe
+    // address is collected (the address country is locked to this value).
+    const shippingCountry = String(body.shipping_country || '').toUpperCase();
+    if (!ALLOWED_SHIPPING_COUNTRIES.has(shippingCountry)) {
+      return new Response(
+        JSON.stringify({ error: 'SHIPPING_COUNTRY_INVALID', message: 'Unsupported or missing shipping country' }),
+        { status: 400, headers: responseHeaders(req) }
+      );
+    }
+    const shippingZone = getShippingZone(shippingCountry);
+    const shippingFeeSgd = shippingZone.rateSgd;
 
     // Charge in the customer-selected display currency (display = charge).
     // Unsupported values fall back to the SGD settlement currency.
@@ -332,6 +371,8 @@ serve(async (req) => {
         .reduce((sum: number, pid: string) => sum + (patchMap.get(pid)?.price ?? 0), 0);
       totalSgd += (product.base_price + patchPrice) * item.quantity;
     }
+    // Flat shipping fee for the selected destination (SGD base).
+    totalSgd += shippingFeeSgd;
 
     // Charge in the customer's selected currency so the price displayed is
     // exactly the price charged (Stripe recommends always displaying the
@@ -387,6 +428,26 @@ serve(async (req) => {
       });
     }
 
+    // Shipping fee line item, converted through the same FX path as products.
+    let shippingChargedMinor = 0;
+    if (shippingFeeSgd > 0) {
+      shippingChargedMinor = toStripeAmount(
+        targetCurrency,
+        shippingFeeSgd * exchangeRate * (targetCurrency === 'sgd' ? 1 : FX_BUFFER)
+      );
+      totalChargedMinor += shippingChargedMinor;
+      lineItems.push({
+        price_data: {
+          currency: targetCurrency,
+          unit_amount: shippingChargedMinor,
+          product_data: {
+            name: `Shipping — ${shippingZone.label}`,
+          },
+        },
+        quantity: 1,
+      });
+    }
+
     if (lineItems.length === 0) {
       return new Response(
         JSON.stringify({ error: 'INVALID_CART', message: 'Could not build line items from cart' }),
@@ -412,8 +473,9 @@ serve(async (req) => {
         // the actual Stripe-charged amount vs this SGD total.
         total_amount: totalSgd,
         currency: targetCurrency,
+        shipping_fee: shippingFeeSgd,
         shipping_address: shippingAddress,
-        shipping_country: shippingAddress?.country || '',
+        shipping_country: shippingAddress?.country || shippingCountry,
         status: 'pending_payment',
       })
       .select('id, order_number')
@@ -453,7 +515,9 @@ serve(async (req) => {
       // when the customer already picked their currency, honor it as-is.
       ...(targetCurrency === 'sgd' ? { adaptive_pricing: { enabled: true } } : {}),
       shipping_address_collection: {
-        allowed_countries: ['SG', 'MY', 'ID', 'TH', 'PH', 'VN', 'US', 'GB', 'AU', 'JP', 'KR', 'CN', 'TW', 'HK'],
+        // Locked to the destination chosen at checkout so the shipping fee
+        // charged always matches the final delivery address.
+        allowed_countries: [shippingCountry],
       },
       return_url: return_url || undefined,
     };
@@ -491,6 +555,7 @@ serve(async (req) => {
         amount: fromStripeAmount(targetCurrency, totalChargedMinor),
         stripeAmount: session.amount_total,
         currency: targetCurrency,
+        shippingFee: fromStripeAmount(targetCurrency, shippingChargedMinor),
         reused: false,
       }),
       { status: 200, headers: responseHeaders(req) }

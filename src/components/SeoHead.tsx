@@ -4,7 +4,7 @@ import type { SeoData } from '../lib/seo';
 const DEFAULT_DESCRIPTION =
   'Patchuu — customize your own tote bags, keychains, pouches, and cardholders with cute patches. We press them for you!';
 const DEFAULT_IMAGE = '/hero/patchuu-logo.png';
-const SITE_NAME = 'Patch & Press';
+const SITE_NAME = 'Patchuu';
 
 function setMeta(selector: string, content: string) {
   if (!content) return;

@@ -1,5 +1,5 @@
 const DEFAULT_IMAGE = '/hero/patchuu-logo.png';
-const SITE_NAME = 'Patch & Press';
+const SITE_NAME = 'Patchuu';
 
 export interface SeoData {
   title: string;

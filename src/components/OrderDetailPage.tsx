@@ -64,6 +64,7 @@ interface Order {
   order_number: string;
   items: OrderItem[];
   total_amount: number;
+  shipping_fee?: number;
   status: string;
   fulfillment_status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
   tracking_number?: string;
@@ -460,11 +461,15 @@ export function OrderDetailPage({ orderId, onBack }: OrderDetailPageProps) {
                 <div className="border-t pt-3 mt-3">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Subtotal</span>
-                    <span>{formatCurrency(order.total_amount, order.currency)}</span>
+                    <span>{formatCurrency(order.total_amount - (order.shipping_fee || 0), order.currency)}</span>
                   </div>
                   <div className="flex justify-between mt-2">
                     <span className="text-gray-600">Shipping</span>
-                    <span className="text-green-600">Free</span>
+                    {(order.shipping_fee || 0) > 0 ? (
+                      <span>{formatCurrency(order.shipping_fee!, order.currency)}</span>
+                    ) : (
+                      <span className="text-green-600">Free</span>
+                    )}
                   </div>
                 </div>
                 <div className="border-t pt-3">
@@ -514,7 +519,7 @@ export function OrderDetailPage({ orderId, onBack }: OrderDetailPageProps) {
                 Have questions about your order? Contact our support team.
               </p>
               <a 
-                href="mailto:support@patchpress.com"
+                href="mailto:contact@patchuu.shop"
                 className="text-pink hover:underline text-sm font-medium"
               >
                 Contact Support

@@ -1,5 +1,6 @@
 import { Truck, Clock, Globe, Package, Mail, MapPin } from 'lucide-react';
 import { useCurrency } from '../context/CurrencyContext';
+import { SHIPPING_ZONES, SHIPPING_COUNTRIES } from '../lib/shipping';
 
 interface ShippingPolicyPageProps {
   onBack: () => void;
@@ -7,9 +8,13 @@ interface ShippingPolicyPageProps {
   contactEmail?: string;
 }
 
-export function ShippingPolicyPage({ onBack, brandName = 'Patch & Press', contactEmail = 'support@patchpress.com' }: ShippingPolicyPageProps) {
-  const { currencySymbol } = useCurrency();
+export function ShippingPolicyPage({ onBack, brandName = 'Patchuu', contactEmail = 'contact@patchuu.shop' }: ShippingPolicyPageProps) {
+  const { formatPrice } = useCurrency();
   const lastUpdated = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+  const domesticZone = SHIPPING_ZONES.find((z) => z.countries.includes('SG'))!;
+  const internationalZones = SHIPPING_ZONES.filter((z) => !z.countries.includes('SG'));
+  const countryNames = SHIPPING_COUNTRIES.map((c) => c.name).join(', ');
 
   return (
     <div className="min-h-screen bg-paper">
@@ -33,35 +38,45 @@ export function ShippingPolicyPage({ onBack, brandName = 'Patch & Press', contac
         <div className="grid md:grid-cols-4 gap-4 mb-12">
           <div className="bg-craft-mint/5 rounded-xl p-5 text-center">
             <Clock className="w-7 h-7 text-craft-mint mx-auto mb-2" />
-            <h3 className="font-bold text-ink text-sm mb-1">Processing</h3>
-            <p className="text-xs text-ink/60">3-5 business days</p>
+            <h3 className="font-bold text-ink text-sm mb-1">Made to Order</h3>
+            <p className="text-xs text-ink/60">4-7 business days</p>
           </div>
           <div className="bg-craft-mint/5 rounded-xl p-5 text-center">
             <Truck className="w-7 h-7 text-craft-mint mx-auto mb-2" />
-            <h3 className="font-bold text-ink text-sm mb-1">Domestic</h3>
-            <p className="text-xs text-ink/60">5-10 business days</p>
+            <h3 className="font-bold text-ink text-sm mb-1">Singapore</h3>
+            <p className="text-xs text-ink/60">{domesticZone.estimate}</p>
           </div>
           <div className="bg-craft-mint/5 rounded-xl p-5 text-center">
             <Globe className="w-7 h-7 text-craft-mint mx-auto mb-2" />
             <h3 className="font-bold text-ink text-sm mb-1">International</h3>
-            <p className="text-xs text-ink/60">10-20 business days</p>
+            <p className="text-xs text-ink/60">8-18 working days</p>
           </div>
           <div className="bg-craft-mint/5 rounded-xl p-5 text-center">
             <Package className="w-7 h-7 text-craft-mint mx-auto mb-2" />
-            <h3 className="font-bold text-ink text-sm mb-1">Free Shipping</h3>
-            <p className="text-xs text-ink/60">Orders over {currencySymbol}50</p>
+            <h3 className="font-bold text-ink text-sm mb-1">Fully Tracked</h3>
+            <p className="text-xs text-ink/60">Every order, every destination</p>
           </div>
         </div>
 
         <div className="prose prose-lg max-w-none">
           <section className="mb-10">
-            <h2 className="text-2xl font-bold text-ink mb-4">1. Processing Time</h2>
+            <h2 className="text-2xl font-bold text-ink mb-4">1. Where We Ship From</h2>
+            <p className="text-ink/60 leading-relaxed">
+              {brandName} is based in <strong>Singapore</strong>, and every order is handmade and
+              dispatched from here. We ship within Singapore and internationally to: {countryNames}.
+              If your country is not listed at checkout, contact us at {contactEmail} before ordering
+              and we'll let you know if we can arrange delivery.
+            </p>
+          </section>
+
+          <section className="mb-10">
+            <h2 className="text-2xl font-bold text-ink mb-4">2. Processing Time</h2>
             <p className="text-ink/60 leading-relaxed mb-4">
               All orders are custom-made to your specifications. Our typical processing times are:
             </p>
             <ul className="list-disc pl-6 text-ink/60 space-y-2">
               <li><strong>Order Processing:</strong> 1-2 business days (verification and preparation)</li>
-              <li><strong>Production Time:</strong> 3-5 business days (design, embroidery, quality check)</li>
+              <li><strong>Production Time:</strong> 3-5 business days (design, pressing, quality check)</li>
               <li><strong>Total Before Shipping:</strong> 4-7 business days</li>
             </ul>
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-4">
@@ -72,74 +87,43 @@ export function ShippingPolicyPage({ onBack, brandName = 'Patch & Press', contac
           </section>
 
           <section className="mb-10">
-            <h2 className="text-2xl font-bold text-ink mb-4">2. Shipping Methods & Rates</h2>
-            
-            <h3 className="text-xl font-semibold text-ink/80 mb-3">Domestic Shipping (United States)</h3>
+            <h2 className="text-2xl font-bold text-ink mb-4">3. Shipping Methods & Rates</h2>
+            <p className="text-ink/60 leading-relaxed mb-4">
+              We charge a simple flat rate per order based on your destination. All services are
+              provided by Singapore Post and include tracking. Delivery times below are estimates
+              in working days after dispatch and exclude our made-to-order processing time.
+            </p>
             <table className="w-full text-left border-collapse mb-6">
               <thead>
                 <tr className="border-b-2 border-ink/10">
-                  <th className="py-3 font-bold text-ink">Method</th>
-                  <th className="py-3 font-bold text-ink">Cost</th>
-                  <th className="py-3 font-bold text-ink">Delivery Time</th>
+                  <th className="py-3 font-bold text-ink">Destination</th>
+                  <th className="py-3 font-bold text-ink">Flat Rate</th>
+                  <th className="py-3 font-bold text-ink">Estimated Delivery</th>
                 </tr>
               </thead>
               <tbody className="text-ink/60">
-                <tr className="border-b border-ink/10">
-                  <td className="py-3">Standard Shipping</td>
-                  <td className="py-3">{currencySymbol}5.99 (FREE over {currencySymbol}50)</td>
-                  <td className="py-3">5-10 business days</td>
-                </tr>
-                <tr className="border-b border-ink/10">
-                  <td className="py-3">Expedited Shipping</td>
-                  <td className="py-3">{currencySymbol}12.99</td>
-                  <td className="py-3">3-5 business days</td>
-                </tr>
-                <tr>
-                  <td className="py-3">Express Shipping</td>
-                  <td className="py-3">{currencySymbol}24.99</td>
-                  <td className="py-3">2-3 business days</td>
-                </tr>
+                {SHIPPING_ZONES.map((zone) => (
+                  <tr key={zone.label} className="border-b border-ink/10 last:border-0">
+                    <td className="py-3">{zone.label}</td>
+                    <td className="py-3">{formatPrice(zone.rateSgd)}</td>
+                    <td className="py-3">{zone.estimate}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
-
-            <h3 className="text-xl font-semibold text-ink/80 mb-3">International Shipping</h3>
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b-2 border-ink/10">
-                  <th className="py-3 font-bold text-ink">Region</th>
-                  <th className="py-3 font-bold text-ink">Cost</th>
-                  <th className="py-3 font-bold text-ink">Delivery Time</th>
-                </tr>
-              </thead>
-              <tbody className="text-ink/60">
-                <tr className="border-b border-ink/10">
-                  <td className="py-3">Canada</td>
-                  <td className="py-3">{currencySymbol}12.99 (FREE over {currencySymbol}75)</td>
-                  <td className="py-3">7-14 business days</td>
-                </tr>
-                <tr className="border-b border-ink/10">
-                  <td className="py-3">Europe</td>
-                  <td className="py-3">{currencySymbol}15.99 (FREE over {currencySymbol}100)</td>
-                  <td className="py-3">10-20 business days</td>
-                </tr>
-                <tr className="border-b border-ink/10">
-                  <td className="py-3">Australia/NZ</td>
-                  <td className="py-3">{currencySymbol}18.99 (FREE over {currencySymbol}100)</td>
-                  <td className="py-3">12-25 business days</td>
-                </tr>
-                <tr>
-                  <td className="py-3">Rest of World</td>
-                  <td className="py-3">{currencySymbol}24.99</td>
-                  <td className="py-3">14-30 business days</td>
-                </tr>
-              </tbody>
-            </table>
+            {internationalZones.length > 0 && (
+              <p className="text-ink/60 leading-relaxed text-sm">
+                Rates are shown in your selected currency for reference; the exact charge is
+                calculated at checkout. International delivery times vary by destination and
+                customs clearance — remote areas may take longer.
+              </p>
+            )}
           </section>
 
           <section className="mb-10">
-            <h2 className="text-2xl font-bold text-ink mb-4">3. Order Tracking</h2>
+            <h2 className="text-2xl font-bold text-ink mb-4">4. Order Tracking</h2>
             <p className="text-ink/60 leading-relaxed mb-4">
-              Once your order ships, you will receive an email with:
+              All our shipping services include tracking. Once your order ships, you will receive an email with:
             </p>
             <ul className="list-disc pl-6 text-ink/60 space-y-2">
               <li>Tracking number</li>
@@ -148,21 +132,6 @@ export function ShippingPolicyPage({ onBack, brandName = 'Patch & Press', contac
             </ul>
             <p className="text-ink/60 leading-relaxed mt-4">
               You can also track your order by logging into your account and viewing your order history.
-            </p>
-          </section>
-
-          <section className="mb-10">
-            <h2 className="text-2xl font-bold text-ink mb-4">4. Shipping Restrictions</h2>
-            <p className="text-ink/60 leading-relaxed mb-4">
-              We currently do not ship to:
-            </p>
-            <ul className="list-disc pl-6 text-ink/60 space-y-2">
-              <li>PO Boxes (physical addresses only)</li>
-              <li>APO/FPO/DPO addresses</li>
-              <li>Certain restricted countries due to customs regulations</li>
-            </ul>
-            <p className="text-ink/60 leading-relaxed mt-4">
-              If you're unsure whether we ship to your location, please contact us before placing your order.
             </p>
           </section>
 
@@ -192,6 +161,11 @@ export function ShippingPolicyPage({ onBack, brandName = 'Patch & Press', contac
               <li>Check with neighbors or building management</li>
               <li>Contact us after 5 days past the estimated delivery date</li>
             </ol>
+            <p className="text-ink/60 leading-relaxed mt-4">
+              Please note that our standard postal services include tracking but limited or no
+              compensation for loss. We will always do our best to make things right — contact us
+              and we'll review each case individually.
+            </p>
 
             <h3 className="text-lg font-semibold text-ink/80 mb-2 mt-6">Damaged Packages</h3>
             <p className="text-ink/60 leading-relaxed mb-4">
@@ -239,7 +213,7 @@ export function ShippingPolicyPage({ onBack, brandName = 'Patch & Press', contac
               </div>
               <div className="flex items-center gap-3">
                 <MapPin className="w-5 h-5 text-craft-mint" />
-                <span className="text-ink/70">{brandName} Shipping Department</span>
+                <span className="text-ink/70">{brandName}, Singapore</span>
               </div>
             </div>
           </section>

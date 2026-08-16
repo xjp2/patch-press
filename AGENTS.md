@@ -89,6 +89,7 @@ The app is a **client-side SPA with no React Router** — view switching is done
 │   ├── lib/
 │   │   ├── supabase.ts          # Supabase client, auth helpers, DB helpers, storage helpers, inventory
 │   │   ├── cms.ts               # CMS data loader (DB → Storage → static JSON fallback, with TTL cache)
+│   │   ├── shipping.ts          # Flat shipping zones/rates (SGD base) + supported destination countries
 │   │   ├── utils.ts             # `cn()`, path fixer, `getClipAndCenter()`
 │   │   └── sounds.ts            # UI sound effects
 ├── scripts/
@@ -242,6 +243,14 @@ After admin changes, call `clearCmsCache()` and dispatch `window.dispatchEvent(n
 - Exchange rates are fetched from `https://open.er-api.com/v6/latest/{base}`
 - Zero-decimal currencies (`JPY`, `KRW`) are rounded to whole units for Stripe; all others are converted to cents
 - `formatPrice()` uses `Intl.NumberFormat` for display
+
+### Shipping Fees (`src/lib/shipping.ts`)
+- Flat per-order shipping by destination zone, defined in SGD base: **SG S$3.90** (SingPost Tracked Letterbox), **MY S$9.90** (booked via EasyParcel, cost ~S$6), **rest of supported countries S$21.90** (SingPost Speedpost Saver, counter-only retail product — not bookable on ezy2ship)
+- Supported destination countries are listed in `SHIPPING_COUNTRIES` (SG, MY, ID, TH, PH, VN, HK, TW, CN, JP, KR, AU, GB, US)
+- The customer picks the destination country in the cart drawer **before** the Stripe form mounts; the Checkout Session's `shipping_address_collection.allowed_countries` is locked to that single country so the charged fee always matches the final address
+- The edge function (`create-payment-intent`) recomputes the fee server-side from `shipping_country` — it carries its own copy of the zone table (keep it in sync with `src/lib/shipping.ts`) and never trusts a client-sent amount
+- Fees convert to the charge currency through the same FX path as products (including the FX buffer); `pending_orders.shipping_fee` stores the SGD base, `orders.shipping_fee` stores the charge-currency amount
+- Changing the country remounts `StripeCheckout` (keyed by country) and the sessionStorage/idempotency keys include the country, so each destination gets its own Checkout Session
 
 ### Payment Flow
 1. `StripeCheckout` creates a PaymentIntent via the `create-payment-intent` Supabase Edge Function
