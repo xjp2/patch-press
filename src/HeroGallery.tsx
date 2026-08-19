@@ -29,7 +29,7 @@ export function HeroGallery({ notices }: HeroGalleryProps) {
         id: n.id,
         title: n.title,
         content: n.content,
-        image: n.image || '/tote-bag.png', // Fallback
+        image: n.image || '/hero/tote-bag.png', // Fallback
         type: n.type,
         isDefault: false
     }));

@@ -76,7 +76,7 @@ function CartItemCard({ item, updateQuantity, removeItem, products, patches }: {
       <div className="flex gap-3">
         {/* Product Preview Image — measures actual image, matches ProductCard */}
         <CroppedThumbnail
-          src={fixImagePath(item.productImage) || '/tote-bag.png'}
+          src={fixImagePath(item.productImage) || '/hero/tote-bag.png'}
           zone={item.placementZone}
           className="w-20 h-20 bg-cardstock rounded-lg border border-ink/10 flex-shrink-0"
           alt={item.productName}
@@ -1078,8 +1078,8 @@ function AppContent() {
         visible: true,
         content: {
           slides: [
-            { id: 'hero-1', title: 'New Summer\nCollection', subtitle: 'Check out our new fruit-themed patches — strawberries, watermelons, and more!', image: '/tote-bag.png' },
-            { id: 'hero-2', title: 'Design Your\nOwn Style', subtitle: 'Pick your item, choose your patches, and make it uniquely yours.', image: '/pouch-beige.png' },
+            { id: 'hero-1', title: 'New Summer\nCollection', subtitle: 'Check out our new fruit-themed patches — strawberries, watermelons, and more!', image: '/hero/tote-bag.png' },
+            { id: 'hero-2', title: 'Design Your\nOwn Style', subtitle: 'Pick your item, choose your patches, and make it uniquely yours.', image: '/hero/pouch.png' },
           ],
           ctaText: 'Start Designing',
         },
@@ -1091,9 +1091,9 @@ function AppContent() {
         content: {
           sectionTitle: 'How It Works',
           steps: [
-            { id: 'step-1', title: 'Pick Your Item', description: 'Select your tote bag, fan or any blank item you want.', image: '/tote-bag.png', emoji: '' },
+            { id: 'step-1', title: 'Pick Your Item', description: 'Select your tote bag, fan or any blank item you want.', image: '/hero/tote-bag.png', emoji: '' },
             { id: 'step-2', title: 'Choose Patches', description: 'Choose your cute patches and add your picks.', image: '', emoji: '' },
-            { id: 'step-3', title: 'We Press It', description: 'We press a heat press to affix your custom artwork.', image: '/cardholder-yellow.png', emoji: '' },
+            { id: 'step-3', title: 'We Press It', description: 'We press a heat press to affix your custom artwork.', image: '/hero/blue-heart.png', emoji: '' },
           ],
         },
       },
@@ -1104,11 +1104,11 @@ function AppContent() {
         content: {
           sectionTitle: 'Featured Creations',
           items: [
-            { id: 'g1', image: '/tote-bag.png', label: 'Custom Tote Bag' },
-            { id: 'g2', image: '/pouch-beige.png', label: 'Designer Pouch' },
-            { id: 'g3', image: '/cardholder-yellow.png', label: 'Card Holder' },
-            { id: 'g4', image: '/keychain-strap-blue.png', label: 'Blue Keychain' },
-            { id: 'g5', image: '/keychain-strap-purple.png', label: 'Purple Keychain' },
+            { id: 'g1', image: '/hero/tote-bag.png', label: 'Custom Tote Bag' },
+            { id: 'g2', image: '/hero/pouch.png', label: 'Designer Pouch' },
+            { id: 'g3', image: '/hero/keychain-white.png', label: 'White Keychain' },
+            { id: 'g4', image: '/hero/keychain-blue.png', label: 'Blue Keychain' },
+            { id: 'g5', image: '/hero/strawberry.png', label: 'Strawberry Patch' },
           ],
         },
       },
@@ -1116,7 +1116,7 @@ function AppContent() {
     footer: {
       brandName: 'Patchuu',
       tagline: 'Create your own unique accessories!',
-      copyright: '© 2025 Patchuu. Made with 💕 in Seoul',
+      copyright: '© 2025 Patchuu. Made with 💕 in Singapore',
       instagramUrl: '#',
       facebookUrl: '#',
       twitterUrl: '#',

@@ -87,14 +87,14 @@ function HowItWorksSection({ section }: { section: PageSection }) {
                                             {step.image ? (
                                                 <img src={getResizedImageUrl(fixImagePath(step.image), 160)} alt={step.title} className="w-20 h-20 object-contain group-hover:scale-110 group-hover:rotate-3 transition-all duration-300" loading="lazy" decoding="async" />
                                             ) : step.emoji === '🔥' ? (
-                                                <img src="/pouch-beige.png" alt="Heat Press" className="w-20 h-20 object-contain group-hover:scale-110 group-hover:rotate-3 transition-all duration-300" loading="lazy" decoding="async" />
+                                                <img src="/hero/pouch.png" alt="Heat Press" className="w-20 h-20 object-contain group-hover:scale-110 group-hover:rotate-3 transition-all duration-300" loading="lazy" decoding="async" />
                                             ) : step.emoji ? (
                                                 <span className="text-5xl group-hover:scale-110 transition-transform">{step.emoji}</span>
                                             ) : (
                                                 <div className="flex gap-2 items-center">
-                                                    <img src="/patch-strawberry.png" alt="" className="w-10 h-10 object-contain group-hover:scale-110 transition-transform duration-300" loading="lazy" decoding="async" />
-                                                    <img src="/patch-watermelon.png" alt="" className="w-10 h-10 object-contain group-hover:scale-110 transition-transform duration-300 delay-75" loading="lazy" decoding="async" />
-                                                    <img src="/patch-cherry.png" alt="" className="w-10 h-10 object-contain group-hover:scale-110 transition-transform duration-300 delay-150" loading="lazy" decoding="async" />
+                                                    <img src="/hero/strawberry.png" alt="" className="w-10 h-10 object-contain group-hover:scale-110 transition-transform duration-300" loading="lazy" decoding="async" />
+                                                    <img src="/hero/flower.png" alt="" className="w-10 h-10 object-contain group-hover:scale-110 transition-transform duration-300 delay-75" loading="lazy" decoding="async" />
+                                                    <img src="/hero/blue-heart.png" alt="" className="w-10 h-10 object-contain group-hover:scale-110 transition-transform duration-300 delay-150" loading="lazy" decoding="async" />
                                                 </div>
                                             )}
                                         </div>
