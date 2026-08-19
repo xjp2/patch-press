@@ -224,6 +224,8 @@ resilience and fast recovery, but normal customer traffic never sees stale cache
 
 After admin changes, call `clearCmsCache()` and dispatch `window.dispatchEvent(new Event('cms-updated'))` to trigger a fresh load in `App.tsx`.
 
+There are **no hardcoded product/patch fallbacks** in `App.tsx` — catalog state starts empty and is populated from Supabase only (the old `initialProducts`/`initialPatches` constants were removed). When the DB answers, its result is trusted even if empty, so admin deletions propagate. The admin panel is gated in `App.tsx`: it renders a loading screen while `isDataLoading`, and is disabled with a retry button when the DB load failed (`dataLoadError`) — this prevents `handleSaveProducts`/`handleSavePatches` (which upsert the current list and **delete any DB rows not in it**) from wiping the catalog off an unloaded or failed state. `CustomizePage` assumes at least one product (`useState(products[0])`), so `App.tsx` renders an empty-store notice instead when the catalog is empty.
+
 ### Image Strategy
 - **Default/legacy assets** (root-level `/patch-*.png`, `/tote-bag.png`, `/hero/*`, etc.) are stored in `public/` and optimized to WebP/AVIF at build time via `scripts/optimize-images.ts`.
 - **Admin-uploaded product/patch images** are kept in Supabase Storage and fetched at runtime from `https://*.supabase.co`. They are **not** copied to `public/`.

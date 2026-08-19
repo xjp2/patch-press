@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { LogOut, Settings, User, ShoppingCart, X, Plus, Minus, Trash2, ChevronDown, ChevronUp, Package, Loader2, Menu, Truck } from 'lucide-react';
+import { LogOut, Settings, User, ShoppingCart, X, Plus, Minus, Trash2, ChevronDown, ChevronUp, Package, Loader2, Menu, Truck, AlertCircle } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import './App.css';
 import { AuthModal } from './AuthModal';
@@ -31,60 +31,6 @@ import { SHIPPING_COUNTRIES, DEFAULT_SHIPPING_COUNTRY, getShippingZone, getShipp
 
 type AppView = 'landing' | 'customize' | 'order-detail' | 'admin' | 'privacy' | 'terms' | 'refund' | 'shipping';
 
-
-const initialPatches: Patch[] = [
-  { id: '1', name: 'Fried Egg', category: 'food', image: '/patch-egg.png', price: 3, quantity: 50, width: 80, height: 80 },
-  { id: '2', name: 'Burger', category: 'food', image: '/patch-burger.png', price: 4, quantity: 50, width: 90, height: 90 },
-  { id: '3', name: 'Fries', category: 'food', image: '/patch-fries.png', price: 3, quantity: 50, width: 70, height: 90 },
-  { id: '11', name: 'Beer', category: 'food', image: '/patch-beer.png', price: 3, quantity: 50, width: 50, height: 90 },
-  { id: '15', name: 'Ice Cream', category: 'food', image: '/patch-icecream.png', price: 3, quantity: 50, width: 60, height: 100 },
-  { id: '16', name: 'Watermelon', category: 'food', image: '/patch-watermelon.png', price: 3, quantity: 50, width: 90, height: 70 },
-  { id: '17', name: 'Pizza', category: 'food', image: '/patch-pizza.png', price: 3, quantity: 50, width: 90, height: 90 },
-  { id: '19', name: 'Strawberry', category: 'food', image: '/patch-strawberry.png', price: 3, quantity: 50, width: 70, height: 80 },
-  { id: '20', name: 'Banana', category: 'food', image: '/patch-banana.png', price: 3, quantity: 50, width: 80, height: 70 },
-  { id: '21', name: 'Donut', category: 'food', image: '/patch-donut.png', price: 3, quantity: 50, width: 80, height: 80 },
-  { id: '22', name: 'Croissant', category: 'food', image: '/patch-croissant.png', price: 3, quantity: 50, width: 90, height: 70 },
-  { id: '23', name: 'Cupcake', category: 'food', image: '/patch-cupcake.png', price: 3, quantity: 50, width: 70, height: 90 },
-  { id: '24', name: 'Boba Tea', category: 'food', image: '/patch-boba.png', price: 4, quantity: 50, width: 60, height: 100 },
-  { id: '25', name: 'Coffee', category: 'food', image: '/patch-coffee.png', price: 3, quantity: 50, width: 70, height: 90 },
-  { id: '26', name: 'Milk', category: 'food', image: '/patch-milk.png', price: 3, quantity: 50, width: 60, height: 90 },
-  { id: '27', name: 'Lemon', category: 'food', image: '/patch-lemon.png', price: 3, quantity: 50, width: 80, height: 70 },
-  { id: '28', name: 'Peach', category: 'food', image: '/patch-peach.png', price: 3, quantity: 50, width: 80, height: 80 },
-  { id: '29', name: 'Cherry', category: 'food', image: '/patch-cherry.png', price: 3, quantity: 50, width: 80, height: 80 },
-  { id: '7', name: 'Cat', category: 'characters', image: '/patch-cat.png', price: 4, quantity: 50, width: 90, height: 90 },
-  { id: '8', name: 'Dog', category: 'characters', image: '/patch-dog.png', price: 4, quantity: 50, width: 90, height: 90 },
-  { id: '14', name: 'Bear', category: 'characters', image: '/patch-bear.png', price: 4, quantity: 50, width: 90, height: 90 },
-  { id: '18', name: 'Cactus', category: 'characters', image: '/patch-cactus.png', price: 4, quantity: 50, width: 70, height: 100 },
-  { id: '30', name: 'Panda', category: 'characters', image: '/patch-panda.png', price: 4, quantity: 50, width: 90, height: 90 },
-  { id: '31', name: 'Rabbit', category: 'characters', image: '/patch-rabbit.png', price: 4, quantity: 50, width: 80, height: 100 },
-  { id: '32', name: 'Hamster', category: 'characters', image: '/patch-hamster.png', price: 4, quantity: 50, width: 90, height: 90 },
-  { id: '33', name: 'Penguin', category: 'characters', image: '/patch-penguin.png', price: 4, quantity: 50, width: 70, height: 100 },
-  { id: '34', name: 'Chick', category: 'characters', image: '/patch-chick.png', price: 4, quantity: 50, width: 80, height: 90 },
-  { id: '9', name: 'Letter S', category: 'letters', image: '/patch-letter-s.png', price: 2, quantity: 50, width: 70, height: 90 },
-  { id: '10', name: 'Letter J', category: 'letters', image: '/patch-letter-j.png', price: 2, quantity: 50, width: 70, height: 90 },
-  { id: '4', name: 'Pink Bow', category: 'symbols', image: '/patch-bow.png', price: 2, quantity: 50, width: 90, height: 70 },
-  { id: '5', name: 'Rainbow', category: 'symbols', image: '/patch-rainbow.png', price: 3, quantity: 50, width: 100, height: 70 },
-  { id: '6', name: 'Heart', category: 'symbols', image: '/patch-heart.png', price: 2, quantity: 50, width: 80, height: 80 },
-  { id: '12', name: 'Car', category: 'symbols', image: '/patch-car.png', price: 4, quantity: 50, width: 100, height: 70 },
-  { id: '13', name: 'Star', category: 'symbols', image: '/patch-star.png', price: 2, quantity: 50, width: 90, height: 90 },
-  { id: '35', name: 'Flower', category: 'symbols', image: '/patch-flower.png', price: 3, quantity: 50, width: 80, height: 80 },
-  { id: '36', name: 'Sunflower', category: 'symbols', image: '/patch-sunflower.png', price: 3, quantity: 50, width: 90, height: 90 },
-  { id: '37', name: 'Tulip', category: 'symbols', image: '/patch-tulip.png', price: 3, quantity: 50, width: 70, height: 90 },
-  { id: '38', name: 'Clover', category: 'symbols', image: '/patch-clover.png', price: 2, quantity: 50, width: 80, height: 80 },
-  { id: '39', name: 'Butterfly', category: 'symbols', image: '/patch-butterfly.png', price: 3, quantity: 50, width: 100, height: 80 },
-  { id: '40', name: 'Bee', category: 'symbols', image: '/patch-bee.png', price: 3, quantity: 50, width: 90, height: 80 },
-  { id: '41', name: 'Music Note', category: 'symbols', image: '/patch-music.png', price: 2, quantity: 50, width: 60, height: 90 },
-  { id: '42', name: 'Lightning', category: 'symbols', image: '/patch-lightning.png', price: 2, quantity: 50, width: 60, height: 100 },
-];
-
-const initialProducts: Product[] = [
-  { id: 'tote', name: 'Canvas Tote', frontImage: '/tote-bag.png', backImage: '/tote-bag.png', basePrice: 25, quantity: 10, width: 400, height: 500, placementZone: { x: 15, y: 25, width: 70, height: 60, type: 'rectangle' } },
-  { id: 'keychain-blue', name: 'Blue Keychain', frontImage: '/keychain-strap-blue.png', backImage: '/keychain-strap-blue.png', basePrice: 12, quantity: 20, width: 300, height: 100, placementZone: { x: 10, y: 20, width: 80, height: 60, type: 'rectangle' } },
-  { id: 'keychain-purple', name: 'Purple Keychain', frontImage: '/keychain-strap-purple.png', backImage: '/keychain-strap-purple.png', basePrice: 12, quantity: 20, width: 300, height: 100, placementZone: { x: 10, y: 20, width: 80, height: 60, type: 'rectangle' } },
-  { id: 'keychain-white', name: 'White Keychain', frontImage: '/keychain-strap-white.png', backImage: '/keychain-strap-white.png', basePrice: 12, quantity: 20, width: 300, height: 100, placementZone: { x: 10, y: 20, width: 80, height: 60, type: 'rectangle' } },
-  { id: 'pouch', name: 'Beige Pouch', frontImage: '/pouch-beige.png', backImage: '/pouch-beige.png', basePrice: 18, quantity: 15, width: 350, height: 250, placementZone: { x: 15, y: 20, width: 70, height: 65, type: 'rectangle' } },
-  { id: 'cardholder', name: 'Cardholder', frontImage: '/cardholder-yellow.png', backImage: '/cardholder-yellow.png', basePrice: 15, quantity: 15, width: 300, height: 200, placementZone: { x: 10, y: 15, width: 80, height: 70, type: 'rectangle' } },
-];
 
 // Cart Item Component with expandable details
 function CartItemCard({ item, updateQuantity, removeItem, products, patches }: { 
@@ -1114,8 +1060,11 @@ function AppContent() {
   const [showUserOrders, setShowUserOrders] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
-  const [products, setProducts] = useState<Product[]>(initialProducts);
-  const [patches, setPatches] = useState<Patch[]>(initialPatches);
+  // Catalog starts empty and is populated from Supabase only — no static
+  // fallback products/patches, so the storefront and admin panel never show
+  // or sell items that don't exist in the DB.
+  const [products, setProducts] = useState<Product[]>([]);
+  const [patches, setPatches] = useState<Patch[]>([]);
 
   const { totalItems, setIsCartOpen } = useCart();
   const { trackPageView } = useAnalytics();
@@ -1249,8 +1198,10 @@ function AppContent() {
           setDataLoadError(true);
         }
 
-        // Process and set products
-        if (prods && prods.length > 0) {
+        // Process and set products. When the DB answered (not a fallback),
+        // trust it even if empty — an empty catalog is a valid state and
+        // must clear any previously loaded items.
+        if (!fromFallback && prods) {
           const frontendProducts = prods.map((p: DbProduct) => ({
             id: p.id,
             name: p.name,
@@ -1267,7 +1218,7 @@ function AppContent() {
         }
 
         // Process and set patches
-        if (patcs && patcs.length > 0) {
+        if (!fromFallback && patcs) {
           const frontendPatches = patcs.map((p: DbPatch) => ({
             id: p.id,
             name: p.name,
@@ -1606,15 +1557,18 @@ function AppContent() {
       
       // Reload all data with forceRefresh=true to bypass static files
       // This ensures localhost and Vercel see the same content
-      const { siteContent: sc, products: prods, patches: patcs } = await Promise.race([
+      const { siteContent: sc, products: prods, patches: patcs, fromFallback } = await Promise.race([
         preloadCmsData(true),
         new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error('CMS refresh timeout')), 10000)
         ),
       ]);
 
-      // Update products
-      if (prods && prods.length > 0) {
+      setDataLoadError(!!fromFallback);
+
+      // Update products. Trust the DB answer even when it is empty so admin
+      // deletions propagate; only keep stale data on fallback.
+      if (!fromFallback && prods) {
         const frontendProducts = prods.map((p: DbProduct) => ({
           id: p.id,
           name: p.name,
@@ -1631,7 +1585,7 @@ function AppContent() {
       }
 
       // Update patches
-      if (patcs && patcs.length > 0) {
+      if (!fromFallback && patcs) {
         const frontendPatches = patcs.map((p: DbPatch) => ({
           id: p.id,
           name: p.name,
@@ -1861,7 +1815,24 @@ function AppContent() {
             />
           </div>
         )}
-        {currentView === 'customize' && (
+        {currentView === 'customize' && products.length === 0 && !isDataLoading && (
+          // Empty catalog (or nothing published yet) — CustomizePage assumes
+          // at least one product exists, so don't render it without one.
+          <div className="min-h-screen bg-paper flex items-center justify-center px-4">
+            <div className="bg-cardstock rounded-2xl p-8 shadow-paper max-w-md w-full text-center">
+              <Package className="w-10 h-10 text-ink/20 mx-auto mb-4" />
+              <h2 className="text-xl font-bold text-ink mb-2">No products available</h2>
+              <p className="text-ink-muted mb-6">There are no products in the store right now. Please check back soon.</p>
+              <button
+                onClick={() => setCurrentView('landing')}
+                className="px-6 py-2.5 bg-ink text-white rounded-xl font-semibold hover:bg-ink/90 transition-colors"
+              >
+                Back to Home
+              </button>
+            </div>
+          </div>
+        )}
+        {currentView === 'customize' && products.length > 0 && (
           <CustomizePage
             products={products}
             patches={patches}
@@ -1878,7 +1849,35 @@ function AppContent() {
             }}
           />
         )}
-        {currentView === 'admin' && currentUser?.role === 'admin' && (
+        {currentView === 'admin' && currentUser?.role === 'admin' && (isDataLoading || dataLoadError) && (
+          // Never let the admin panel render (and especially save) a catalog
+          // that didn't come from the DB — saving an unloaded/failed state
+          // would wipe or clobber the products and patches tables.
+          <div className="min-h-screen bg-paper flex items-center justify-center px-4">
+            <div className="bg-cardstock rounded-2xl p-8 shadow-paper max-w-md w-full text-center">
+              {isDataLoading ? (
+                <>
+                  <Loader2 className="w-8 h-8 animate-spin text-craft-mint mx-auto mb-4" />
+                  <h2 className="text-xl font-bold text-ink mb-2">Loading store data…</h2>
+                  <p className="text-ink-muted">Fetching the latest products, patches and content from the database.</p>
+                </>
+              ) : (
+                <>
+                  <AlertCircle className="w-8 h-8 text-craft-rose mx-auto mb-4" />
+                  <h2 className="text-xl font-bold text-ink mb-2">Couldn't load store data</h2>
+                  <p className="text-ink-muted mb-6">The admin panel is disabled until the database is reachable, to protect your catalog from accidental overwrites.</p>
+                  <button
+                    onClick={() => { setDataLoadError(false); setIsDataLoading(true); refreshCmsData(); }}
+                    className="px-6 py-2.5 bg-ink text-white rounded-xl font-semibold hover:bg-ink/90 transition-colors"
+                  >
+                    Retry
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+        {currentView === 'admin' && currentUser?.role === 'admin' && !isDataLoading && !dataLoadError && (
           <div className="min-h-screen bg-gray-50">
             <AdminPanel
               showAdmin={true}
