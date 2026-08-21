@@ -35,6 +35,14 @@ export interface CartItem {
     height?: number;
     points?: { x: number; y: number }[];
   };
+  cropZone?: {
+    type: 'rectangle' | 'polygon';
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+    points?: { x: number; y: number }[];
+  };
   width?: number;
   height?: number;
 }
@@ -224,16 +232,17 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             quantity: item.quantity,
             design_image: item.designImage,
             placement_zone: item.placementZone,
+            crop_zone: item.cropZone,
             updated_at: new Date().toISOString()
           }));
           
           console.log('🛒 Cart: Upserting items:', dbItems.length);
           let { error } = await db.cart.upsert(dbItems);
           
-          // If placement_zone column doesn't exist, retry without it
-          if (error && error.message?.includes('placement_zone')) {
-            console.log('🛒 Cart: placement_zone column missing, retrying without it');
-            const dbItemsWithoutZone = dbItems.map(({ placement_zone, ...rest }) => rest);
+          // If zone columns don't exist, retry without them
+          if (error && (error.message?.includes('placement_zone') || error.message?.includes('crop_zone'))) {
+            console.log('🛒 Cart: zone column missing, retrying without zones');
+            const dbItemsWithoutZone = dbItems.map(({ placement_zone, crop_zone, ...rest }) => rest);
             const result = await db.cart.upsert(dbItemsWithoutZone);
             error = result.error;
           }
@@ -307,6 +316,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             designImage: row.design_image,
             name: row.product_name,
             placementZone: localItem?.placementZone,
+            cropZone: localItem?.cropZone,
             width: localItem?.width,
             height: localItem?.height,
           };
@@ -360,6 +370,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         designImage: row.design_image,
         name: row.product_name,
         placementZone: row.placement_zone,
+        cropZone: row.crop_zone,
       }));
 
       console.log('🛒 Cart: Cloud items:', cloudItems.length);
@@ -406,12 +417,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         quantity: item.quantity,
         design_image: item.designImage,
         placement_zone: item.placementZone,
+        crop_zone: item.cropZone,
         updated_at: new Date().toISOString()
       }));
       
       let { error: upsertError } = await db.cart.upsert(dbItems);
-      if (upsertError && upsertError.message?.includes('placement_zone')) {
-        const dbItemsWithoutZone = dbItems.map(({ placement_zone, ...rest }) => rest);
+      if (upsertError && (upsertError.message?.includes('placement_zone') || upsertError.message?.includes('crop_zone'))) {
+        const dbItemsWithoutZone = dbItems.map(({ placement_zone, crop_zone, ...rest }) => rest);
         const result = await db.cart.upsert(dbItemsWithoutZone);
         upsertError = result.error;
       }

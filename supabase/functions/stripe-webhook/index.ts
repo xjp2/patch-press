@@ -255,6 +255,7 @@ function buildOrderItemsJson(items: any[], currency: string, rate: number): any[
     productImage: item.productImage,
     productBackImage: item.productBackImage,
     placementZone: item.placementZone,
+    cropZone: item.cropZone,
     productWidth: item.width,
     productHeight: item.height,
     frontPatches: (item.frontPatches || []).map((p: any) => ({

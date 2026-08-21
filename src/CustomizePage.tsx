@@ -415,6 +415,7 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
             })),
             totalPrice: totalPrice,
             placementZone: selectedProduct.placementZone,
+            cropZone: selectedProduct.cropZone,
             width: selectedProduct.width,
             height: selectedProduct.height,
             designImage: undefined // Could generate preview image here

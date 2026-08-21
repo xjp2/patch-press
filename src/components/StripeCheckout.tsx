@@ -434,6 +434,7 @@ export function StripeCheckout({
                 productImage: item.productImage,
                 productBackImage: item.productBackImage,
                 placementZone: item.placementZone,
+                cropZone: item.cropZone,
                 width: item.width,
                 height: item.height,
                 frontPatches: item.frontPatches || [],

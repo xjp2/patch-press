@@ -264,6 +264,70 @@ export function ProductCapture({ onCaptured, onCancel }: ProductCaptureProps) {
     []
   );
 
+  // After manual touch-up, re-crop to the opaque content so the product is
+  // zoomed-in consistently with the auto-removal path.
+  const retrimToOpaque = useCallback(
+    async (imageUrl: string, padding: number = 6): Promise<{ blob: Blob; url: string; rawUrl: string; bbox: { x: number; y: number; w: number; h: number } } | null> => {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          const w = img.naturalWidth;
+          const h = img.naturalHeight;
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return resolve(null);
+          ctx.drawImage(img, 0, 0);
+          const imageData = ctx.getImageData(0, 0, w, h);
+          const data = imageData.data;
+
+          let minX = w, minY = h, maxX = 0, maxY = 0;
+          for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+              const i = (y * w + x) * 4;
+              if (data[i + 3] > 20) {
+                if (x < minX) minX = x;
+                if (x > maxX) maxX = x;
+                if (y < minY) minY = y;
+                if (y > maxY) maxY = y;
+              }
+            }
+          }
+          if (minX > maxX || minY > maxY) return resolve(null);
+
+          const cropMinX = Math.max(0, minX - padding);
+          const cropMinY = Math.max(0, minY - padding);
+          const cropMaxX = Math.min(w, maxX + 1 + padding);
+          const cropMaxY = Math.min(h, maxY + 1 + padding);
+          const cropW = cropMaxX - cropMinX;
+          const cropH = cropMaxY - cropMinY;
+
+          const out = document.createElement('canvas');
+          out.width = cropW;
+          out.height = cropH;
+          const octx = out.getContext('2d');
+          if (!octx) return resolve(null);
+          octx.drawImage(img, cropMinX, cropMinY, cropW, cropH, 0, 0, cropW, cropH);
+
+          out.toBlob((blob) => {
+            if (!blob) return resolve(null);
+            resolve({
+              blob,
+              url: URL.createObjectURL(blob),
+              rawUrl: URL.createObjectURL(blob),
+              bbox: { x: cropMinX, y: cropMinY, w: cropW, h: cropH },
+            });
+          }, 'image/png');
+        };
+        img.onerror = () => resolve(null);
+        img.src = imageUrl;
+      });
+    },
+    []
+  );
+
   const applyResult = useCallback(
     async (result: { blob: Blob; url: string; rawUrl: string; bbox: { x: number; y: number; w: number; h: number } } | null, rawUrl: string, rawWidth: number, rawHeight: number) => {
       if (result) {
@@ -1090,14 +1154,30 @@ export function ProductCapture({ onCaptured, onCancel }: ProductCaptureProps) {
           imageUrl={processedUrl}
           originalUrl={rawProcessedUrl || undefined}
           title="Touch Up Product Edges"
-          onSave={(blob, url) => {
+          onSave={async (blob, url) => {
             if (processedUrl !== capturedUrl && processedUrl.startsWith('blob:')) URL.revokeObjectURL(processedUrl);
             if (processedBaseUrl && processedBaseUrl !== capturedUrl && processedBaseUrl !== processedUrl && processedBaseUrl.startsWith('blob:')) URL.revokeObjectURL(processedBaseUrl);
-            setProcessedUrl(url);
-            setProcessedBaseUrl(url);
-            setBaseBlob(blob);
+            const trimmed = await retrimToOpaque(url);
+            if (trimmed) {
+              setProcessedUrl(trimmed.url);
+              setProcessedBaseUrl(trimmed.url);
+              setBaseBlob(trimmed.blob);
+              setRawProcessedUrl(trimmed.rawUrl);
+              setCroppedBlob(trimmed.blob);
+              if (step === 'front' && calibration) {
+                setWidthMm(String(Math.round(trimmed.bbox.w / calibration.pixelsPerMm)));
+                setHeightMm(String(Math.round(trimmed.bbox.h / calibration.pixelsPerMm)));
+              } else if (step === 'front') {
+                setWidthMm(String(trimmed.bbox.w));
+                setHeightMm(String(trimmed.bbox.h));
+              }
+            } else {
+              setProcessedUrl(url);
+              setProcessedBaseUrl(url);
+              setBaseBlob(blob);
+              setCroppedBlob(blob);
+            }
             resetAdjustments();
-            setCroppedBlob(blob);
             setShowMaskEditor(false);
           }}
           onCancel={() => setShowMaskEditor(false)}

@@ -77,7 +77,7 @@ function CartItemCard({ item, updateQuantity, removeItem, products, patches }: {
         {/* Product Preview Image — measures actual image, matches ProductCard */}
         <CroppedThumbnail
           src={fixImagePath(item.productImage) || '/hero/tote-bag.png'}
-          zone={item.placementZone}
+          zone={item.cropZone || item.placementZone}
           className="w-20 h-20 bg-cardstock rounded-lg border border-ink/10 flex-shrink-0"
           alt={item.productName}
         />
@@ -398,7 +398,8 @@ function CartDrawer({ currentUser, setShowAuth, setAuthView, products, patches }
           patches: [...(i.frontPatches || []), ...(i.backPatches || [])].map(p => ({ name: p.name, image: p.image, price: p.price })), 
           qty: i.quantity, 
           productImage: i.productImage,
-          placementZone: i.placementZone
+          placementZone: i.placementZone,
+          cropZone: i.cropZone
         }))}
         totalAmount={orderSummary.totalPrice}
         deliveryEstimate={shippingZone.estimate}

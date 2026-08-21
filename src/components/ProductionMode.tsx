@@ -46,6 +46,14 @@ interface OrderItem {
     height?: number;
     points?: { x: number; y: number }[];
   };
+  cropZone?: {
+    type: 'rectangle' | 'polygon';
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+    points?: { x: number; y: number }[];
+  };
 }
 
 interface ShippingAddress {
@@ -179,9 +187,10 @@ export function ProductionMode({
   // Real-world dimensions for this item (width/height are stored in mm)
   const productWidthCm = (currentItem?.productWidth || 400) / 10;
   const productHeightCm = (currentItem?.productHeight || 500) / 10;
+  const displayZone = currentItem?.cropZone || currentItem?.placementZone || { x: 0, y: 0, width: 100, height: 100, type: 'rectangle' };
   const placementZone = currentItem?.placementZone || { x: 0, y: 0, width: 100, height: 100, type: 'rectangle' };
   const hasDimensions = !!(currentItem?.productWidth && currentItem?.productHeight);
-  const { transform: cropTransform } = getClipAndCenter(placementZone);
+  const { transform: cropTransform } = getClipAndCenter(displayZone);
 
   // Measure the rendered product image so overlays match the visible product
   useEffect(() => {
@@ -341,7 +350,7 @@ export function ProductionMode({
                   <CroppedProductImage
                     src={displayImage}
                     alt={currentItem?.name}
-                    zone={placementZone}
+                    zone={displayZone}
                     className="max-w-full max-h-[70vh] object-contain"
                   />
 

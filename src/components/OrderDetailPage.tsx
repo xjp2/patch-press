@@ -45,6 +45,14 @@ interface OrderItem {
     height?: number;
     points?: { x: number; y: number }[];
   };
+  cropZone?: {
+    type: 'rectangle' | 'polygon';
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+    points?: { x: number; y: number }[];
+  };
   productWidth?: number;
   productHeight?: number;
 }
@@ -398,7 +406,7 @@ export function OrderDetailPage({ orderId, onBack }: OrderDetailPageProps) {
                               <DesignPreview
                                 productImage={item.front_image || item.productImage || '/placeholder-product.png'}
                                 patches={item.frontPatches || []}
-                                placementZone={item.placementZone}
+                                placementZone={item.cropZone || item.placementZone}
                                 maxWidth={400}
                               />
                               {/* Patch count badge */}
@@ -417,7 +425,7 @@ export function OrderDetailPage({ orderId, onBack }: OrderDetailPageProps) {
                               <DesignPreview
                                 productImage={item.back_image || item.productBackImage || item.productImage || '/placeholder-product.png'}
                                 patches={item.backPatches || []}
-                                placementZone={item.placementZone}
+                                placementZone={item.cropZone || item.placementZone}
                                 maxWidth={400}
                               />
                               {/* Patch count badge */}

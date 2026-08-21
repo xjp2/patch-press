@@ -1394,26 +1394,29 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                                     <input
                                                         type="number"
                                                         min="1"
+                                                        step="1"
                                                         value={patch.width ?? ''}
                                                         onChange={(e) => {
-                                                            const v = Number(e.target.value);
-                                                            setPatches(patches.map(p => p.id === patch.id ? { ...p, width: v } : p));
+                                                            const v = parseInt(e.target.value, 10);
+                                                            setPatches(patches.map(p => p.id === patch.id ? { ...p, width: isNaN(v) ? 0 : v } : p));
                                                         }}
                                                         title="Width (mm)"
-                                                        className="w-12 px-1 py-0.5 text-[10px] text-center rounded border border-transparent hover:border-ink/10 focus:border-craft-mint focus:outline-none bg-transparent text-ink/60"
+                                                        className="w-12 px-1 py-0.5 text-[10px] text-center rounded border border-ink/20 hover:border-ink/40 focus:border-craft-mint focus:outline-none bg-paper/50 text-ink"
                                                     />
                                                     <span className="text-[10px] text-ink/40">×</span>
                                                     <input
                                                         type="number"
                                                         min="1"
+                                                        step="1"
                                                         value={patch.height ?? ''}
                                                         onChange={(e) => {
-                                                            const v = Number(e.target.value);
-                                                            setPatches(patches.map(p => p.id === patch.id ? { ...p, height: v } : p));
+                                                            const v = parseInt(e.target.value, 10);
+                                                            setPatches(patches.map(p => p.id === patch.id ? { ...p, height: isNaN(v) ? 0 : v } : p));
                                                         }}
                                                         title="Height (mm)"
-                                                        className="w-12 px-1 py-0.5 text-[10px] text-center rounded border border-transparent hover:border-ink/10 focus:border-craft-mint focus:outline-none bg-transparent text-ink/60"
+                                                        className="w-12 px-1 py-0.5 text-[10px] text-center rounded border border-ink/20 hover:border-ink/40 focus:border-craft-mint focus:outline-none bg-paper/50 text-ink"
                                                     />
+                                                    <span className="text-[10px] text-ink/40">mm</span>
                                                 </div>
                                                 <p className={`text-[10px] ${(patch.quantity ?? 0) <= 10 ? 'text-craft-pink font-bold' : 'text-craft-mint'}`}>Stock: {patch.quantity ?? 0}</p>
 
@@ -1421,7 +1424,8 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                                 <div className="flex flex-col gap-1 mt-2">
                                                     <button
                                                         onClick={() => openExistingPatchSizer(patch.id)}
-                                                        className="flex items-center justify-center gap-1.5 px-2 py-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-[10px] font-semibold shadow-sm"
+                                                        className="flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] font-semibold shadow-sm text-white border border-[#1d4ed8]"
+                                                        style={{ backgroundColor: '#2563eb' }}
                                                         title="Edit Content Zone"
                                                     >
                                                         <Crop className="w-3.5 h-3.5" /> Edit Content Zone

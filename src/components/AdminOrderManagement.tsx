@@ -59,6 +59,14 @@ interface OrderItem {
     height?: number;
     points?: { x: number; y: number }[];
   };
+  cropZone?: {
+    type: 'rectangle' | 'polygon';
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+    points?: { x: number; y: number }[];
+  };
 }
 
 interface ShippingAddress {
@@ -111,6 +119,7 @@ export function AdminOrderManagement() {
     productWidthCm?: number;
     productHeightCm?: number;
     placementZone?: OrderItem['placementZone'];
+    cropZone?: OrderItem['cropZone'];
   } | null>(null);
 
   // Production mode state
@@ -353,7 +362,7 @@ export function AdminOrderManagement() {
       side,
       productWidthCm: item.productWidth ? item.productWidth / 10 : 40,
       productHeightCm: item.productHeight ? item.productHeight / 10 : 45,
-      placementZone: item.placementZone,
+      placementZone: item.cropZone || item.placementZone,
     });
   };
 
