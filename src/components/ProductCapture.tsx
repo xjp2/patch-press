@@ -1197,10 +1197,10 @@ export function ProductCapture({ onCaptured, onCancel }: ProductCaptureProps) {
         document.body
       )}
 
-      {showMaskEditor && processedUrl && createPortal(
+      {showMaskEditor && capturedUrl && createPortal(
         <MaskEditor
-          imageUrl={processedUrl}
-          originalUrl={rawProcessedUrl || undefined}
+          imageUrl={capturedUrl}
+          originalUrl={capturedUrl}
           title="Touch Up Product Edges"
           onSave={async (blob, url) => {
             if (processedUrl !== capturedUrl && processedUrl.startsWith('blob:')) URL.revokeObjectURL(processedUrl);
