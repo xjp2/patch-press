@@ -165,6 +165,40 @@ export function ProductCapture({ onCaptured, onCancel }: ProductCaptureProps) {
           // pixel-accurate keying mask for background removal
           const margin = 255 - thresholdValue;
           const detection = analyzeFrameLayered(data, w, h, margin);
+
+          // If background removal is disabled, keep the full image so the user can
+          // draw/erase the outline themselves. Still run white-balance on the full
+          // frame if a background was detected. The manual touch-up editor will trim
+          // to opaque pixels when the user saves.
+          if (!removeBg) {
+            if (detection.background) {
+              const bgMask = new Uint8Array(w * h);
+              let bgCount = 0;
+              for (let i = 0; i < w * h; i++) {
+                if (detection.background[i] === 1) {
+                  bgMask[i] = 1;
+                  bgCount++;
+                }
+              }
+              if (bgCount > 100) {
+                whiteBalanceFromBackground(imageData, bgMask);
+                fullCtx.putImageData(imageData, 0, 0);
+              }
+            }
+            enhanceCapture(imageData, 0.35, 0);
+            fullCtx.putImageData(imageData, 0, 0);
+            fullCanvas.toBlob((blob) => {
+              if (!blob) return resolve(null);
+              resolve({
+                blob,
+                url: URL.createObjectURL(blob),
+                rawUrl: URL.createObjectURL(blob),
+                bbox: { x: 0, y: 0, w, h },
+              });
+            }, 'image/png');
+            return;
+          }
+
           if (!detection.bbox) return resolve(null);
 
           const detMinX = detection.bbox.minX;
@@ -225,19 +259,17 @@ export function ProductCapture({ onCaptured, onCancel }: ProductCaptureProps) {
             rawCtx.putImageData(cropImageData, 0, 0);
           }
 
-          if (removeBg) {
-            for (let y = 0; y < cropH; y++) {
-              for (let x = 0; x < cropW; x++) {
-                const i = (y * cropW + x) * 4;
-                const isBgHere = detection.background[(y + minY) * w + (x + minX)] === 1;
-                if (cropData[i + 3] <= 20 || isBgHere) {
-                  cropData[i + 3] = 0;
-                }
+          for (let y = 0; y < cropH; y++) {
+            for (let x = 0; x < cropW; x++) {
+              const i = (y * cropW + x) * 4;
+              const isBgHere = detection.background[(y + minY) * w + (x + minX)] === 1;
+              if (cropData[i + 3] <= 20 || isBgHere) {
+                cropData[i + 3] = 0;
               }
             }
           }
 
-          enhanceCapture(cropImageData, 0.35, removeBg ? erodePx : 0);
+          enhanceCapture(cropImageData, 0.35, erodePx);
           cropCtx.putImageData(cropImageData, 0, 0);
 
           cropCanvas.toBlob((blob) => {
@@ -266,8 +298,9 @@ export function ProductCapture({ onCaptured, onCancel }: ProductCaptureProps) {
 
   // After manual touch-up, re-crop to the opaque content so the product is
   // zoomed-in consistently with the auto-removal path.
+  // `originalImageUrl` stays as the restore source (full/uncropped image).
   const retrimToOpaque = useCallback(
-    async (imageUrl: string, padding: number = 6): Promise<{ blob: Blob; url: string; rawUrl: string; bbox: { x: number; y: number; w: number; h: number } } | null> => {
+    async (imageUrl: string, originalImageUrl: string, padding: number = 6): Promise<{ blob: Blob; url: string; rawUrl: string; bbox: { x: number; y: number; w: number; h: number } } | null> => {
       return new Promise((resolve) => {
         const img = new Image();
         img.crossOrigin = 'anonymous';
@@ -311,15 +344,30 @@ export function ProductCapture({ onCaptured, onCancel }: ProductCaptureProps) {
           if (!octx) return resolve(null);
           octx.drawImage(img, cropMinX, cropMinY, cropW, cropH, 0, 0, cropW, cropH);
 
-          out.toBlob((blob) => {
-            if (!blob) return resolve(null);
-            resolve({
-              blob,
-              url: URL.createObjectURL(blob),
-              rawUrl: URL.createObjectURL(blob),
-              bbox: { x: cropMinX, y: cropMinY, w: cropW, h: cropH },
-            });
-          }, 'image/png');
+          const rawImg = new Image();
+          rawImg.crossOrigin = 'anonymous';
+          rawImg.onload = () => {
+            const rawOut = document.createElement('canvas');
+            rawOut.width = cropW;
+            rawOut.height = cropH;
+            const rctx = rawOut.getContext('2d');
+            if (!rctx) return resolve(null);
+            rctx.drawImage(rawImg, cropMinX, cropMinY, cropW, cropH, 0, 0, cropW, cropH);
+            rawOut.toBlob((rawBlob) => {
+              if (!rawBlob) return resolve(null);
+              out.toBlob((blob) => {
+                if (!blob) return resolve(null);
+                resolve({
+                  blob,
+                  url: URL.createObjectURL(blob),
+                  rawUrl: URL.createObjectURL(rawBlob),
+                  bbox: { x: cropMinX, y: cropMinY, w: cropW, h: cropH },
+                });
+              }, 'image/png');
+            }, 'image/png');
+          };
+          rawImg.onerror = () => resolve(null);
+          rawImg.src = originalImageUrl;
         };
         img.onerror = () => resolve(null);
         img.src = imageUrl;
@@ -1157,11 +1205,14 @@ export function ProductCapture({ onCaptured, onCancel }: ProductCaptureProps) {
           onSave={async (blob, url) => {
             if (processedUrl !== capturedUrl && processedUrl.startsWith('blob:')) URL.revokeObjectURL(processedUrl);
             if (processedBaseUrl && processedBaseUrl !== capturedUrl && processedBaseUrl !== processedUrl && processedBaseUrl.startsWith('blob:')) URL.revokeObjectURL(processedBaseUrl);
-            const trimmed = await retrimToOpaque(url);
+            // The uncropped captured frame is the authoritative restore source.
+            const originalSource = capturedUrl || rawProcessedUrl || url;
+            const trimmed = await retrimToOpaque(url, originalSource);
             if (trimmed) {
               setProcessedUrl(trimmed.url);
               setProcessedBaseUrl(trimmed.url);
               setBaseBlob(trimmed.blob);
+              // rawProcessedUrl stays as the full uncropped source so restore still works.
               setRawProcessedUrl(trimmed.rawUrl);
               setCroppedBlob(trimmed.blob);
               if (step === 'front' && calibration) {

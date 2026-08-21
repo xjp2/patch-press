@@ -260,8 +260,9 @@ export function PatchCapture({ onPatchSaved }: PatchCaptureProps) {
 
   // After manual touch-up, re-crop to the opaque content so the patch is
   // zoomed-in consistently with the auto-removal path.
+  // `originalImageUrl` stays as the restore source (full/uncropped image).
   const retrimToOpaque = useCallback(
-    async (imageUrl: string, padding: number = 6): Promise<{ blob: Blob; url: string; rawUrl: string; bbox: { x: number; y: number; w: number; h: number } } | null> => {
+    async (imageUrl: string, originalImageUrl: string, padding: number = 6): Promise<{ blob: Blob; url: string; rawUrl: string; bbox: { x: number; y: number; w: number; h: number } } | null> => {
       return new Promise((resolve) => {
         const img = new Image();
         img.crossOrigin = 'anonymous';
@@ -305,15 +306,30 @@ export function PatchCapture({ onPatchSaved }: PatchCaptureProps) {
           if (!octx) return resolve(null);
           octx.drawImage(img, cropMinX, cropMinY, cropW, cropH, 0, 0, cropW, cropH);
 
-          out.toBlob((blob) => {
-            if (!blob) return resolve(null);
-            resolve({
-              blob,
-              url: URL.createObjectURL(blob),
-              rawUrl: URL.createObjectURL(blob),
-              bbox: { x: cropMinX, y: cropMinY, w: cropW, h: cropH },
-            });
-          }, 'image/png');
+          const rawImg = new Image();
+          rawImg.crossOrigin = 'anonymous';
+          rawImg.onload = () => {
+            const rawOut = document.createElement('canvas');
+            rawOut.width = cropW;
+            rawOut.height = cropH;
+            const rctx = rawOut.getContext('2d');
+            if (!rctx) return resolve(null);
+            rctx.drawImage(rawImg, cropMinX, cropMinY, cropW, cropH, 0, 0, cropW, cropH);
+            rawOut.toBlob((rawBlob) => {
+              if (!rawBlob) return resolve(null);
+              out.toBlob((blob) => {
+                if (!blob) return resolve(null);
+                resolve({
+                  blob,
+                  url: URL.createObjectURL(blob),
+                  rawUrl: URL.createObjectURL(rawBlob),
+                  bbox: { x: cropMinX, y: cropMinY, w: cropW, h: cropH },
+                });
+              }, 'image/png');
+            }, 'image/png');
+          };
+          rawImg.onerror = () => resolve(null);
+          rawImg.src = originalImageUrl;
         };
         img.onerror = () => resolve(null);
         img.src = imageUrl;
@@ -1209,11 +1225,14 @@ export function PatchCapture({ onPatchSaved }: PatchCaptureProps) {
           onSave={async (blob, url) => {
             if (processedUrl !== capturedUrl && processedUrl.startsWith('blob:')) URL.revokeObjectURL(processedUrl);
             if (processedBaseUrl && processedBaseUrl !== capturedUrl && processedBaseUrl !== processedUrl && processedBaseUrl.startsWith('blob:')) URL.revokeObjectURL(processedBaseUrl);
-            const trimmed = await retrimToOpaque(url);
+            const originalSource = capturedUrl || rawProcessedUrl || url;
+            const trimmed = await retrimToOpaque(url, originalSource);
             if (trimmed) {
               setProcessedUrl(trimmed.url);
               setProcessedBaseUrl(trimmed.url);
               setBaseBlob(trimmed.blob);
+              // rawProcessedUrl stays as the uncropped source so restore still works.
+              setRawProcessedUrl(trimmed.rawUrl);
               setCroppedBlob(trimmed.blob);
               if (calibration) {
                 setWidth(String(Math.round(trimmed.bbox.w / calibration.pixelsPerMm)));
