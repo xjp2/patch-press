@@ -1250,6 +1250,8 @@ export function PatchCapture({ onPatchSaved }: PatchCaptureProps) {
         <MaskEditor
           imageUrl={maskEditorImageUrl}
           originalUrl={capturedUrl}
+          maskImageUrl={processedUrl || undefined}
+          maskBbox={cropBbox || undefined}
           title="Touch Up Patch Edges"
           onSave={async (blob, url) => {
             if (processedUrl !== capturedUrl && processedUrl.startsWith('blob:')) URL.revokeObjectURL(processedUrl);

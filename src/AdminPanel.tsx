@@ -1424,8 +1424,7 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                                 <div className="flex flex-col gap-1 mt-2">
                                                     <button
                                                         onClick={() => openExistingPatchSizer(patch.id)}
-                                                        className="flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] font-semibold shadow-sm text-white border border-[#1d4ed8]"
-                                                        style={{ backgroundColor: '#2563eb' }}
+                                                        className="flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] font-semibold shadow-sm text-white bg-[#2563eb] hover:bg-[#1d4ed8] border border-[#1d4ed8]"
                                                         title="Edit Content Zone"
                                                     >
                                                         <Crop className="w-3.5 h-3.5" /> Edit Content Zone

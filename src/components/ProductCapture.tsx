@@ -1231,6 +1231,8 @@ export function ProductCapture({ onCaptured, onCancel }: ProductCaptureProps) {
         <MaskEditor
           imageUrl={maskEditorImageUrl}
           originalUrl={capturedUrl}
+          maskImageUrl={processedUrl || undefined}
+          maskBbox={cropBbox || undefined}
           title="Touch Up Product Edges"
           onSave={async (blob, url) => {
             if (processedUrl !== capturedUrl && processedUrl.startsWith('blob:')) URL.revokeObjectURL(processedUrl);

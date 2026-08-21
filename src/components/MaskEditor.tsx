@@ -9,6 +9,13 @@ interface MaskEditorProps {
    *  `imageUrl` carry no usable colour of their own. Must have the same
    *  dimensions as imageUrl. Falls back to imageUrl when omitted. */
   originalUrl?: string;
+  /** Optional mask source. Its alpha channel is used to initialise the editor
+   *  mask instead of reading alpha from `imageUrl`. Use this when `imageUrl`
+   *  is a full-frame display image with an opaque background. */
+  maskImageUrl?: string;
+  /** Bounding box that tells us where `maskImageUrl` sits inside `imageUrl`.
+   *  If omitted, `maskImageUrl` is assumed to cover the whole image. */
+  maskBbox?: { x: number; y: number; w: number; h: number };
   title?: string;
   onSave: (blob: Blob, url: string) => void;
   onCancel: () => void;
@@ -23,7 +30,7 @@ type Pt = { x: number; y: number };
  * kept pixels) mode. The mask is a full-resolution canvas; the preview shows
  * the masked result over a faint copy of the original for context.
  */
-export function MaskEditor({ imageUrl, originalUrl, title = 'Touch Up Edges', onSave, onCancel }: MaskEditorProps) {
+export function MaskEditor({ imageUrl, originalUrl, maskImageUrl, maskBbox, title = 'Touch Up Edges', onSave, onCancel }: MaskEditorProps) {
   const displayRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const maskCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -115,25 +122,69 @@ export function MaskEditor({ imageUrl, originalUrl, title = 'Touch Up Edges', on
     }
   }, [rectPreview, polyPoints, cursor, mode]);
 
-  const initMask = useCallback((img: HTMLImageElement) => {
+  const initMask = useCallback((
+    img: HTMLImageElement,
+    maskSrc?: HTMLImageElement,
+    bbox?: { x: number; y: number; w: number; h: number }
+  ) => {
     const mask = document.createElement('canvas');
     mask.width = img.naturalWidth;
     mask.height = img.naturalHeight;
     const mctx = mask.getContext('2d');
     if (!mctx) return null;
-    const tmp = document.createElement('canvas');
-    tmp.width = img.naturalWidth;
-    tmp.height = img.naturalHeight;
-    const tctx = tmp.getContext('2d');
-    if (!tctx) return null;
-    tctx.drawImage(img, 0, 0);
-    const src = tctx.getImageData(0, 0, tmp.width, tmp.height);
-    const maskData = mctx.createImageData(tmp.width, tmp.height);
-    for (let i = 0; i < src.data.length; i += 4) {
-      const v = src.data[i + 3] > 128 ? 255 : 0;
-      maskData.data[i] = maskData.data[i + 1] = maskData.data[i + 2] = v;
+
+    const maskData = mctx.createImageData(mask.width, mask.height);
+    // Default to transparent (erased) outside the mask source area.
+    for (let i = 0; i < maskData.data.length; i += 4) {
+      maskData.data[i] = maskData.data[i + 1] = maskData.data[i + 2] = 0;
       maskData.data[i + 3] = 255;
     }
+
+    if (maskSrc) {
+      const tmp = document.createElement('canvas');
+      tmp.width = maskSrc.naturalWidth;
+      tmp.height = maskSrc.naturalHeight;
+      const tctx = tmp.getContext('2d');
+      if (!tctx) return null;
+      tctx.drawImage(maskSrc, 0, 0);
+      const src = tctx.getImageData(0, 0, tmp.width, tmp.height);
+
+      if (bbox) {
+        for (let y = 0; y < bbox.h; y++) {
+          for (let x = 0; x < bbox.w; x++) {
+            const srcX = Math.min(tmp.width - 1, Math.floor((x / bbox.w) * tmp.width));
+            const srcY = Math.min(tmp.height - 1, Math.floor((y / bbox.h) * tmp.height));
+            const srcI = (srcY * tmp.width + srcX) * 4;
+            const dstI = ((bbox.y + y) * mask.width + (bbox.x + x)) * 4;
+            const v = src.data[srcI + 3] > 128 ? 255 : 0;
+            maskData.data[dstI] = maskData.data[dstI + 1] = maskData.data[dstI + 2] = v;
+          }
+        }
+      } else {
+        // Assume maskSrc has the same dimensions as the display image.
+        for (let y = 0; y < mask.height; y++) {
+          for (let x = 0; x < mask.width; x++) {
+            const srcI = (y * mask.width + x) * 4;
+            const dstI = srcI;
+            const v = src.data[srcI + 3] > 128 ? 255 : 0;
+            maskData.data[dstI] = maskData.data[dstI + 1] = maskData.data[dstI + 2] = v;
+          }
+        }
+      }
+    } else {
+      const tmp = document.createElement('canvas');
+      tmp.width = img.naturalWidth;
+      tmp.height = img.naturalHeight;
+      const tctx = tmp.getContext('2d');
+      if (!tctx) return null;
+      tctx.drawImage(img, 0, 0);
+      const src = tctx.getImageData(0, 0, tmp.width, tmp.height);
+      for (let i = 0; i < src.data.length; i += 4) {
+        const v = src.data[i + 3] > 128 ? 255 : 0;
+        maskData.data[i] = maskData.data[i + 1] = maskData.data[i + 2] = v;
+      }
+    }
+
     mctx.putImageData(maskData, 0, 0);
     return mask;
   }, []);
@@ -148,11 +199,17 @@ export function MaskEditor({ imageUrl, originalUrl, title = 'Touch Up Edges', on
       try {
         const img = await loadImage(imageUrl);
         let orig: HTMLImageElement | null = null;
+        let maskImg: HTMLImageElement | null = null;
         if (originalUrl && originalUrl !== imageUrl) {
           try {
             const o = await loadImage(originalUrl);
             if (o.naturalWidth === img.naturalWidth && o.naturalHeight === img.naturalHeight) orig = o;
           } catch { /* fall back to imageUrl */ }
+        }
+        if (maskImageUrl && maskImageUrl !== imageUrl) {
+          try {
+            maskImg = await loadImage(maskImageUrl);
+          } catch { /* mask will fall back to imageUrl alpha */ }
         }
         if (cancelled) return;
         imgRef.current = img;
@@ -168,7 +225,7 @@ export function MaskEditor({ imageUrl, originalUrl, title = 'Touch Up Edges', on
         display.width = Math.max(1, Math.round(img.naturalWidth * scale));
         display.height = Math.max(1, Math.round(img.naturalHeight * scale));
 
-        const mask = initMask(img);
+        const mask = initMask(img, maskImg || undefined, maskBbox);
         if (!mask) return;
         maskCanvasRef.current = mask;
         setReady(true);
@@ -178,7 +235,7 @@ export function MaskEditor({ imageUrl, originalUrl, title = 'Touch Up Edges', on
       }
     })();
     return () => { cancelled = true; };
-  }, [imageUrl, originalUrl, redraw, initMask]);
+  }, [imageUrl, originalUrl, maskImageUrl, maskBbox, redraw, initMask]);
 
   const fillColor = () => (mode === 'restore' ? '#ffffff' : '#000000');
 
