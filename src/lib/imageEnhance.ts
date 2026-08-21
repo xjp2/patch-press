@@ -206,6 +206,38 @@ export interface ManualAdjustments {
   sharpen?: number;
 }
 
+/** Composite a trimmed/processed image (with transparency) back onto the full
+ *  captured frame at `bbox`. Returns a full-frame data URL that preserves erased
+ *  areas, so a mask editor can reopen the touch-up session at full resolution. */
+export function compositeProcessedOntoFullFrame(
+  capturedUrl: string,
+  processedUrl: string,
+  bbox: { x: number; y: number; w: number; h: number }
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const captured = new Image();
+    captured.crossOrigin = 'anonymous';
+    captured.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = captured.naturalWidth;
+      canvas.height = captured.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return reject(new Error('Could not get canvas context'));
+      ctx.drawImage(captured, 0, 0);
+      const processed = new Image();
+      processed.crossOrigin = 'anonymous';
+      processed.onload = () => {
+        ctx.drawImage(processed, bbox.x, bbox.y, bbox.w, bbox.h);
+        resolve(canvas.toDataURL('image/png'));
+      };
+      processed.onerror = reject;
+      processed.src = processedUrl;
+    };
+    captured.onerror = reject;
+    captured.src = capturedUrl;
+  });
+}
+
 /** One-pass manual adjustment (brightness → contrast → colour → sharpen). */
 export async function adjustImage(
   imageUrl: string,

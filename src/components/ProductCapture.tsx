@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Camera, RefreshCw, AlertCircle, Loader2, X, Crop, RotateCw, RotateCcw, Paintbrush, ZoomIn } from 'lucide-react';
 import { storage } from '../lib/supabase';
 import { analyzeFrameLayered } from '../lib/objectDetect';
-import { enhanceCapture, rotateImage90, whiteBalanceFromBackground, adjustImage } from '../lib/imageEnhance';
+import { enhanceCapture, rotateImage90, whiteBalanceFromBackground, adjustImage, compositeProcessedOntoFullFrame } from '../lib/imageEnhance';
 import { ImageTracer } from '../ImageTracer';
 import type { TracedZone } from '../ImageTracer';
 import { MaskEditor } from './MaskEditor';
@@ -52,6 +52,10 @@ export function ProductCapture({ onCaptured, onCancel }: ProductCaptureProps) {
   // absolute pixel scale (and therefore calibration) is unchanged at any zoom
   const [zoom, setZoom] = useState(1);
   const [showMaskEditor, setShowMaskEditor] = useState(false);
+  const [maskEditorImageUrl, setMaskEditorImageUrl] = useState('');
+  // Full-frame bbox of the trimmed processed image inside the captured frame.
+  // Preserved so the MaskEditor can reopen with previous erasures intact.
+  const [cropBbox, setCropBbox] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   // Unkeyed copy of the processed crop — restore source for the touch-up editor
   const [rawProcessedUrl, setRawProcessedUrl] = useState('');
   // Auto-processed base image + manual warmth/tint applied on top of it
@@ -394,6 +398,7 @@ export function ProductCapture({ onCaptured, onCancel }: ProductCaptureProps) {
           return result.rawUrl;
         });
         setCroppedBlob(result.blob);
+        setCropBbox(result.bbox);
         // Only the front capture defines the product's real-world size
         if (step === 'front') {
           if (calibration) {
@@ -414,6 +419,7 @@ export function ProductCapture({ onCaptured, onCancel }: ProductCaptureProps) {
         setBaseBlob(blob);
         resetAdjustments();
         setCroppedBlob(blob);
+        setCropBbox(null);
         if (step === 'front' && rawWidth > 0 && rawHeight > 0) {
           setWidthMm(String(rawWidth));
           setHeightMm(String(rawHeight));
@@ -447,6 +453,21 @@ export function ProductCapture({ onCaptured, onCancel }: ProductCaptureProps) {
       setProcessedUrl(adjusted.url);
       setCroppedBlob(adjusted.blob);
     }
+  };
+
+  const openMaskEditor = async () => {
+    if (!capturedUrl) return;
+    try {
+      if (cropBbox && processedUrl) {
+        const fullFrameUrl = await compositeProcessedOntoFullFrame(capturedUrl, processedUrl, cropBbox);
+        setMaskEditorImageUrl(fullFrameUrl);
+      } else {
+        setMaskEditorImageUrl(capturedUrl);
+      }
+    } catch {
+      setMaskEditorImageUrl(capturedUrl);
+    }
+    setShowMaskEditor(true);
   };
 
   // Capture the current video frame, cropping to the centre 1/zoom when zoomed.
@@ -634,6 +655,9 @@ export function ProductCapture({ onCaptured, onCancel }: ProductCaptureProps) {
     if (processedBaseUrl && processedBaseUrl !== capturedUrl && processedBaseUrl !== processedUrl && processedBaseUrl.startsWith('blob:')) {
       URL.revokeObjectURL(processedBaseUrl);
     }
+    if (maskEditorImageUrl && maskEditorImageUrl !== capturedUrl) {
+      URL.revokeObjectURL(maskEditorImageUrl);
+    }
     setCapturedUrl('');
     setProcessedUrl('');
     setRawProcessedUrl('');
@@ -641,6 +665,8 @@ export function ProductCapture({ onCaptured, onCancel }: ProductCaptureProps) {
     setBaseBlob(null);
     resetAdjustments();
     setCroppedBlob(null);
+    setCropBbox(null);
+    setMaskEditorImageUrl('');
   };
 
   // Rotate a captured front/back image by ±90°; front rotation swaps the mm measurements
@@ -675,6 +701,8 @@ export function ProductCapture({ onCaptured, onCancel }: ProductCaptureProps) {
       setProcessedUrl('');
     setRawProcessedUrl('');
       setCroppedBlob(null);
+      setCropBbox(null);
+      setMaskEditorImageUrl('');
       setStep('back-prompt');
     } else if (step === 'back') {
       setBackBlob(croppedBlob);
@@ -683,6 +711,8 @@ export function ProductCapture({ onCaptured, onCancel }: ProductCaptureProps) {
       setProcessedUrl('');
     setRawProcessedUrl('');
       setCroppedBlob(null);
+      setCropBbox(null);
+      setMaskEditorImageUrl('');
       setStep('details');
     }
   };
@@ -958,7 +988,7 @@ export function ProductCapture({ onCaptured, onCancel }: ProductCaptureProps) {
                 )}
                 {processedUrl && (
                   <button
-                    onClick={() => setShowMaskEditor(true)}
+                    onClick={openMaskEditor}
                     className="w-full px-3 py-2 rounded-xl text-sm font-semibold text-ink/70 bg-paper hover:bg-paper/70 transition-colors flex items-center justify-center gap-1.5"
                   >
                     <Paintbrush className="w-4 h-4" /> Touch Up Edges Manually
@@ -1197,9 +1227,9 @@ export function ProductCapture({ onCaptured, onCancel }: ProductCaptureProps) {
         document.body
       )}
 
-      {showMaskEditor && capturedUrl && createPortal(
+      {showMaskEditor && maskEditorImageUrl && createPortal(
         <MaskEditor
-          imageUrl={capturedUrl}
+          imageUrl={maskEditorImageUrl}
           originalUrl={capturedUrl}
           title="Touch Up Product Edges"
           onSave={async (blob, url) => {
@@ -1212,9 +1242,10 @@ export function ProductCapture({ onCaptured, onCancel }: ProductCaptureProps) {
               setProcessedUrl(trimmed.url);
               setProcessedBaseUrl(trimmed.url);
               setBaseBlob(trimmed.blob);
-              // rawProcessedUrl stays as the full uncropped source so restore still works.
+              // rawProcessedUrl stays as the uncropped source so restore still works.
               setRawProcessedUrl(trimmed.rawUrl);
               setCroppedBlob(trimmed.blob);
+              setCropBbox(trimmed.bbox);
               if (step === 'front' && calibration) {
                 setWidthMm(String(Math.round(trimmed.bbox.w / calibration.pixelsPerMm)));
                 setHeightMm(String(Math.round(trimmed.bbox.h / calibration.pixelsPerMm)));
@@ -1227,11 +1258,22 @@ export function ProductCapture({ onCaptured, onCancel }: ProductCaptureProps) {
               setProcessedBaseUrl(url);
               setBaseBlob(blob);
               setCroppedBlob(blob);
+              setCropBbox(null);
             }
             resetAdjustments();
+            if (maskEditorImageUrl && maskEditorImageUrl !== capturedUrl) {
+              URL.revokeObjectURL(maskEditorImageUrl);
+            }
+            setMaskEditorImageUrl('');
             setShowMaskEditor(false);
           }}
-          onCancel={() => setShowMaskEditor(false)}
+          onCancel={() => {
+            if (maskEditorImageUrl && maskEditorImageUrl !== capturedUrl) {
+              URL.revokeObjectURL(maskEditorImageUrl);
+            }
+            setMaskEditorImageUrl('');
+            setShowMaskEditor(false);
+          }}
         />,
         document.body
       )}

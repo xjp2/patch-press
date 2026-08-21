@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Camera, RefreshCw, Check, AlertCircle, Loader2, Crop, RotateCw, RotateCcw, Paintbrush, ZoomIn, ImageIcon } from 'lucide-react';
 import { storage, db, supabase } from '../lib/supabase';
 import { analyzeFrameLayered } from '../lib/objectDetect';
-import { enhanceCapture, rotateImage90, whiteBalanceFromBackground, adjustImage } from '../lib/imageEnhance';
+import { enhanceCapture, rotateImage90, whiteBalanceFromBackground, adjustImage, compositeProcessedOntoFullFrame } from '../lib/imageEnhance';
 import { v4 as uuidv4 } from 'uuid';
 import { ImageTracer } from '../ImageTracer';
 import type { TracedZone } from '../ImageTracer';
@@ -44,6 +44,10 @@ export function PatchCapture({ onPatchSaved }: PatchCaptureProps) {
   const [pictureZone, setPictureZone] = useState<TracedZone>(fullZone);
   const [showPictureEditor, setShowPictureEditor] = useState(false);
   const [showMaskEditor, setShowMaskEditor] = useState(false);
+  const [maskEditorImageUrl, setMaskEditorImageUrl] = useState('');
+  // Full-frame bbox of the trimmed processed image inside the captured frame.
+  // Preserved so the MaskEditor can reopen with previous erasures intact.
+  const [cropBbox, setCropBbox] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   // Unkeyed copy of the processed crop — restore source for the touch-up editor
   const [rawProcessedUrl, setRawProcessedUrl] = useState('');
   // Auto-processed image before manual colour tweaks — sliders regenerate from this
@@ -383,6 +387,7 @@ export function PatchCapture({ onPatchSaved }: PatchCaptureProps) {
       setBaseBlob(result.blob);
       resetAdjustments();
       setCroppedBlob(result.blob);
+      setCropBbox(result.bbox);
       if (calibration) {
         setWidth(String(Math.round(result.bbox.w / calibration.pixelsPerMm)));
         setHeight(String(Math.round(result.bbox.h / calibration.pixelsPerMm)));
@@ -400,6 +405,7 @@ export function PatchCapture({ onPatchSaved }: PatchCaptureProps) {
       resetAdjustments();
       setRawProcessedUrl(rawUrl);
       setCroppedBlob(blob);
+      setCropBbox(null);
       setWidth(String(canvas.width));
       setHeight(String(canvas.height));
     }
@@ -615,6 +621,9 @@ export function PatchCapture({ onPatchSaved }: PatchCaptureProps) {
     if (processedBaseUrl && processedBaseUrl !== capturedUrl && processedBaseUrl !== processedUrl && processedBaseUrl.startsWith('blob:')) {
       URL.revokeObjectURL(processedBaseUrl);
     }
+    if (maskEditorImageUrl && maskEditorImageUrl !== capturedUrl) {
+      URL.revokeObjectURL(maskEditorImageUrl);
+    }
     if (capturedUrl) {
       URL.revokeObjectURL(capturedUrl);
     }
@@ -625,6 +634,8 @@ export function PatchCapture({ onPatchSaved }: PatchCaptureProps) {
     setBaseBlob(null);
     resetAdjustments();
     setCroppedBlob(null);
+    setCropBbox(null);
+    setMaskEditorImageUrl('');
     setName('');
     setPrice('3');
     setQuantity('50');
@@ -667,6 +678,7 @@ export function PatchCapture({ onPatchSaved }: PatchCaptureProps) {
       }
       setContentZone(fullZone);
       setPictureZone(fullZone);
+      setCropBbox(null);
       const w = width;
       setWidth(height);
       setHeight(w);
@@ -698,6 +710,21 @@ export function PatchCapture({ onPatchSaved }: PatchCaptureProps) {
       setProcessedUrl(adjusted.url);
       setCroppedBlob(adjusted.blob);
     }
+  };
+
+  const openMaskEditor = async () => {
+    if (!capturedUrl) return;
+    try {
+      if (cropBbox && processedUrl) {
+        const fullFrameUrl = await compositeProcessedOntoFullFrame(capturedUrl, processedUrl, cropBbox);
+        setMaskEditorImageUrl(fullFrameUrl);
+      } else {
+        setMaskEditorImageUrl(capturedUrl);
+      }
+    } catch {
+      setMaskEditorImageUrl(capturedUrl);
+    }
+    setShowMaskEditor(true);
   };
 
   const previewUrl = processedUrl || capturedUrl;
@@ -908,6 +935,7 @@ export function PatchCapture({ onPatchSaved }: PatchCaptureProps) {
                           setBaseBlob(result.blob);
                           resetAdjustments();
                           setCroppedBlob(result.blob);
+                          setCropBbox(result.bbox);
                           if (calibration) {
                             setWidth(String(Math.round(result.bbox.w / calibration.pixelsPerMm)));
                             setHeight(String(Math.round(result.bbox.h / calibration.pixelsPerMm)));
@@ -950,6 +978,7 @@ export function PatchCapture({ onPatchSaved }: PatchCaptureProps) {
                           setBaseBlob(result.blob);
                           resetAdjustments();
                           setCroppedBlob(result.blob);
+                          setCropBbox(result.bbox);
                         }
                         setIsProcessing(false);
                       });
@@ -960,7 +989,7 @@ export function PatchCapture({ onPatchSaved }: PatchCaptureProps) {
                 <p className="text-[10px] text-ink/50 mt-1">Trims leftover background halo around the edges. Higher = cleaner cut, but eats slightly into the object.</p>
                 {processedUrl && (
                   <button
-                    onClick={() => setShowMaskEditor(true)}
+                    onClick={openMaskEditor}
                     className="mt-2 w-full px-3 py-2 rounded-xl text-sm font-semibold text-ink/70 bg-paper hover:bg-paper/70 transition-colors flex items-center justify-center gap-1.5"
                   >
                     <Paintbrush className="w-4 h-4" /> Touch Up Edges Manually
@@ -1217,9 +1246,9 @@ export function PatchCapture({ onPatchSaved }: PatchCaptureProps) {
         document.body
       )}
 
-      {showMaskEditor && capturedUrl && createPortal(
+      {showMaskEditor && maskEditorImageUrl && createPortal(
         <MaskEditor
-          imageUrl={capturedUrl}
+          imageUrl={maskEditorImageUrl}
           originalUrl={capturedUrl}
           title="Touch Up Patch Edges"
           onSave={async (blob, url) => {
@@ -1234,6 +1263,7 @@ export function PatchCapture({ onPatchSaved }: PatchCaptureProps) {
               // rawProcessedUrl stays as the uncropped source so restore still works.
               setRawProcessedUrl(trimmed.rawUrl);
               setCroppedBlob(trimmed.blob);
+              setCropBbox(trimmed.bbox);
               if (calibration) {
                 setWidth(String(Math.round(trimmed.bbox.w / calibration.pixelsPerMm)));
                 setHeight(String(Math.round(trimmed.bbox.h / calibration.pixelsPerMm)));
@@ -1246,11 +1276,22 @@ export function PatchCapture({ onPatchSaved }: PatchCaptureProps) {
               setProcessedBaseUrl(url);
               setBaseBlob(blob);
               setCroppedBlob(blob);
+              setCropBbox(null);
             }
             resetAdjustments();
+            if (maskEditorImageUrl && maskEditorImageUrl !== capturedUrl) {
+              URL.revokeObjectURL(maskEditorImageUrl);
+            }
+            setMaskEditorImageUrl('');
             setShowMaskEditor(false);
           }}
-          onCancel={() => setShowMaskEditor(false)}
+          onCancel={() => {
+            if (maskEditorImageUrl && maskEditorImageUrl !== capturedUrl) {
+              URL.revokeObjectURL(maskEditorImageUrl);
+            }
+            setMaskEditorImageUrl('');
+            setShowMaskEditor(false);
+          }}
         />,
         document.body
       )}
