@@ -1364,37 +1364,7 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                     <h3 className="font-heading text-lg font-bold mb-4">Existing Patches ({patches.length})</h3>
                                     <div className="grid grid-cols-4 md:grid-cols-8 gap-3">
                                         {patches.map(patch => (
-                                            <div key={patch.id} className="bg-cardstock rounded-xl p-2 text-center relative group">
-                                                <div className="absolute -top-1 -right-1 flex gap-1 z-10">
-                                                    <button
-                                                        onClick={() => openExistingPatchSizer(patch.id)}
-                                                        className="bg-blue-500 text-white rounded-full p-0.5 shadow-sm"
-                                                        title="Edit Content Zone"
-                                                    >
-                                                        <Crop className="w-3 h-3" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => openPatchCropEditor(patch.id)}
-                                                        className="bg-indigo-500 text-white rounded-full p-0.5 shadow-sm"
-                                                        title="Edit Picture Zone (what customers see)"
-                                                    >
-                                                        <ImageIcon className="w-3 h-3" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => setRestockModal({ show: true, type: 'patch', id: patch.id, name: patch.name, currentQty: patch.quantity ?? 0 })}
-                                                        className="bg-craft-mint text-white rounded-full p-0.5 shadow-sm"
-                                                        title="Restock Patch"
-                                                    >
-                                                        <PackagePlus className="w-3 h-3" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleDeletePatch(patch.id)}
-                                                        className="bg-craft-pink text-white rounded-full p-0.5 shadow-sm"
-                                                        title="Delete Patch"
-                                                    >
-                                                        <X className="w-3 h-3" />
-                                                    </button>
-                                                </div>
+                                            <div key={patch.id} className="bg-cardstock rounded-xl p-2 text-center relative group flex flex-col">
                                                 <CroppedThumbnail src={getResizedImageUrl(patch.image, 192)} alt={patch.name} zone={patch.cropZone || patch.contentZone} className="w-full aspect-square mb-1" />
                                                 <input
                                                     type="text"
@@ -1446,6 +1416,38 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                                     />
                                                 </div>
                                                 <p className={`text-[10px] ${(patch.quantity ?? 0) <= 10 ? 'text-craft-pink font-bold' : 'text-craft-mint'}`}>Stock: {patch.quantity ?? 0}</p>
+
+                                                {/* Visible action buttons for existing patches */}
+                                                <div className="grid grid-cols-2 gap-1 mt-2">
+                                                    <button
+                                                        onClick={() => openExistingPatchSizer(patch.id)}
+                                                        className="flex items-center justify-center gap-1 px-1 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-[9px] font-semibold shadow-sm"
+                                                        title="Edit Content Zone"
+                                                    >
+                                                        <Crop className="w-3 h-3" /> Content
+                                                    </button>
+                                                    <button
+                                                        onClick={() => openPatchCropEditor(patch.id)}
+                                                        className="flex items-center justify-center gap-1 px-1 py-1 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg text-[9px] font-semibold shadow-sm"
+                                                        title="Edit Picture Zone (what customers see)"
+                                                    >
+                                                        <ImageIcon className="w-3 h-3" /> Picture
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setRestockModal({ show: true, type: 'patch', id: patch.id, name: patch.name, currentQty: patch.quantity ?? 0 })}
+                                                        className="flex items-center justify-center gap-1 px-1 py-1 bg-craft-mint hover:bg-craft-mint/90 text-white rounded-lg text-[9px] font-semibold shadow-sm"
+                                                        title="Restock Patch"
+                                                    >
+                                                        <PackagePlus className="w-3 h-3" /> Stock
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDeletePatch(patch.id)}
+                                                        className="flex items-center justify-center gap-1 px-1 py-1 bg-craft-pink hover:bg-craft-pink/90 text-white rounded-lg text-[9px] font-semibold shadow-sm"
+                                                        title="Delete Patch"
+                                                    >
+                                                        <X className="w-3 h-3" /> Delete
+                                                    </button>
+                                                </div>
                                             </div>
                                         ))}
                                     </div>

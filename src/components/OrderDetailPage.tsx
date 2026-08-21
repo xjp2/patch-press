@@ -156,7 +156,8 @@ export function OrderDetailPage({ orderId, onBack }: OrderDetailPageProps) {
       { 
         status: 'processing', 
         label: 'Processing', 
-        date: order.fulfillment_status !== 'pending' ? order.created_at : null,
+        // No dedicated processing timestamp in the schema; avoid repeating the order date.
+        date: null,
         description: 'We\'re preparing your custom design'
       },
       { 
