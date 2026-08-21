@@ -74,6 +74,8 @@ The app is a **client-side SPA with no React Router** — view switching is done
 │   │   ├── DesignPreview.tsx
 │   │   ├── MotionStep.tsx
 │   │   ├── PatchFlight.tsx
+│   │   ├── PatchCapture.tsx        # Camera capture for patches (auto-crop, real-mm measure, direct DB save)
+│   │   ├── ProductCapture.tsx      # Camera capture for products (front/back, fills the add-product form)
 │   │   ├── HeatPressSequence.tsx
 │   │   ├── CraftingView.tsx
 │   │   ├── StationeryDecorations.tsx
@@ -91,6 +93,7 @@ The app is a **client-side SPA with no React Router** — view switching is done
 │   │   ├── cms.ts               # CMS data loader (DB → Storage → static JSON fallback, with TTL cache)
 │   │   ├── shipping.ts          # Flat shipping zones/rates (SGD base) + supported destination countries
 │   │   ├── utils.ts             # `cn()`, path fixer, `getClipAndCenter()`
+│   │   ├── objectDetect.ts      # Shared camera object detection (local background field + largest component)
 │   │   └── sounds.ts            # UI sound effects
 ├── scripts/
 │   ├── export-cms.ts            # Build-time export of CMS data to `public/cms/*.json`
@@ -307,7 +310,7 @@ VITE_STRIPE_PUBLISHABLE_KEY=pk_test_...
 | Table | Purpose |
 |-------|---------|
 | `products` | Product catalog (id, name, front_image_url, back_image_url, base_price, quantity, width, height, placement_zone, crop_zone, sort_order) |
-| `patches` | Patch catalog (id, name, category, image_url, price, quantity, width, height, content_zone, sort_order) |
+| `patches` | Patch catalog (id, name, category, image_url, price, quantity, width, height, content_zone, crop_zone, sort_order) |
 | `site_content` | CMS data (id='current', landing_page, footer, global_settings, customize_page, navbar) |
 | `orders` | Customer orders (order_number, payment_intent_id, items, total_amount, status, fulfillment_status, shipping_address, payment_verified, paid_at) |
 | `order_items` | Line items per order (product_id, patches, quantity, unit_price, total_price, design_image_url, front_patches, back_patches) |
@@ -317,6 +320,10 @@ VITE_STRIPE_PUBLISHABLE_KEY=pk_test_...
 | `payment_logs` | Failed payment logging (optional) |
 
 Row Level Security (RLS) is enforced. Users can only read/write their own orders and cart items. Admin write access to products/patches/site_content is gated by RLS policies checking the `profiles.role` field.
+
+**Product zones:** `placement_zone` defines where customers may place patches; `crop_zone` is the "picture zone" — which part of the product image customers see. Display components (`ProductCard`, `CustomizePage`, admin `CroppedThumbnail`) render with `cropZone || placementZone`, so an unset crop zone falls back to the placement zone. Patch overlays live inside the clipped/transformed wrapper, so alignment is preserved; the placement zone should stay inside the picture zone.
+
+**Patch zones:** `content_zone` is the usable content of the patch image — placed patches are clipped to it on the product. `crop_zone` is the patch "picture zone" — which part of the image customers see in the picker (and admin thumbnails); displays use `cropZone || contentZone`. The camera capture flow (`PatchCapture`) can edit both, as can the admin patches tab for new and existing patches.
 
 ---
 

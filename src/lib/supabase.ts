@@ -715,6 +715,7 @@ export function dbPatchToFrontend(row: any) {
     height: row.height,
     quantity: row.quantity ?? 0,
     contentZone: row.content_zone,
+    cropZone: row.crop_zone,
   };
 }
 
@@ -729,6 +730,7 @@ export function frontendPatchToDb(patch: any, sortOrder: number = 0) {
     height: patch.height,
     quantity: patch.quantity ?? 0,
     content_zone: patch.contentZone || null,
+    crop_zone: patch.cropZone || null,
     sort_order: sortOrder,
   };
 }

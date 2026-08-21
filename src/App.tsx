@@ -1229,6 +1229,7 @@ function AppContent() {
             width: p.width,
             height: p.height,
             contentZone: p.content_zone,
+            cropZone: p.crop_zone,
           }));
           setPatches(frontendPatches);
         }
@@ -1596,6 +1597,7 @@ function AppContent() {
           width: p.width,
           height: p.height,
           contentZone: p.content_zone,
+          cropZone: p.crop_zone,
         }));
         setPatches(frontendPatches);
       }

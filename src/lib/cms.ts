@@ -68,6 +68,7 @@ export interface Patch {
   width: number;
   height: number;
   content_zone?: any;
+  crop_zone?: any;
   sort_order: number;
 }
 

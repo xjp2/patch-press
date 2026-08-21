@@ -46,7 +46,9 @@ export function ImageTracer({
     return { x: 25, y: 25, width: 50, height: 50, type: 'rectangle', points: [] };
   });
   
-  const [activeTool, setActiveTool] = useState<ToolMode>('rectangle');
+  const [activeTool, setActiveTool] = useState<ToolMode>(
+    initialZone?.type === 'polygon' ? 'polygon' : 'rectangle'
+  );
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string>('');
   
@@ -69,6 +71,11 @@ export function ImageTracer({
   // Fetch image with proper CORS handling
   useEffect(() => {
     const fetchImage = async () => {
+      // blob: URLs are already local — re-fetching them is pointless
+      if (imageUrl.startsWith('blob:')) {
+        setProcessedImageUrl(imageUrl);
+        return;
+      }
       try {
         const response = await fetch(imageUrl, { mode: 'cors' });
         if (response.ok) {
@@ -140,11 +147,19 @@ export function ImageTracer({
       const width = canvas.width;
       const height = canvas.height;
       
+      // Images with real transparency (camera captures after background removal)
+      // are traced by alpha alone; opaque images fall back to brightness
+      let hasTransparency = false;
+      for (let i = 3; i < data.length; i += 40) {
+        if (data[i] < 50) { hasTransparency = true; break; }
+      }
+
       // Helper to check if pixel is content (not white/transparent)
       const isContent = (x: number, y: number) => {
         if (x < 0 || x >= width || y < 0 || y >= height) return false;
         const i = (y * width + x) * 4;
         const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3];
+        if (hasTransparency) return a > 50;
         const brightness = (r + g + b) / 3;
         return brightness < threshold && a > 50;
       };
@@ -492,22 +507,24 @@ export function ImageTracer({
   };
 
   const handleSave = () => {
-    if (activeTool === 'polygon' && polygonPoints.length >= 3) {
-      closePolygon();
-      setTimeout(() => onSave(zone), 50);
-    } else if (activeTool === 'polygon') {
-      closePolygon();
-      setTimeout(() => onSave({
-        ...zone,
-        x: Math.min(...polygonPoints.map(p => p.x)),
-        y: Math.min(...polygonPoints.map(p => p.y)),
-        width: Math.max(...polygonPoints.map(p => p.x)) - Math.min(...polygonPoints.map(p => p.x)),
-        height: Math.max(...polygonPoints.map(p => p.y)) - Math.min(...polygonPoints.map(p => p.y)),
+    if (activeTool === 'polygon') {
+      if (polygonPoints.length < 3) {
+        setError('A polygon needs at least 3 points');
+        setTimeout(() => setError(''), 2000);
+        return;
+      }
+      const xs = polygonPoints.map(p => p.x);
+      const ys = polygonPoints.map(p => p.y);
+      onSave({
+        x: Math.min(...xs),
+        y: Math.min(...ys),
+        width: Math.max(...xs) - Math.min(...xs),
+        height: Math.max(...ys) - Math.min(...ys),
         type: 'polygon',
-        points: polygonPoints
-      }), 50);
+        points: [...polygonPoints]
+      });
     } else {
-      onSave(zone);
+      onSave({ ...zone, type: 'rectangle', points: [] });
     }
   };
 
@@ -544,6 +561,22 @@ export function ImageTracer({
                 onClick={() => {
                   setActiveTool('rectangle');
                   setPolygonPoints([]);
+                  // Convert a polygon zone to its bounding box so the rectangle tool is editable;
+                  // keep the original points on zone.points so switching back to polygon can restore them.
+                  if (zone.type === 'polygon' && zone.points && zone.points.length > 0) {
+                    const xs = zone.points.map(p => p.x);
+                    const ys = zone.points.map(p => p.y);
+                    setZone({
+                      x: Math.min(...xs),
+                      y: Math.min(...ys),
+                      width: Math.max(...xs) - Math.min(...xs),
+                      height: Math.max(...ys) - Math.min(...ys),
+                      type: 'rectangle',
+                      points: zone.points
+                    });
+                  } else {
+                    setZone(prev => ({ ...prev, type: 'rectangle' }));
+                  }
                 }}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-craft-mint focus-visible:ring-offset-ink ${
                   activeTool === 'rectangle' 
@@ -559,7 +592,13 @@ export function ImageTracer({
                 aria-selected={activeTool === 'polygon'}
                 onClick={() => {
                   setActiveTool('polygon');
-                  setPolygonPoints([]);
+                  // Restore previously kept polygon points when a zone has them;
+                  // only reset to empty when there is no polygon to resume.
+                  if (zone.points && zone.points.length > 0) {
+                    setPolygonPoints(zone.points);
+                  } else {
+                    setPolygonPoints([]);
+                  }
                 }}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-craft-mint focus-visible:ring-offset-ink ${
                   activeTool === 'polygon' 

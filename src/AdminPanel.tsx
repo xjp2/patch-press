@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import { useCurrency } from './context/CurrencyContext';
 import { db, storage, supabase, frontendProductToDb, frontendPatchToDb } from './lib/supabase';
 import { Settings, X, Plus, ShoppingCart, Palette, Layers, Camera, AlertCircle, Trash2, Layout, ChevronDown, ChevronUp, Eye, EyeOff, Facebook, Twitter, Loader2, ImageIcon, RefreshCw, Wand2, Crop, PackagePlus } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
@@ -13,6 +12,7 @@ import { CroppedProductImage } from './components/CroppedProductImage';
 import { CroppedThumbnail } from './components/CroppedThumbnail';
 import { InventoryLogsViewer } from './components/InventoryLogsViewer';
 import { PatchCapture } from './components/PatchCapture';
+import ProductCapture from './components/ProductCapture';
 import { getResizedImageUrl } from './lib/utils';
 
 export interface Notice {
@@ -41,6 +41,14 @@ export interface Patch {
         type: 'rectangle' | 'polygon';
         points?: { x: number; y: number }[];
     };
+    cropZone?: {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+        type: 'rectangle' | 'polygon';
+        points?: { x: number; y: number }[];
+    } | null;
 }
 
 export interface Product {
@@ -311,7 +319,6 @@ export interface AdminPanelProps {
 }
 
 export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, products, setProducts, patches, setPatches, siteContent, setSiteContent, onContentSaved, currentUser }: AdminPanelProps) {
-    const { formatPrice } = useCurrency();
     if (!showAdmin) return null;
     if (currentUser?.role !== 'admin') {
         return (
@@ -664,6 +671,8 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
     const [newProductBackImage, setNewProductBackImage] = useState('');
     const [newProductWidth, setNewProductWidth] = useState('');
     const [newProductHeight, setNewProductHeight] = useState('');
+    // Camera capture mode for adding new products
+    const [productCaptureMode, setProductCaptureMode] = useState(false);
     // Visual Zone Editor State
     const [showZoneEditor, setShowZoneEditor] = useState(false);
     const [showCropEditor, setShowCropEditor] = useState(false);
@@ -675,6 +684,8 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
     const [tracerInitialZone, setTracerInitialZone] = useState<TracedZone | undefined>(undefined);
 
     const [tempZone, setTempZone] = useState<TracedZone>({ x: 15, y: 25, width: 70, height: 60, type: 'rectangle' });
+    // Display/picture zone for NEW products — which part of the image customers see
+    const [tempCropZone, setTempCropZone] = useState<TracedZone>({ x: 0, y: 0, width: 100, height: 100, type: 'rectangle' });
 
     const [newPatchName, setNewPatchName] = useState('');
     const [newPatchPrice, setNewPatchPrice] = useState('');
@@ -689,6 +700,10 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
     // Patch content zone editor (for trimming patch bounds)
     const [showPatchSizer, setShowPatchSizer] = useState(false);
     const [tempPatchZone, setTempPatchZone] = useState<TracedZone>({ x: 10, y: 10, width: 80, height: 80, type: 'rectangle' });
+    // Patch picture zone (what customers see in the picker; falls back to content zone)
+    const [showPatchCropEditor, setShowPatchCropEditor] = useState(false);
+    const [editingPatchForCrop, setEditingPatchForCrop] = useState<string | null>(null);
+    const [tempPatchCropZone, setTempPatchCropZone] = useState<TracedZone>({ x: 0, y: 0, width: 100, height: 100, type: 'rectangle' });
     
     // Restock modal state
     const [restockModal, setRestockModal] = useState<{
@@ -738,13 +753,15 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
             quantity: parseInt(newProductQuantity) || 10,
             width: Number(newProductWidth) || 400,
             height: Number(newProductHeight) || 500,
-            placementZone: tempZone
+            placementZone: tempZone,
+            cropZone: tempCropZone
         };
         const newProducts = [...products, product];
         setProducts(newProducts);
         // Reset forms
         setNewProductName(''); setNewProductPrice(''); setNewProductQuantity('10'); setNewProductFrontImage(''); setNewProductBackImage(''); setNewProductWidth(''); setNewProductHeight('');
         setTempZone({ x: 15, y: 25, width: 70, height: 60, type: 'rectangle' });
+        setTempCropZone({ x: 0, y: 0, width: 100, height: 100, type: 'rectangle' });
     };
 
     const handleAddPatch = () => {
@@ -758,12 +775,14 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
             quantity: parseInt(newPatchQuantity) || 50,
             width: parseInt(newPatchWidth) || 80,
             height: parseInt(newPatchHeight) || 80,
-            contentZone: tempPatchZone
+            contentZone: tempPatchZone,
+            cropZone: tempPatchCropZone
         };
         const newPatches = [...patches, patch];
         setPatches(newPatches);
         setNewPatchName(''); setNewPatchPrice(''); setNewPatchQuantity('50'); setNewPatchImage('');
         setTempPatchZone({ x: 10, y: 10, width: 80, height: 80, type: 'rectangle' });
+        setTempPatchCropZone({ x: 0, y: 0, width: 100, height: 100, type: 'rectangle' });
     };
 
     const handleDeletePatch = async (id: string) => {
@@ -794,7 +813,7 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
         if (mode === 'placement') {
             setTracerInitialZone(product?.placementZone || tempZone);
         } else {
-            setTracerInitialZone(product?.cropZone || { x: 0, y: 0, width: 100, height: 100, type: 'rectangle' });
+            setTracerInitialZone(product?.cropZone || tempCropZone);
         }
         
         if (productId) {
@@ -802,6 +821,12 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                 setEditingProductId(productId);
             } else {
                 setEditingProductForCrop(productId);
+            }
+        } else {
+            if (mode === 'placement') {
+                setEditingProductId(null);
+            } else {
+                setEditingProductForCrop(null);
             }
         }
         
@@ -833,6 +858,20 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
         setTracerImageUrl(patch.image);
         setTracerInitialZone(patch.contentZone || { x: 10, y: 10, width: 80, height: 80, type: 'rectangle' });
         setShowPatchSizer(true);
+    };
+
+    // Picture zone editor for patches (new patch when no id given)
+    const openPatchCropEditor = (patchId?: string) => {
+        const patch = patchId ? patches.find(p => p.id === patchId) : null;
+        const imageUrl = patch?.image || newPatchImage;
+        if (!imageUrl) {
+            alert("Please upload a patch image first!");
+            return;
+        }
+        setEditingPatchForCrop(patchId || null);
+        setTracerImageUrl(imageUrl);
+        setTracerInitialZone(patch?.cropZone || tempPatchCropZone);
+        setShowPatchCropEditor(true);
     };
 
     // Restock handler
@@ -1029,6 +1068,26 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                             {newProductBackImage && <CroppedProductImage src={getResizedImageUrl(newProductBackImage, 192)} alt="Back Preview" zone={tempZone} className="mt-2 w-24 h-24 object-contain rounded-lg" />}
                                         </div>
                                     </div>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => setProductCaptureMode(!productCaptureMode)}
+                                        className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed border-craft-mint/40 text-craft-mint font-semibold text-sm hover:bg-craft-mint/10 transition-colors"
+                                    >
+                                        <Camera className="w-4 h-4" /> {productCaptureMode ? 'Hide Camera Capture' : 'Capture with Camera'}
+                                    </button>
+                                    {productCaptureMode && (
+                                        <ProductCapture
+                                            onCaptured={({ frontUrl, backUrl, widthMm, heightMm }) => {
+                                                setNewProductFrontImage(frontUrl);
+                                                setNewProductBackImage(backUrl);
+                                                setNewProductWidth(String(Math.round(widthMm)));
+                                                setNewProductHeight(String(Math.round(heightMm)));
+                                                setProductCaptureMode(false);
+                                            }}
+                                            onCancel={() => setProductCaptureMode(false)}
+                                        />
+                                    )}
                                 </div>
 
                                 {/* Placement Zone Configuration */}
@@ -1062,6 +1121,38 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                     {!newProductFrontImage && <p className="text-craft-pink text-xs mt-2"><AlertCircle className="w-3 h-3 inline" /> Upload front image to edit zone</p>}
                                 </div>
 
+                                {/* Picture Zone Configuration */}
+                                <div className="bg-paper-ruled p-4 rounded-xl border border-ink/10">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <div>
+                                            <h3 className="font-bold text-ink/70">Product Picture Zone</h3>
+                                            <p className="text-xs text-ink-muted">Which part of the image customers see — the product display is cropped to this area</p>
+                                        </div>
+                                        <button
+                                            onClick={() => openImageTracer('crop')}
+                                            className="text-indigo-500 hover:text-indigo-600 font-semibold text-sm flex items-center gap-1 bg-indigo-500/10 px-3 py-1.5 rounded-lg hover:bg-indigo-500/20 transition-colors"
+                                        >
+                                            <Crop className="w-4 h-4" /> Edit Picture Zone
+                                        </button>
+                                    </div>
+                                    <div className="grid grid-cols-4 gap-2 text-sm">
+                                        <div>
+                                            <span className="text-ink-muted">X:</span> {Math.round(tempCropZone.x)}%
+                                        </div>
+                                        <div>
+                                            <span className="text-ink-muted">Y:</span> {Math.round(tempCropZone.y)}%
+                                        </div>
+                                        <div>
+                                            <span className="text-ink-muted">W:</span> {Math.round(tempCropZone.width)}%
+                                        </div>
+                                        <div>
+                                            <span className="text-ink-muted">H:</span> {Math.round(tempCropZone.height)}%
+                                        </div>
+                                    </div>
+                                    <p className="text-xs text-ink-muted mt-2">Default is the full image (0,0 – 100×100). Make sure the patch placement area stays inside the picture zone.</p>
+                                    {!newProductFrontImage && <p className="text-craft-pink text-xs mt-2"><AlertCircle className="w-3 h-3 inline" /> Upload front image to edit zone</p>}
+                                </div>
+
                                 <button onClick={handleAddProduct} className="btn-primary"><Plus className="w-4 h-4 inline mr-2" />Add Product</button>
 
                                 <div className="mt-8">
@@ -1071,6 +1162,7 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                             <div key={product.id} className="bg-cardstock rounded-xl p-3 text-center relative group">
                                                 <div className="absolute top-2 right-2 flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                                                     <button onClick={() => openImageTracer('placement', product.id)} className="p-1.5 bg-cardstock rounded-lg shadow text-indigo-500 hover:text-indigo-700 hover:scale-110 transition-transform" title="Edit where patches can be placed"><Wand2 className="w-4 h-4" /></button>
+                                                    <button onClick={() => openImageTracer('crop', product.id)} className="p-1.5 bg-cardstock rounded-lg shadow text-ink/60 hover:text-ink hover:scale-110 transition-transform" title="Edit picture zone (what customers see)"><Crop className="w-4 h-4" /></button>
                                                     <button 
                                                         onClick={() => setRestockModal({ show: true, type: 'product', id: product.id, name: product.name, currentQty: product.quantity ?? 0 })}
                                                         className="p-1.5 bg-cardstock rounded-lg shadow text-craft-mint hover:text-green-700 hover:scale-110 transition-transform"
@@ -1087,9 +1179,31 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                                         }
                                                     }} className="p-1 bg-cardstock rounded shadow text-craft-pink hover:text-red-700 hover:scale-110" title="Delete Product"><Trash2 className="w-4 h-4" /></button>
                                                 </div>
-                                                <CroppedThumbnail src={getResizedImageUrl(product.frontImage, 320)} alt={product.name} zone={product.placementZone} className="w-full h-20 mb-2" />
-                                                <p className="text-sm font-semibold truncate">{product.name}</p>
-                                                <p className="text-sm text-craft-mint">{formatPrice(product.basePrice)}</p>
+                                                <CroppedThumbnail src={getResizedImageUrl(product.frontImage, 320)} alt={product.name} zone={product.cropZone || product.placementZone} className="w-full h-20 mb-2" />
+                                                <input
+                                                    type="text"
+                                                    value={product.name}
+                                                    onChange={(e) => {
+                                                        setProducts(products.map(p => p.id === product.id ? { ...p, name: e.target.value } : p));
+                                                    }}
+                                                    placeholder="Name"
+                                                    className="w-full px-1 py-1 text-sm font-semibold text-center rounded border border-transparent hover:border-ink/10 focus:border-craft-mint focus:outline-none bg-transparent"
+                                                />
+                                                <div className="flex items-center justify-center gap-1">
+                                                    <span className="text-[10px] text-ink/40">$</span>
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        min="0"
+                                                        value={product.basePrice ?? ''}
+                                                        onChange={(e) => {
+                                                            const v = Number(e.target.value);
+                                                            setProducts(products.map(p => p.id === product.id ? { ...p, basePrice: v } : p));
+                                                        }}
+                                                        placeholder="Price"
+                                                        className="w-20 px-1 py-1 text-sm text-craft-mint text-center rounded border border-transparent hover:border-ink/10 focus:border-craft-mint focus:outline-none bg-transparent"
+                                                    />
+                                                </div>
                                                 <p className={`text-xs ${(product.quantity ?? 0) <= 5 ? 'text-craft-pink font-bold' : 'text-craft-mint'}`}>Stock: {product.quantity ?? 0}</p>
                                                 <div className="flex gap-1 mt-1 justify-center">
                                                     <input
@@ -1218,6 +1332,30 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                             </div>
                                         )}
 
+                                        {/* Picture Zone Editor for New Patches */}
+                                        {newPatchImage && (
+                                            <div className="bg-paper-ruled p-4 rounded-xl border border-ink/10">
+                                                <div className="flex justify-between items-center">
+                                                    <div>
+                                                        <h4 className="font-bold text-ink/70">Patch Picture Zone</h4>
+                                                        <p className="text-xs text-ink-muted">Which part of the image customers see in the patch picker — defaults to the full image</p>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => openPatchCropEditor()}
+                                                        className="text-indigo-500 hover:text-indigo-600 font-semibold text-sm flex items-center gap-1 bg-indigo-500/10 px-3 py-1.5 rounded-lg hover:bg-indigo-500/20 transition-colors"
+                                                    >
+                                                        <Crop className="w-4 h-4" /> Edit Picture Zone
+                                                    </button>
+                                                </div>
+                                                <div className="grid grid-cols-4 gap-2 text-sm mt-3">
+                                                    <div><span className="text-ink-muted">X:</span> {Math.round(tempPatchCropZone.x)}%</div>
+                                                    <div><span className="text-ink-muted">Y:</span> {Math.round(tempPatchCropZone.y)}%</div>
+                                                    <div><span className="text-ink-muted">W:</span> {Math.round(tempPatchCropZone.width)}%</div>
+                                                    <div><span className="text-ink-muted">H:</span> {Math.round(tempPatchCropZone.height)}%</div>
+                                                </div>
+                                            </div>
+                                        )}
+
                                         <button onClick={handleAddPatch} className="btn-primary w-fit"><Plus className="w-4 h-4 inline mr-2" />Add Patch</button>
                                     </div>
                                 )}
@@ -1227,13 +1365,20 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                     <div className="grid grid-cols-4 md:grid-cols-8 gap-3">
                                         {patches.map(patch => (
                                             <div key={patch.id} className="bg-cardstock rounded-xl p-2 text-center relative group">
-                                                <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                                                <div className="absolute -top-1 -right-1 flex gap-1 z-10">
                                                     <button
                                                         onClick={() => openExistingPatchSizer(patch.id)}
                                                         className="bg-blue-500 text-white rounded-full p-0.5 shadow-sm"
                                                         title="Edit Content Zone"
                                                     >
                                                         <Crop className="w-3 h-3" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => openPatchCropEditor(patch.id)}
+                                                        className="bg-indigo-500 text-white rounded-full p-0.5 shadow-sm"
+                                                        title="Edit Picture Zone (what customers see)"
+                                                    >
+                                                        <ImageIcon className="w-3 h-3" />
                                                     </button>
                                                     <button
                                                         onClick={() => setRestockModal({ show: true, type: 'patch', id: patch.id, name: patch.name, currentQty: patch.quantity ?? 0 })}
@@ -1250,9 +1395,56 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                                                         <X className="w-3 h-3" />
                                                     </button>
                                                 </div>
-                                                <CroppedThumbnail src={getResizedImageUrl(patch.image, 192)} alt={patch.name} zone={patch.contentZone} className="w-full aspect-square mb-1" />
-                                                <p className="text-[10px] font-semibold truncate">{patch.name}</p>
-                                                <p className="text-[10px] text-ink/40">{patch.width}×{patch.height}px</p>
+                                                <CroppedThumbnail src={getResizedImageUrl(patch.image, 192)} alt={patch.name} zone={patch.cropZone || patch.contentZone} className="w-full aspect-square mb-1" />
+                                                <input
+                                                    type="text"
+                                                    value={patch.name}
+                                                    onChange={(e) => {
+                                                        setPatches(patches.map(p => p.id === patch.id ? { ...p, name: e.target.value } : p));
+                                                    }}
+                                                    placeholder="Name"
+                                                    className="w-full px-1 py-0.5 text-[10px] font-semibold text-center rounded border border-transparent hover:border-ink/10 focus:border-craft-mint focus:outline-none bg-transparent"
+                                                />
+                                                <div className="flex items-center justify-center gap-0.5">
+                                                    <span className="text-[9px] text-ink/40">$</span>
+                                                    <input
+                                                        type="number"
+                                                        step="0.01"
+                                                        min="0"
+                                                        value={patch.price ?? ''}
+                                                        onChange={(e) => {
+                                                            const v = Number(e.target.value);
+                                                            setPatches(patches.map(p => p.id === patch.id ? { ...p, price: v } : p));
+                                                        }}
+                                                        placeholder="Price"
+                                                        className="w-14 px-1 py-0.5 text-[10px] text-craft-mint text-center rounded border border-transparent hover:border-ink/10 focus:border-craft-mint focus:outline-none bg-transparent"
+                                                    />
+                                                </div>
+                                                <div className="flex items-center justify-center gap-1 mt-1">
+                                                    <input
+                                                        type="number"
+                                                        min="1"
+                                                        value={patch.width ?? ''}
+                                                        onChange={(e) => {
+                                                            const v = Number(e.target.value);
+                                                            setPatches(patches.map(p => p.id === patch.id ? { ...p, width: v } : p));
+                                                        }}
+                                                        title="Width (mm)"
+                                                        className="w-12 px-1 py-0.5 text-[10px] text-center rounded border border-transparent hover:border-ink/10 focus:border-craft-mint focus:outline-none bg-transparent text-ink/60"
+                                                    />
+                                                    <span className="text-[10px] text-ink/40">×</span>
+                                                    <input
+                                                        type="number"
+                                                        min="1"
+                                                        value={patch.height ?? ''}
+                                                        onChange={(e) => {
+                                                            const v = Number(e.target.value);
+                                                            setPatches(patches.map(p => p.id === patch.id ? { ...p, height: v } : p));
+                                                        }}
+                                                        title="Height (mm)"
+                                                        className="w-12 px-1 py-0.5 text-[10px] text-center rounded border border-transparent hover:border-ink/10 focus:border-craft-mint focus:outline-none bg-transparent text-ink/60"
+                                                    />
+                                                </div>
                                                 <p className={`text-[10px] ${(patch.quantity ?? 0) <= 10 ? 'text-craft-pink font-bold' : 'text-craft-mint'}`}>Stock: {patch.quantity ?? 0}</p>
                                             </div>
                                         ))}
@@ -2224,12 +2416,14 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                 <ImageTracer
                     imageUrl={tracerImageUrl || (editingProductForCrop ? (products.find(p => p.id === editingProductForCrop)?.frontImage || '') : newProductFrontImage)}
                     mode="crop"
-                    title="Auto-Trace Product Crop"
-                    initialZone={tracerInitialZone || tempZone}
+                    title="Edit Picture Zone (what customers see)"
+                    initialZone={tracerInitialZone || tempCropZone}
                     onSave={(zone) => {
                         if (editingProductForCrop) {
                             const newProducts = products.map(p => p.id === editingProductForCrop ? { ...p, cropZone: zone } : p);
                             setProducts(newProducts);
+                        } else {
+                            setTempCropZone(zone);
                         }
                         setShowCropEditor(false);
                         setEditingProductForCrop(null);
@@ -2266,6 +2460,33 @@ export function AdminPanel({ showAdmin, setShowAdmin, adminTab, setAdminTab, pro
                     onCancel={() => {
                         setShowPatchSizer(false);
                         setEditingPatchId(null);
+                        setTracerImageUrl('');
+                        setTracerInitialZone(undefined);
+                    }}
+                />
+            )}
+
+            {showPatchCropEditor && (
+                <ImageTracer
+                    imageUrl={tracerImageUrl || (editingPatchForCrop ? (patches.find(p => p.id === editingPatchForCrop)?.image || '') : newPatchImage)}
+                    mode="crop"
+                    title="Edit Patch Picture Zone (what customers see)"
+                    initialZone={tracerInitialZone || tempPatchCropZone}
+                    onSave={(zone) => {
+                        if (editingPatchForCrop) {
+                            const newPatches = patches.map(p => p.id === editingPatchForCrop ? { ...p, cropZone: zone } : p);
+                            setPatches(newPatches);
+                        } else {
+                            setTempPatchCropZone(zone);
+                        }
+                        setShowPatchCropEditor(false);
+                        setEditingPatchForCrop(null);
+                        setTracerImageUrl('');
+                        setTracerInitialZone(undefined);
+                    }}
+                    onCancel={() => {
+                        setShowPatchCropEditor(false);
+                        setEditingPatchForCrop(null);
                         setTracerImageUrl('');
                         setTracerInitialZone(undefined);
                     }}

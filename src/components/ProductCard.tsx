@@ -52,7 +52,7 @@ export function ProductCard({ product, isSelected, onClick, index }: ProductCard
   }, [product.frontImage]);
 
   // Build the visible image element
-  const zone = product.placementZone;
+  const zone = product.cropZone || product.placementZone;
   let cropDiv: React.ReactNode = null;
 
   if (dims) {

@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect, useMemo } from 'react';
+import type { ImgHTMLAttributes, ReactNode } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -30,6 +31,73 @@ const isPointInPolygon = (x: number, y: number, points: { x: number, y: number }
         if (intersect) inside = !inside;
     }
     return inside;
+};
+
+// Renders a patch image at its true aspect ratio (object-contain geometry) inside
+// the placement box. The selection overlay, content-zone clip, and handles live
+// inside the measured image box so they align with the visible image even when
+// the placement box aspect is off (e.g. legacy patches whose saved W/H don't
+// match the image).
+type ImgHandlers = Pick<ImgHTMLAttributes<HTMLImageElement>, 'onMouseDown' | 'onTouchStart' | 'onClick'>;
+
+const ContainedPatchImage = ({
+    image,
+    alt,
+    clipPath,
+    imgClassName,
+    imgHandlers,
+    children,
+}: {
+    image: string;
+    alt: string;
+    clipPath?: string;
+    imgClassName?: string;
+    imgHandlers?: ImgHandlers;
+    children?: ReactNode;
+}) => {
+    const parentRef = useRef<HTMLDivElement>(null);
+    const [boxSize, setBoxSize] = useState<{ w: number; h: number } | null>(null);
+    const [natSize, setNatSize] = useState<{ w: number; h: number } | null>(null);
+
+    useEffect(() => {
+        const el = parentRef.current;
+        if (!el) return;
+        const ro = new ResizeObserver((entries) => {
+            const r = entries[0].contentRect;
+            setBoxSize({ w: r.width, h: r.height });
+        });
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, []);
+
+    const measured = boxSize && natSize && natSize.w > 0 && natSize.h > 0;
+    const contained = measured
+        ? (() => {
+            const s = Math.min(boxSize.w / natSize.w, boxSize.h / natSize.h);
+            return { width: `${natSize.w * s}px`, height: `${natSize.h * s}px` };
+        })()
+        : { width: '100%', height: '100%' };
+
+    return (
+        <div ref={parentRef} className="absolute inset-0 flex items-center justify-center">
+            <div className="relative" style={contained}>
+                <img
+                    src={image}
+                    alt={alt}
+                    className={`block w-full h-full ${imgClassName || ''}`}
+                    style={{ clipPath }}
+                    draggable={false}
+                    decoding="async"
+                    onLoad={(e) => {
+                        const t = e.currentTarget;
+                        if (t.naturalWidth > 0) setNatSize({ w: t.naturalWidth, h: t.naturalHeight });
+                    }}
+                    {...imgHandlers}
+                />
+                {measured ? children : null}
+            </div>
+        </div>
+    );
 };
 
 // Helper for Distance from Point to Line Segment
@@ -688,7 +756,7 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                                 transition={{ type: 'spring', stiffness: 400, damping: 17 }}
                                             >
                                                 <img src={getResizedImageUrl(patch.image, 200)} alt={patch.name} className="w-full aspect-square object-contain mb-1" loading="lazy" decoding="async" style={(() => {
-                                                    const s = getClipAndCenter(patch.contentZone);
+                                                    const s = getClipAndCenter(patch.cropZone || patch.contentZone);
                                                     return {
                                                         clipPath: s.clipPath,
                                                         transform: s.transform,
@@ -759,7 +827,7 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                     <FloatingDecorations />
                                     <div ref={canvasRef} className="absolute inset-0 flex items-center justify-center transition-transform duration-100" style={{ transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`, transformOrigin: 'center center' }}>
                                         {(() => {
-                                            const s = getClipAndCenter(selectedProduct.placementZone);
+                                            const s = getClipAndCenter(selectedProduct.cropZone || selectedProduct.placementZone);
                                             return (
                                                 <div className="relative" style={{ transform: s.transform }}>
                                                     {/* Product Image */}
@@ -855,76 +923,75 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                                             rotate: { duration: 0 },
                                                         }}
                                                     >
-                                                        <img
-                                                            src={patch.image}
+                                                        <ContainedPatchImage
+                                                            image={patch.image}
                                                             alt={patch.name}
-                                                            className={`w-full h-full object-contain drop-shadow-lg cursor-move ${selectedPatchId === patch.uniqueId ? 'brightness-110' : ''}`}
-                                                            style={{
-                                                                clipPath: patch.contentZone
-                                                                    ? (patch.contentZone.type === 'polygon' && patch.contentZone.points
-                                                                        ? `polygon(${patch.contentZone.points.map(p => `${p.x}% ${p.y}%`).join(', ')})`
-                                                                        : `inset(${patch.contentZone.y}% ${100 - (patch.contentZone.x + patch.contentZone.width)}% ${100 - (patch.contentZone.y + patch.contentZone.height)}% ${patch.contentZone.x}%)`)
-                                                                    : 'none'
+                                                            clipPath={patch.contentZone
+                                                                ? (patch.contentZone.type === 'polygon' && patch.contentZone.points
+                                                                    ? `polygon(${patch.contentZone.points.map(p => `${p.x}% ${p.y}%`).join(', ')})`
+                                                                    : `inset(${patch.contentZone.y}% ${100 - (patch.contentZone.x + patch.contentZone.width)}% ${100 - (patch.contentZone.y + patch.contentZone.height)}% ${patch.contentZone.x}%)`)
+                                                                : 'none'}
+                                                            imgClassName={`drop-shadow-lg cursor-move ${selectedPatchId === patch.uniqueId ? 'brightness-110' : ''}`}
+                                                            imgHandlers={{
+                                                                onMouseDown: (e) => startDragPatch(e, patch.uniqueId),
+                                                                onTouchStart: (e) => startDragPatch(e, patch.uniqueId),
+                                                                onClick: (e) => { e.stopPropagation(); setSelectedPatchId(patch.uniqueId); },
                                                             }}
-                                                            draggable={false}
-                                                            decoding="async"
-                                                            onMouseDown={(e) => startDragPatch(e, patch.uniqueId)}
-                                                            onTouchStart={(e) => startDragPatch(e, patch.uniqueId)}
-                                                            onClick={(e) => { e.stopPropagation(); setSelectedPatchId(patch.uniqueId); }}
-                                                        />
-                                                        {isFresh && <FreshPatchGlow active={isFresh} />}
-                                                        {selectedPatchId === patch.uniqueId && (
-                                                            <>
-                                                                {/* Traced Zone Overlay - Semi-transparent fill with border */}
-                                                                <div className="absolute inset-0 pointer-events-none" style={{ margin: '-4px' }}>
-                                                                    <svg className="w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
-                                                                        {patch.contentZone && patch.contentZone.type === 'polygon' && patch.contentZone.points ? (
-                                                                            <>
-                                                                                {/* Filled background */}
-                                                                                <polygon points={patch.contentZone.points.map(p => `${p.x},${p.y}`).join(' ')}
-                                                                                    fill="rgba(129, 199, 132, 0.15)" stroke="none" />
-                                                                                {/* Dashed border */}
-                                                                                <polygon points={patch.contentZone.points.map(p => `${p.x},${p.y}`).join(' ')}
-                                                                                    stroke="#81c784" strokeWidth="2" fill="none" vectorEffect="non-scaling-stroke" strokeDasharray="4 2" />
-                                                                            </>
-                                                                        ) : (
-                                                                            <>
-                                                                                {/* Filled background */}
-                                                                                <rect x={patch.contentZone ? patch.contentZone.x : 0}
-                                                                                    y={patch.contentZone ? patch.contentZone.y : 0}
-                                                                                    width={patch.contentZone ? patch.contentZone.width : 100}
-                                                                                    height={patch.contentZone ? patch.contentZone.height : 100}
-                                                                                    fill="rgba(129, 199, 132, 0.15)" stroke="none" rx="1" />
-                                                                                {/* Dashed border */}
-                                                                                <rect x={patch.contentZone ? patch.contentZone.x : 0}
-                                                                                    y={patch.contentZone ? patch.contentZone.y : 0}
-                                                                                    width={patch.contentZone ? patch.contentZone.width : 100}
-                                                                                    height={patch.contentZone ? patch.contentZone.height : 100}
-                                                                                    stroke="#81c784" strokeWidth="2" fill="none" vectorEffect="non-scaling-stroke" strokeDasharray="4 2" rx="1" />
-                                                                            </>
-                                                                        )}
-                                                                    </svg>
-                                                                </div>
-                                                                <div className="absolute -top-10 left-1/2 -translate-x-1/2 cursor-grab active:cursor-grabbing"
-                                                                    style={{
-                                                                        left: `${cx}%`,
-                                                                        top: `${cz.y}%`,
-                                                                        transform: 'translate(-50%, -100%)'
-                                                                    }}
-                                                                    onMouseDown={(e) => startRotatePatch(e, patch.uniqueId)}
-                                                                    onTouchStart={(e) => startRotatePatch(e, patch.uniqueId)}>
-                                                                    <div className="w-6 h-6 bg-craft-mint rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform"><RotateCw className="w-3 h-3 text-white" /></div>
-                                                                    <div className="absolute top-6 left-1/2 -translate-x-1/2 w-0.5 h-4 bg-craft-mint" />
-                                                                </div>
-                                                                <button onClick={(e) => { e.stopPropagation(); deletePatch(patch.uniqueId); }}
-                                                                    style={{
-                                                                        left: `${cz.x + cz.width}%`,
-                                                                        top: `${cz.y}%`,
-                                                                        transform: 'translate(50%, -50%)'
-                                                                    }}
-                                                                    className="absolute w-6 h-6 bg-craft-pink text-white rounded-full flex items-center justify-center shadow-lg hover:bg-craft-pink-light"><X className="w-4 h-4" /></button>
-                                                            </>
-                                                        )}
+                                                        >
+                                                            {isFresh && <FreshPatchGlow active={isFresh} />}
+                                                            {selectedPatchId === patch.uniqueId && (
+                                                                <>
+                                                                    {/* Traced Zone Overlay - Semi-transparent fill with border */}
+                                                                    <div className="absolute inset-0 pointer-events-none" style={{ margin: '-4px' }}>
+                                                                        <svg className="w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
+                                                                            {patch.contentZone && patch.contentZone.type === 'polygon' && patch.contentZone.points ? (
+                                                                                <>
+                                                                                    {/* Filled background */}
+                                                                                    <polygon points={patch.contentZone.points.map(p => `${p.x},${p.y}`).join(' ')}
+                                                                                        fill="rgba(129, 199, 132, 0.15)" stroke="none" />
+                                                                                    {/* Dashed border */}
+                                                                                    <polygon points={patch.contentZone.points.map(p => `${p.x},${p.y}`).join(' ')}
+                                                                                        stroke="#81c784" strokeWidth="2" fill="none" vectorEffect="non-scaling-stroke" strokeDasharray="4 2" />
+                                                                                </>
+                                                                            ) : (
+                                                                                <>
+                                                                                    {/* Filled background */}
+                                                                                    <rect x={patch.contentZone ? patch.contentZone.x : 0}
+                                                                                        y={patch.contentZone ? patch.contentZone.y : 0}
+                                                                                        width={patch.contentZone ? patch.contentZone.width : 100}
+                                                                                        height={patch.contentZone ? patch.contentZone.height : 100}
+                                                                                        fill="rgba(129, 199, 132, 0.15)" stroke="none" rx="1" />
+                                                                                    {/* Dashed border */}
+                                                                                    <rect x={patch.contentZone ? patch.contentZone.x : 0}
+                                                                                        y={patch.contentZone ? patch.contentZone.y : 0}
+                                                                                        width={patch.contentZone ? patch.contentZone.width : 100}
+                                                                                        height={patch.contentZone ? patch.contentZone.height : 100}
+                                                                                        stroke="#81c784" strokeWidth="2" fill="none" vectorEffect="non-scaling-stroke" strokeDasharray="4 2" rx="1" />
+                                                                                </>
+                                                                            )}
+                                                                        </svg>
+                                                                    </div>
+                                                                    <div className="absolute -top-10 left-1/2 -translate-x-1/2 cursor-grab active:cursor-grabbing"
+                                                                        style={{
+                                                                            left: `${cx}%`,
+                                                                            top: `${cz.y}%`,
+                                                                            transform: 'translate(-50%, -100%)'
+                                                                        }}
+                                                                        onMouseDown={(e) => startRotatePatch(e, patch.uniqueId)}
+                                                                        onTouchStart={(e) => startRotatePatch(e, patch.uniqueId)}>
+                                                                        <div className="w-6 h-6 bg-craft-mint rounded-full flex items-center justify-center shadow-lg hover:scale-110 transition-transform"><RotateCw className="w-3 h-3 text-white" /></div>
+                                                                        <div className="absolute top-6 left-1/2 -translate-x-1/2 w-0.5 h-4 bg-craft-mint" />
+                                                                    </div>
+                                                                    <button onClick={(e) => { e.stopPropagation(); deletePatch(patch.uniqueId); }}
+                                                                        style={{
+                                                                            left: `${cz.x + cz.width}%`,
+                                                                            top: `${cz.y}%`,
+                                                                            transform: 'translate(50%, -50%)'
+                                                                        }}
+                                                                        className="absolute w-6 h-6 bg-craft-pink text-white rounded-full flex items-center justify-center shadow-lg hover:bg-craft-pink-light"><X className="w-4 h-4" /></button>
+                                                                </>
+                                                            )}
+                                                        </ContainedPatchImage>
 
                                                     </motion.div>
                                                 );
@@ -1051,7 +1118,7 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                     <div className="relative bg-white/60 rounded-xl p-3 shadow-sm">
                                         <h4 className="text-xs font-bold text-center text-ink/40 mb-2">Front</h4>
                                         {(() => {
-                                            const s = getClipAndCenter(selectedProduct.placementZone);
+                                            const s = getClipAndCenter(selectedProduct.cropZone || selectedProduct.placementZone);
                                             return (
                                                 <div className="relative mx-auto" style={{ maxWidth: 260, transform: s.transform }}>
                                                     <img src={fixImagePath(selectedProduct.frontImage)} alt={`${selectedProduct.name} Front`} className="w-full object-contain" loading="lazy" decoding="async" style={{ clipPath: s.clipPath }} />
@@ -1060,16 +1127,21 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                                         const cx = cz.x + cz.width / 2;
                                                         const cy = cz.y + cz.height / 2;
                                                         return (
-                                                            <img key={patch.uniqueId} src={fixImagePath(patch.image)} alt={patch.name} className="absolute object-contain" loading="lazy" decoding="async" style={{
+                                                            <div key={patch.uniqueId} className="absolute" style={{
                                                                 left: `${patch.x}%`, top: `${patch.y}%`, width: `${patch.widthPercent}%`, height: `${patch.heightPercent}%`,
                                                                 transform: `rotate(${patch.rotation}deg)`,
-                                                                transformOrigin: `${cx}% ${cy}%`,
-                                                                clipPath: patch.contentZone
-                                                                    ? (patch.contentZone.type === 'polygon' && patch.contentZone.points
-                                                                        ? `polygon(${patch.contentZone.points.map(p => `${p.x}% ${p.y}%`).join(', ')})`
-                                                                        : `inset(${patch.contentZone.y}% ${100 - (patch.contentZone.x + patch.contentZone.width)}% ${100 - (patch.contentZone.y + patch.contentZone.height)}% ${patch.contentZone.x}%)`)
-                                                                    : 'none'
-                                                            }} />
+                                                                transformOrigin: `${cx}% ${cy}%`
+                                                            }}>
+                                                                <ContainedPatchImage
+                                                                    image={fixImagePath(patch.image)}
+                                                                    alt={patch.name}
+                                                                    clipPath={patch.contentZone
+                                                                        ? (patch.contentZone.type === 'polygon' && patch.contentZone.points
+                                                                            ? `polygon(${patch.contentZone.points.map(p => `${p.x}% ${p.y}%`).join(', ')})`
+                                                                            : `inset(${patch.contentZone.y}% ${100 - (patch.contentZone.x + patch.contentZone.width)}% ${100 - (patch.contentZone.y + patch.contentZone.height)}% ${patch.contentZone.x}%)`)
+                                                                        : undefined}
+                                                                />
+                                                            </div>
                                                         )
                                                     })}
                                                 </div>
@@ -1082,7 +1154,7 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                     <div className="relative bg-white/60 rounded-xl p-3 shadow-sm">
                                         <h4 className="text-xs font-bold text-center text-ink/40 mb-2">Back</h4>
                                         {(() => {
-                                            const s = getClipAndCenter(selectedProduct.placementZone);
+                                            const s = getClipAndCenter(selectedProduct.cropZone || selectedProduct.placementZone);
                                             return (
                                                 <div className="relative mx-auto" style={{ maxWidth: 260, transform: s.transform }}>
                                                     <img src={fixImagePath(selectedProduct.backImage)} alt={`${selectedProduct.name} Back`} className="w-full object-contain" loading="lazy" decoding="async" style={{ clipPath: s.clipPath }} />
@@ -1091,16 +1163,21 @@ export function CustomizePage({ products, patches, setCurrentView, siteContent }
                                                         const cx = cz.x + cz.width / 2;
                                                         const cy = cz.y + cz.height / 2;
                                                         return (
-                                                            <img key={patch.uniqueId} src={fixImagePath(patch.image)} alt={patch.name} className="absolute object-contain" loading="lazy" decoding="async" style={{
+                                                            <div key={patch.uniqueId} className="absolute" style={{
                                                                 left: `${patch.x}%`, top: `${patch.y}%`, width: `${patch.widthPercent}%`, height: `${patch.heightPercent}%`,
                                                                 transform: `rotate(${patch.rotation}deg)`,
-                                                                transformOrigin: `${cx}% ${cy}%`,
-                                                                clipPath: patch.contentZone
-                                                                    ? (patch.contentZone.type === 'polygon' && patch.contentZone.points
-                                                                        ? `polygon(${patch.contentZone.points.map(p => `${p.x}% ${p.y}%`).join(', ')})`
-                                                                        : `inset(${patch.contentZone.y}% ${100 - (patch.contentZone.x + patch.contentZone.width)}% ${100 - (patch.contentZone.y + patch.contentZone.height)}% ${patch.contentZone.x}%)`)
-                                                                    : 'none'
-                                                            }} />
+                                                                transformOrigin: `${cx}% ${cy}%`
+                                                            }}>
+                                                                <ContainedPatchImage
+                                                                    image={fixImagePath(patch.image)}
+                                                                    alt={patch.name}
+                                                                    clipPath={patch.contentZone
+                                                                        ? (patch.contentZone.type === 'polygon' && patch.contentZone.points
+                                                                            ? `polygon(${patch.contentZone.points.map(p => `${p.x}% ${p.y}%`).join(', ')})`
+                                                                            : `inset(${patch.contentZone.y}% ${100 - (patch.contentZone.x + patch.contentZone.width)}% ${100 - (patch.contentZone.y + patch.contentZone.height)}% ${patch.contentZone.x}%)`)
+                                                                        : undefined}
+                                                                />
+                                                            </div>
                                                         )
                                                     })}
                                                 </div>
